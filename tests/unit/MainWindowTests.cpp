@@ -1,10 +1,12 @@
 #include "hatt/ui/DesignCanvas.hpp"
 #include "hatt/ui/MainWindow.hpp"
+#include "hatt/ui/Theme.hpp"
 
 #include <QAction>
 #include <QApplication>
 #include <QDialog>
 #include <QDockWidget>
+#include <QImage>
 #include <QListWidget>
 #include <QMouseEvent>
 #include <QPushButton>
@@ -65,6 +67,8 @@ private slots:
     void keyboardShortcutsDriveToolsAndUndo();
     void escapeReturnsWindowToSelectionMode();
     void snapSettingsArePersisted();
+    void selectionStatesFollowTheme_data();
+    void selectionStatesFollowTheme();
 
 private:
     QTemporaryDir settingsDir_;
@@ -329,6 +333,55 @@ void MainWindowTests::undoFollowsActiveWorkspaceAndKeepsTool() {
     QCOMPARE(mergen->tool(), CanvasTool::Symbol);
     action(window, "hatteda.action.redo")->trigger();
     QCOMPARE(mergen->document().size(), 1);
+}
+
+void MainWindowTests::selectionStatesFollowTheme_data() {
+    QTest::addColumn<bool>("light");
+    QTest::newRow("dark") << false;
+    QTest::newRow("light") << true;
+}
+
+void MainWindowTests::selectionStatesFollowTheme() {
+    QFETCH(bool, light);
+    auto* application = qobject_cast<QApplication*>(QCoreApplication::instance());
+    QVERIFY(application != nullptr);
+    const QPalette originalPalette = QApplication::palette();
+    hatt::ui::Theme::apply(*application,
+                           light ? hatt::ui::ThemeMode::Light : hatt::ui::ThemeMode::Dark);
+    // Selected surfaces must follow the theme: light ground in light, dark ground in dark.
+    const auto matchesTheme = [light](const QColor& color) {
+        return light ? color.lightness() > 170 : color.lightness() < 90;
+    };
+
+    QToolButton rail;
+    rail.setProperty("command", true);
+    rail.setProperty("rail", true);
+    rail.setCheckable(true);
+    rail.setChecked(true);
+    rail.setFixedSize(40, 40);
+    const QImage railImage = rail.grab().toImage();
+    const QColor railGround = railImage.pixelColor(railImage.width() / 2, railImage.height() / 2);
+    QVERIFY2(matchesTheme(railGround), qPrintable(railGround.name()));
+    // Structural cue: the checked rail button keeps a brand-colored left rail.
+    const QColor railCue = railImage.pixelColor(1, railImage.height() / 2);
+    QVERIFY2(railCue.green() > railCue.red() + 40, qPrintable(railCue.name()));
+
+    QListWidget selector;
+    selector.setObjectName(QStringLiteral("ObjectSelector"));
+    selector.resize(220, 120);
+    selector.addItem(QStringLiteral("Rectangle"));
+    selector.addItem(QStringLiteral("Line"));
+    selector.setCurrentRow(0);
+    selector.grab();
+    const QRect itemRect = selector.visualItemRect(selector.item(0));
+    const QImage listImage = selector.viewport()->grab().toImage();
+    const QColor selected = listImage.pixelColor(itemRect.right() - 8, itemRect.center().y());
+    QVERIFY2(matchesTheme(selected), qPrintable(selected.name()));
+
+    QVERIFY(application->styleSheet().contains(QStringLiteral("QToolButton[command=\"true\"]:disabled")));
+
+    application->setStyleSheet(QString());
+    QApplication::setPalette(originalPalette);
 }
 
 QTEST_MAIN(MainWindowTests)

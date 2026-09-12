@@ -71,8 +71,9 @@ void Theme::apply(QApplication& application, ThemeMode mode) {
         QPushButton[snap="true"]:hover { background: #222c35; color: #ffffff; }
         QToolButton[command="true"] { background: transparent; color: #aeb9c4; border: 1px solid transparent; border-radius: 4px; min-height: 28px; padding: 2px 9px; }
         QToolButton[command="true"]:hover { background: #242d36; color: #ffffff; border-color: #34414d; }
-        QToolButton[rail="true"] { min-width: 34px; min-height: 34px; padding: 0; font-weight: 700; }
-        QToolButton[rail="true"]:checked { background: #163431; color: #55decb; border-color: #238f83; }
+        QToolButton[command="true"]:disabled { background: transparent; color: #4f5b67; border-color: transparent; }
+        QToolButton[rail="true"] { min-width: 34px; min-height: 34px; padding: 0; font-weight: 700; border-left: 3px solid transparent; }
+        QToolButton[rail="true"]:checked { background: #163431; color: #55decb; border-color: #238f83; border-left-color: #18b6a4; }
         #CommandDivider { color: #303943; }
         #ToolRail { background: #10151b; border-right: 1px solid #2a333d; }
         #ContextPanel { background: #151b22; border-right: 1px solid #303943; }
@@ -97,8 +98,8 @@ void Theme::apply(QApplication& application, ThemeMode mode) {
         QDockWidget::title { background: #151c24; border-top: 1px solid #26313d; border-bottom: 1px solid #26313d; padding: 8px 10px; text-align: left; }
         QDockWidget > QWidget { background: #111820; }
         QListWidget { background: #111820; border: 0; color: #93a0ad; padding: 6px; }
-        QListWidget::item { padding: 7px; border-radius: 4px; }
-        QListWidget::item:selected { background: #1a302f; color: #55decb; }
+        QListWidget::item { padding: 7px; border-radius: 4px; border-left: 3px solid transparent; }
+        QListWidget::item:selected { background: #1a302f; color: #55decb; border-left-color: #18b6a4; }
         QTabWidget::pane { border: 1px solid #26313d; background: #0d1319; }
         QTabBar::tab { background: #151c24; color: #8593a1; border-right: 1px solid #26313d; padding: 8px 14px; min-width: 140px; }
         QTabBar::tab:selected { background: #1b252e; color: #e7edf3; border-top: 2px solid #18b6a4; }
@@ -120,9 +121,12 @@ void Theme::apply(QApplication& application, ThemeMode mode) {
             #ToolPreview { background: #f8fafb; border-color: #c8d0d7; }
             #ContextHint, #ProjectMeta, #SectionLabel { color: #5e6b76; }
             #CompactProjectTitle, QToolButton[command="true"] { color: #34404b; }
+            QToolButton[command="true"]:disabled { background: transparent; color: #9aa6b0; border-color: transparent; }
+            QToolButton[rail="true"]:checked { background: #d7eeea; color: #075f57; border-color: #55a79f; border-left-color: #087f73; }
             QPushButton[documentTab="true"] { color: #53616c; }
             QPushButton[documentTab="true"]:checked { background: #ffffff; color: #111820; border-bottom-color: #087f73; }
             QListWidget { background: #f7f9fa; color: #34404b; }
+            QListWidget::item:selected { background: #d7eeea; color: #075f57; border-left-color: #087f73; }
             QStatusBar { background: #e9edf1; color: #53616c; border-color: #c8d0d7; }
         )");
     }
