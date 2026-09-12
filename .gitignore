@@ -1,0 +1,8 @@
+/build/
+/.docx-review/
+/.vs/
+/.vscode/
+/.idea/
+*.user
+*.autosave
+/.qtcreator/
