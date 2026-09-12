@@ -71,6 +71,21 @@ private slots:
     void measureDoesNotChangeDocument();
     void escapeCancelsThenRequestsSelection();
 
+    // Automated regression coverage supporting issue #2; not manual verification.
+    void escapeIsLayered();
+    void escapeDuringDragCancelsMoveWithoutUndoEntry();
+    void wireBackspaceRemovesLastCornerAndEnterFinishes();
+    void wireFinishesOnRightClick();
+    void wireFinishesOnDoubleClick();
+    void rightClickWithSinglePointCancelsWire();
+    void lineByDragAndRectangleCircleMeasureByTwoClicks();
+    void arcNeedsThreeClicks();
+    void shiftAndCtrlClickToggleSelection();
+    void arrowKeysNudgeSelection();
+    void rotateBeforePlacingSymbol();
+    void wheelZoomKeepsPointUnderCursor();
+    void middleButtonPans();
+
 private:
     DesignCanvas* canvas_ = nullptr;
 };
@@ -263,6 +278,260 @@ void DesignCanvasTests::escapeCancelsThenRequestsSelection() {
     QCOMPARE(requested.count(), 0);
     QTest::keyClick(canvas_, Qt::Key_Escape);
     QCOMPARE(requested.count(), 1);
+}
+
+void DesignCanvasTests::escapeIsLayered() {
+    QSignalSpy requested(canvas_, &DesignCanvas::selectToolRequested);
+
+    // Layer 1: a pending operation is cancelled first, the tool stays active.
+    canvas_->setTool(CanvasTool::Line);
+    click(*canvas_, {5.08, 5.08});
+    QVERIFY(canvas_->hasPendingOperation());
+    QTest::keyClick(canvas_, Qt::Key_Escape);
+    QVERIFY(!canvas_->hasPendingOperation());
+    QCOMPARE(canvas_->tool(), CanvasTool::Line);
+    QCOMPARE(canvas_->document().size(), 0);
+    QCOMPARE(requested.count(), 0);
+
+    // Layer 2: without a pending operation the selection is cleared before the tool changes.
+    placeResistor(*canvas_, {20.32, 20.32});
+    canvas_->setTool(CanvasTool::Select);
+    click(*canvas_, {20.32, 20.32});
+    QCOMPARE(canvas_->selection(), QList<int>{0});
+    QTest::keyClick(canvas_, Qt::Key_Escape);
+    QVERIFY(canvas_->selection().isEmpty());
+    QCOMPARE(requested.count(), 0);
+
+    // Selection tool with nothing to cancel: Esc is a no-op.
+    QTest::keyClick(canvas_, Qt::Key_Escape);
+    QCOMPARE(requested.count(), 0);
+
+    // Layer 3: a finished measurement is dismissed before returning to selection.
+    canvas_->setTool(CanvasTool::Measure);
+    click(*canvas_, {5.08, 5.08});
+    click(*canvas_, {30.48, 5.08});
+    QVERIFY(!canvas_->hasPendingOperation());
+    QTest::keyClick(canvas_, Qt::Key_Escape);
+    QCOMPARE(requested.count(), 0);
+    QTest::keyClick(canvas_, Qt::Key_Escape);
+    QCOMPARE(requested.count(), 1);
+    QCOMPARE(canvas_->document().size(), 1);
+}
+
+void DesignCanvasTests::escapeDuringDragCancelsMoveWithoutUndoEntry() {
+    placeResistor(*canvas_, {20.32, 20.32});
+    canvas_->setTool(CanvasTool::Select);
+    sendMouse(*canvas_, QEvent::MouseButtonPress, {20.32, 20.32}, Qt::LeftButton, Qt::LeftButton);
+    sendMouse(*canvas_, QEvent::MouseMove, {25.4, 20.32}, Qt::NoButton, Qt::LeftButton);
+    sendMouse(*canvas_, QEvent::MouseMove, {30.48, 20.32}, Qt::NoButton, Qt::LeftButton);
+    QVERIFY(canvas_->hasPendingOperation());
+    QTest::keyClick(canvas_, Qt::Key_Escape);
+    QVERIFY(!canvas_->hasPendingOperation());
+    sendMouse(*canvas_, QEvent::MouseButtonRelease, {30.48, 20.32}, Qt::LeftButton, Qt::NoButton);
+
+    QVERIFY(samePoint(canvas_->document().first().points.first(), {20.32, 20.32}));
+    QCOMPARE(canvas_->undoStack()->count(), 1);
+    // The selection survives the cancelled drag; the next Esc clears it.
+    QCOMPARE(canvas_->selection(), QList<int>{0});
+}
+
+void DesignCanvasTests::wireBackspaceRemovesLastCornerAndEnterFinishes() {
+    canvas_->setTool(CanvasTool::Wire);
+    click(*canvas_, {5.08, 5.08});
+    click(*canvas_, {15.24, 5.08});
+    click(*canvas_, {15.24, 15.24});
+    QTest::keyClick(canvas_, Qt::Key_Backspace);
+    QVERIFY(canvas_->hasPendingOperation());
+    QTest::keyClick(canvas_, Qt::Key_Return);
+
+    QVERIFY(!canvas_->hasPendingOperation());
+    QCOMPARE(canvas_->document().size(), 1);
+    const SketchItem& wire = canvas_->document().first();
+    QCOMPARE(wire.kind, SketchItem::Kind::Wire);
+    QCOMPARE(wire.points.size(), 2);
+    QVERIFY(samePoint(wire.points.last(), {15.24, 5.08}));
+    QCOMPARE(canvas_->undoStack()->count(), 1);
+    QCOMPARE(canvas_->tool(), CanvasTool::Wire);
+
+    // Keypad Enter also finishes.
+    click(*canvas_, {5.08, 25.4});
+    click(*canvas_, {25.4, 25.4});
+    QTest::keyClick(canvas_, Qt::Key_Enter);
+    QCOMPARE(canvas_->document().size(), 2);
+}
+
+void DesignCanvasTests::wireFinishesOnRightClick() {
+    canvas_->setTool(CanvasTool::Wire);
+    click(*canvas_, {5.08, 5.08});
+    click(*canvas_, {15.24, 5.08});
+    click(*canvas_, {15.24, 15.24});
+    sendMouse(*canvas_, QEvent::MouseButtonPress, {30.48, 30.48}, Qt::RightButton, Qt::RightButton);
+    sendMouse(*canvas_, QEvent::MouseButtonRelease, {30.48, 30.48}, Qt::RightButton, Qt::NoButton);
+
+    QVERIFY(!canvas_->hasPendingOperation());
+    QCOMPARE(canvas_->document().size(), 1);
+    QCOMPARE(canvas_->document().first().points.size(), 3);
+    QCOMPARE(canvas_->undoStack()->count(), 1);
+}
+
+void DesignCanvasTests::wireFinishesOnDoubleClick() {
+    canvas_->setTool(CanvasTool::Wire);
+    click(*canvas_, {5.08, 5.08});
+    // A real double-click delivers press, release, double-click, release.
+    const QPointF end(15.24, 5.08);
+    click(*canvas_, end);
+    sendMouse(*canvas_, QEvent::MouseButtonDblClick, end, Qt::LeftButton, Qt::LeftButton);
+    sendMouse(*canvas_, QEvent::MouseButtonRelease, end, Qt::LeftButton, Qt::NoButton);
+
+    QVERIFY(!canvas_->hasPendingOperation());
+    QCOMPARE(canvas_->document().size(), 1);
+    QCOMPARE(canvas_->document().first().points.size(), 2);
+    QCOMPARE(canvas_->undoStack()->count(), 1);
+}
+
+void DesignCanvasTests::rightClickWithSinglePointCancelsWire() {
+    canvas_->setTool(CanvasTool::Wire);
+    click(*canvas_, {5.08, 5.08});
+    sendMouse(*canvas_, QEvent::MouseButtonPress, {5.08, 5.08}, Qt::RightButton, Qt::RightButton);
+    QVERIFY(!canvas_->hasPendingOperation());
+    QCOMPARE(canvas_->document().size(), 0);
+    QCOMPARE(canvas_->undoStack()->count(), 0);
+}
+
+void DesignCanvasTests::lineByDragAndRectangleCircleMeasureByTwoClicks() {
+    canvas_->setTool(CanvasTool::Line);
+    drag(*canvas_, {5.08, 5.08}, {25.4, 5.08});
+    QCOMPARE(canvas_->document().size(), 1);
+    QCOMPARE(canvas_->document().at(0).kind, SketchItem::Kind::Line);
+
+    canvas_->setTool(CanvasTool::Rectangle);
+    click(*canvas_, {5.08, 20.32});
+    QVERIFY(canvas_->hasPendingOperation());
+    click(*canvas_, {25.4, 30.48});
+    QCOMPARE(canvas_->document().size(), 2);
+    QCOMPARE(canvas_->document().at(1).kind, SketchItem::Kind::Rectangle);
+    QVERIFY(samePoint(canvas_->document().at(1).points.at(1), {25.4, 30.48}));
+
+    canvas_->setTool(CanvasTool::Circle);
+    click(*canvas_, {50.8, 50.8});
+    click(*canvas_, {55.88, 50.8});
+    QCOMPARE(canvas_->document().size(), 3);
+    QCOMPARE(canvas_->document().at(2).kind, SketchItem::Kind::Circle);
+
+    canvas_->setTool(CanvasTool::Circle);
+    drag(*canvas_, {76.2, 50.8}, {81.28, 50.8});
+    QCOMPARE(canvas_->document().size(), 4);
+
+    canvas_->setTool(CanvasTool::Measure);
+    click(*canvas_, {5.08, 60.96});
+    click(*canvas_, {30.48, 60.96});
+    QCOMPARE(canvas_->document().size(), 4);
+    QCOMPARE(canvas_->undoStack()->count(), 4);
+}
+
+void DesignCanvasTests::arcNeedsThreeClicks() {
+    canvas_->setTool(CanvasTool::Arc);
+    click(*canvas_, {5.08, 5.08});
+    click(*canvas_, {25.4, 5.08});
+    QCOMPARE(canvas_->document().size(), 0);
+    QVERIFY(canvas_->hasPendingOperation());
+    click(*canvas_, {15.24, 12.7});
+    QVERIFY(!canvas_->hasPendingOperation());
+    QCOMPARE(canvas_->document().size(), 1);
+    const SketchItem& arc = canvas_->document().first();
+    QCOMPARE(arc.kind, SketchItem::Kind::Arc);
+    QVERIFY(samePoint(arc.points.at(0), {5.08, 5.08}));
+    QVERIFY(samePoint(arc.points.at(2), {25.4, 5.08}));
+    QCOMPARE(canvas_->undoStack()->count(), 1);
+}
+
+void DesignCanvasTests::shiftAndCtrlClickToggleSelection() {
+    placeResistor(*canvas_, {20.32, 20.32});
+    click(*canvas_, {50.8, 20.32});
+    canvas_->setTool(CanvasTool::Select);
+
+    click(*canvas_, {20.32, 20.32});
+    QCOMPARE(canvas_->selection(), QList<int>{0});
+    click(*canvas_, {50.8, 20.32}, Qt::ShiftModifier);
+    QCOMPARE(canvas_->selection(), (QList<int>{0, 1}));
+    click(*canvas_, {20.32, 20.32}, Qt::ControlModifier);
+    QCOMPARE(canvas_->selection(), QList<int>{1});
+    // Plain click on empty space clears; Shift-click on empty space keeps.
+    click(*canvas_, {20.32, 20.32}, Qt::ShiftModifier);
+    click(*canvas_, {80.0, 80.0}, Qt::ShiftModifier);
+    QCOMPARE(canvas_->selection(), (QList<int>{0, 1}));
+    click(*canvas_, {80.0, 80.0});
+    QVERIFY(canvas_->selection().isEmpty());
+    QCOMPARE(canvas_->undoStack()->count(), 2);
+}
+
+void DesignCanvasTests::arrowKeysNudgeSelection() {
+    placeResistor(*canvas_, {20.32, 20.32});
+    canvas_->setTool(CanvasTool::Select);
+    click(*canvas_, {20.32, 20.32});
+
+    QTest::keyClick(canvas_, Qt::Key_Right);
+    QVERIFY(samePoint(canvas_->document().first().points.first(), {22.86, 20.32}));
+    QTest::keyClick(canvas_, Qt::Key_Down, Qt::ShiftModifier);
+    QVERIFY(samePoint(canvas_->document().first().points.first(), {22.86, 33.02}));
+    QCOMPARE(canvas_->undoStack()->count(), 3);
+    canvas_->undoStack()->undo();
+    QVERIFY(samePoint(canvas_->document().first().points.first(), {22.86, 20.32}));
+}
+
+void DesignCanvasTests::rotateBeforePlacingSymbol() {
+    canvas_->setTool(CanvasTool::Symbol, Resistor);
+    canvas_->rotateSelection();
+    click(*canvas_, {20.32, 20.32});
+    QCOMPARE(canvas_->document().size(), 1);
+    QCOMPARE(canvas_->document().first().quarterTurns, 1);
+    QCOMPARE(canvas_->undoStack()->count(), 1);
+}
+
+void DesignCanvasTests::wheelZoomKeepsPointUnderCursor() {
+    QSignalSpy zoom(canvas_, &DesignCanvas::zoomChanged);
+    const QPointF world(40.64, 30.48);
+    const QPointF screen = canvas_->worldToScreen(world);
+    const int before = canvas_->zoomPercent();
+
+    QWheelEvent in(screen, canvas_->mapToGlobal(screen), QPoint(), QPoint(0, 120), Qt::NoButton,
+                   Qt::NoModifier, Qt::NoScrollPhase, false);
+    QApplication::sendEvent(canvas_, &in);
+    QVERIFY(canvas_->zoomPercent() > before);
+    QVERIFY(QLineF(canvas_->worldToScreen(world), screen).length() < 1e-6);
+
+    QWheelEvent out(screen, canvas_->mapToGlobal(screen), QPoint(), QPoint(0, -240), Qt::NoButton,
+                    Qt::NoModifier, Qt::NoScrollPhase, false);
+    QApplication::sendEvent(canvas_, &out);
+    QVERIFY(canvas_->zoomPercent() < before);
+    QVERIFY(QLineF(canvas_->worldToScreen(world), screen).length() < 1e-6);
+    QCOMPARE(zoom.count(), 2);
+
+    placeResistor(*canvas_, {200.0, 200.0});
+    canvas_->zoomToFit();
+    const QPointF fitted = canvas_->worldToScreen({200.0, 200.0});
+    QVERIFY(QRectF(canvas_->rect()).contains(fitted));
+}
+
+void DesignCanvasTests::middleButtonPans() {
+    canvas_->setTool(CanvasTool::Wire);
+    const QPointF world(20.32, 20.32);
+    const QPointF before = canvas_->worldToScreen(world);
+    const QPointF start(300, 300);
+    const QPointF end(350, 260);
+    auto send = [&](QEvent::Type type, QPointF position, Qt::MouseButton button,
+                    Qt::MouseButtons buttons) {
+        QMouseEvent event(type, position, canvas_->mapToGlobal(position), button, buttons,
+                          Qt::NoModifier);
+        QApplication::sendEvent(canvas_, &event);
+    };
+    send(QEvent::MouseButtonPress, start, Qt::MiddleButton, Qt::MiddleButton);
+    send(QEvent::MouseMove, end, Qt::NoButton, Qt::MiddleButton);
+    send(QEvent::MouseButtonRelease, end, Qt::MiddleButton, Qt::NoButton);
+
+    QVERIFY(QLineF(canvas_->worldToScreen(world), before + (end - start)).length() < 1e-6);
+    QCOMPARE(canvas_->document().size(), 0);
+    QVERIFY(!canvas_->hasPendingOperation());
 }
 
 QTEST_MAIN(DesignCanvasTests)
