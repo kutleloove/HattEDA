@@ -1,5 +1,7 @@
 # HattEDA
 
+[![CI](https://github.com/kutleloove/HattEDA/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/kutleloove/HattEDA/actions/workflows/ci.yml)
+
 HattEDA; elektronik şema ve simülasyon, PCB/CAD, CAM ve üretim otomasyonu için geliştirilen Qt tabanlı bir masaüstü uygulamasıdır. Ürün, başlangıçtan itibaren eklenti katkılarına açık olacak; ancak proje verisi ve domain modeli kararlı servis sınırlarının arkasında kalacaktır.
 
 Bu depo şu anda ilk çalışan geliştirme dilimini içerir:
@@ -46,6 +48,28 @@ Release derlemesi:
 & 'C:\Qt\Tools\CMake_64\bin\cmake.exe' --preset windows-mingw-release
 & 'C:\Qt\Tools\CMake_64\bin\cmake.exe' --build --preset release
 ```
+
+QtTest çıktısı CTest tarafından yakalanmadığı için her QtTest programı sonuçlarını `build/<preset>/test-logs/<test>.txt` dosyasına da yazar.
+
+## CI
+
+GitHub Actions (`.github/workflows/ci.yml`) her `main`, `feature/**` ve `work/**` push'unda, `main`'e açılan pull request'lerde ve elle tetiklendiğinde `windows-latest` üzerinde çalışır:
+
+- `jurplel/install-qt-action` ile Qt 6.11.2 MinGW 64-bit, MinGW 13.1 ve Ninja kurulur (yalnızca CI aracıdır, uygulama bağımlılığı değildir) ve önbelleğe alınır.
+- `ci-mingw-debug` ile uyarılar hata sayılarak (`HATTEDA_WERROR=ON`) Debug derlenir, `ctest --preset ci-debug` (`QT_QPA_PLATFORM=offscreen`) çalışır; başarısızlıkta `test-logs` artifact olarak yüklenir.
+- `ci-mingw-release` ile Release derlemesi (`BUILD_TESTING=OFF`) doğrulanır.
+
+CI preset'leri araç zincirini mutlak yollar yerine ortam değişkenlerinden alır. Yerelde denemek için:
+
+```powershell
+$env:QT_ROOT_DIR = 'C:\Qt\6.11.2\mingw_64'; $env:HATTEDA_MINGW_DIR = 'C:\Qt\Tools\mingw1310_64'
+$env:PATH = "C:\Qt\Tools\Ninja;$env:PATH"
+& 'C:\Qt\Tools\CMake_64\bin\cmake.exe' --preset ci-mingw-debug -DHATTEDA_WERROR=ON
+& 'C:\Qt\Tools\CMake_64\bin\cmake.exe' --build --preset ci-debug
+& 'C:\Qt\Tools\CMake_64\bin\ctest.exe' --preset ci-debug
+```
+
+Karar kaydı: [ADR-0005](docs/adr/ADR-0005-continuous-integration.md).
 
 ## Depo yapısı
 

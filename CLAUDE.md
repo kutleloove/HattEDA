@@ -34,7 +34,23 @@ $env:PATH = "C:\Qt\6.11.2\mingw_64\bin;C:\Qt\Tools\mingw1310_64\bin;$env:PATH"; 
 & 'C:\Qt\Tools\CMake_64\bin\cmake.exe' --build --preset release
 ```
 
+QtTest output is not captured by CTest on Windows (`--output-on-failure` shows nothing for QtTest executables), so `tests/unit/CMakeLists.txt` registers them via `hatt_add_qt_test(name)`, which passes `-o <build>/test-logs/<name>.txt,txt`; read those files when a test fails. Register new QtTest executables with `hatt_add_qt_test`.
+
 Formatting follows `.clang-format` (LLVM base, 4-space indent, 100 columns, left pointer alignment). Targets compile with `-Wall -Wextra -Wpedantic` (`/W4 /permissive-` on MSVC).
+
+### CI
+
+`.github/workflows/ci.yml` (GitHub Actions, `windows-latest`) runs on pushes to `main`, `feature/**`, `work/**`, on PRs to `main`, and manually. It installs Qt 6.11.2 `win64_mingw` plus `tools_mingw1310` and `tools_ninja` with `jurplel/install-qt-action` (cached; aqtinstall is installed from a pinned git commit because the 3.3.0 release cannot resolve Qt 6.11), then configures `ci-mingw-debug` with `-DHATTEDA_WERROR=ON`, builds `ci-debug`, runs `ctest --preset ci-debug`, uploads `build/ci-mingw-debug/test-logs` on failure, and builds `ci-mingw-release`/`ci-release`. Action versions are pinned by commit SHA. Decision record: ADR-0005.
+
+- CI presets inherit hidden `ci-mingw-base` and take the toolchain from environment variables instead of absolute paths: `QT_ROOT_DIR` (Qt kit, e.g. `C:\Qt\6.11.2\mingw_64`) and `HATTEDA_MINGW_DIR` (e.g. `C:\Qt\Tools\mingw1310_64`); `ninja` must be on PATH. The `windows-mingw-*` presets and `debug`/`release` build/test presets are the local ones and must keep working.
+- `HATTEDA_WERROR` (CMake option, default OFF) sets `CMAKE_COMPILE_WARNING_AS_ERROR`. CI enables it, so new code must build warning-free with MinGW in Debug and Release.
+
+```powershell
+$env:QT_ROOT_DIR = 'C:\Qt\6.11.2\mingw_64'; $env:HATTEDA_MINGW_DIR = 'C:\Qt\Tools\mingw1310_64'; $env:PATH = "C:\Qt\Tools\Ninja;$env:PATH"
+& 'C:\Qt\Tools\CMake_64\bin\cmake.exe' --preset ci-mingw-debug -DHATTEDA_WERROR=ON
+& 'C:\Qt\Tools\CMake_64\bin\cmake.exe' --build --preset ci-debug
+& 'C:\Qt\Tools\CMake_64\bin\ctest.exe' --preset ci-debug
+```
 
 ## Layout and architecture
 
