@@ -867,6 +867,19 @@ QWidget* MainWindow::createEditor() {
     deviceLayout->addWidget(pickDevices, 1);
     deviceLayout->addWidget(removeDeviceButton_);
     contextLayout->addWidget(deviceBar_);
+    // Board component mode: place every waiting part at once (Proteus ARES auto placer).
+    boardPartsBar_ = new QWidget(contextPanel);
+    boardPartsBar_->setObjectName(QStringLiteral("BoardPartsBar"));
+    auto* partsLayout = new QHBoxLayout(boardPartsBar_);
+    partsLayout->setContentsMargins(0, 0, 0, 0);
+    auto* autoPlace = new QPushButton(tr("Auto placer..."), boardPartsBar_);
+    autoPlace->setObjectName(QStringLiteral("hatteda.parts.auto-place"));
+    autoPlace->setToolTip(tr("Place all listed components inside the board outline"));
+    connect(autoPlace, &QPushButton::clicked, this, [this] {
+        if (auto* action = findChild<QAction*>(QStringLiteral("hatteda.action.auto-place"))) action->trigger();
+    });
+    partsLayout->addWidget(autoPlace, 1);
+    contextLayout->addWidget(boardPartsBar_);
     objectSelector_ = new QListWidget(contextPanel);
     objectSelector_->setObjectName(QStringLiteral("ObjectSelector"));
     objectSelector_->setIconSize(QSize(32, 32));
@@ -1199,6 +1212,7 @@ void MainWindow::rebuildObjectSelector() {
                                : workspace == Workspace::Schematic ? tr("DEVICES")
                                                                    : tr("COMPONENTS TO PLACE"));
         deviceBar_->setVisible(componentMode && workspace == Workspace::Schematic);
+        boardPartsBar_->setVisible(componentMode && workspace == Workspace::Board);
         if (hasObjects) {
             const int row = rememberedObjectRows_.value(rememberKey(static_cast<int>(toolMode_), workspace), 0);
             objectSelector_->setCurrentRow(std::clamp(row, 0, objectSelector_->count() - 1));

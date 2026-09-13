@@ -121,6 +121,7 @@ private:
     QWidget* objectPreview_ = nullptr;
     QListWidget* objectSelector_ = nullptr;
     QWidget* deviceBar_ = nullptr;
+    QWidget* boardPartsBar_ = nullptr;
     QPushButton* removeDeviceButton_ = nullptr;
     QStringList componentKeys_;
     // Board component mode: footprints waiting for placement, indexed by the selector rows.

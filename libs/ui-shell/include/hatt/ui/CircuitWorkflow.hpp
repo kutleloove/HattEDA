@@ -20,7 +20,13 @@ public:
     ~CircuitWorkflow() override;
 public slots:
     void showNetlist();
+    // Asks for a file and writes netlistText (plain text, .net).
+    void exportNetlist();
     void updateBoard();
+    // Places every board part that is not on the board yet (one undo step); returns how many.
+    int autoPlace(double grid, double spacing);
+    // Auto placer dialog (AutoPlacerDialog) with grid and spacing, remembered in QSettings.
+    void showAutoPlacer();
     void runDc();
     void cancelDc();
     void loadExample();

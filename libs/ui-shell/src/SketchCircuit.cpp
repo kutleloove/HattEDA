@@ -202,8 +202,9 @@ BoardParts unplacedBoardParts(const SketchDocument& schematic, const SketchDocum
     return result;
 }
 
-SketchDocument autoPlaceParts(const SketchDocument& board, const SketchDocument& parts, double grid) {
-    constexpr double gap = 2.54;
+SketchDocument autoPlaceParts(const SketchDocument& board, const SketchDocument& parts, double grid,
+                              double spacing) {
+    const double gap = std::max(0.0, spacing);
     SketchDocument result = board;
     QVector<QRectF> occupied;
     QRectF area;
@@ -244,10 +245,42 @@ SketchDocument autoPlaceParts(const SketchDocument& board, const SketchDocument&
                 rowHeight = std::max(rowHeight, placed.bottom() - y);
                 break;
             }
-            x = std::max(x + gap, blocker->right() + gap);
+            x = std::max(x + std::max(gap, 0.254), blocker->right() + gap);
         }
     }
     return result;
+}
+
+QString netlistText(const SketchDocument& schematic, QStringList* errors) {
+    const auto snapshot = analyzeSchematic(schematic);
+    if (errors) *errors = snapshot.errors;
+    if (!snapshot.errors.isEmpty()) return {};
+    QHash<QString, QString> references;
+    for (const auto& item : schematic) references.insert(item.id, item.label);
+    QString text = QStringLiteral("* HattEDA netlist\n* %1 nets\n").arg(snapshot.connectivity.nets.size());
+    text += QStringLiteral("*PARTS\n");
+    for (const auto& item : schematic) {
+        if (!component(item)) continue;
+        text += QStringLiteral("%1 %2 %3 %4\n").arg(item.label, item.variant,
+                                                    item.value.isEmpty() ? QStringLiteral("-") : item.value,
+                                                    item.footprint.isEmpty() ? QStringLiteral("-") : item.footprint);
+    }
+    text += QStringLiteral("*NETS\n");
+    for (const auto& net : snapshot.connectivity.nets) {
+        QStringList members;
+        for (int p : net.pins) {
+            const auto& pin = snapshot.input.pins[p];
+            const QString reference = references.value(QString::fromStdString(pin.component));
+            // Ports, rails and probes name nets but are not parts.
+            if (reference.isEmpty() || !std::any_of(schematic.begin(), schematic.end(), [&](const SketchItem& item) {
+                    return item.id == QString::fromStdString(pin.component) && component(item);
+                })) continue;
+            members << reference + QLatin1Char('.') + QString::fromStdString(pin.number);
+        }
+        if (members.isEmpty()) continue;
+        text += QStringLiteral("%1: %2\n").arg(QString::fromStdString(net.name), members.join(QLatin1Char(' ')));
+    }
+    return text;
 }
 
 BoardGuidance boardGuidance(const SketchDocument& schematic, const SketchDocument& board) {

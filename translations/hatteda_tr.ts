@@ -210,4 +210,27 @@ Son projeler listesinden kaldırılsın mı?</translation></message>
     <message><source>The library section is invalid.</source><translation>Kütüphane bölümü geçersiz.</translation></message>
     <message><source>The library lists the unknown device '%1'.</source><translation>Kütüphane bilinmeyen '%1' elemanını içeriyor.</translation></message>
   </context>
+  <context>
+    <name>hatt::ui::CircuitWorkflow</name>
+    <message><source>Export netlist...</source><translation>Netlisti dışa aktar...</translation></message>
+    <message><source>Netlist to PCB</source><translation>Netlisti PCB'ye aktar</translation></message>
+    <message><source>Update PCB from schematic: refresh linked footprints and auto place new parts</source><translation>PCB'yi şemadan güncelle: bağlı kılıfları yenile, yeni parçaları otomatik yerleştir</translation></message>
+    <message><source>Auto placer...</source><translation>Otomatik yerleştirici...</translation></message>
+    <message><source>Auto place components</source><translation>Elemanları otomatik yerleştir</translation></message>
+    <message><source>Auto placer</source><translation>Otomatik yerleştirici</translation></message>
+    <message><source>Every schematic component is already on the board.</source><translation>Şemadaki tüm elemanlar zaten kartta.</translation></message>
+    <message numerus="yes"><source>%n component(s) will be placed inside the board outline, or next to the design when there is no outline.</source><translation><numerusform>%n eleman kart dış çizgisinin içine, dış çizgi yoksa tasarımın yanına yerleştirilecek.</numerusform></translation></message>
+    <message><source>Placement grid</source><translation>Yerleşim ızgarası</translation></message>
+    <message><source>Spacing between components</source><translation>Elemanlar arası boşluk</translation></message>
+    <message><source>Not placed</source><translation>Yerleştirilmeyenler</translation></message>
+    <message><source>Place</source><translation>Yerleştir</translation></message>
+    <message><source>Export netlist</source><translation>Netlisti dışa aktar</translation></message>
+    <message><source>Netlist (*.net);;All files (*.*)</source><translation>Netlist (*.net);;Tüm dosyalar (*.*)</translation></message>
+    <message><source>Cannot write %1: %2</source><translation>%1 yazılamıyor: %2</translation></message>
+  </context>
+  <context>
+    <name>hatt::ui::MainWindow</name>
+    <message><source>Auto placer...</source><translation>Otomatik yerleştirici...</translation></message>
+    <message><source>Place all listed components inside the board outline</source><translation>Listelenen tüm elemanları kart dış çizgisinin içine yerleştir</translation></message>
+  </context>
 </TS>

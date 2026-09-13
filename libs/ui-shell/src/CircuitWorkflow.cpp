@@ -1,8 +1,17 @@
 #include "hatt/ui/CircuitWorkflow.hpp"
 #include "hatt/ui/SketchCircuit.hpp"
 #include <QAction>
+#include <QDialog>
+#include <QDialogButtonBox>
+#include <QDoubleSpinBox>
+#include <QFileDialog>
+#include <QFormLayout>
+#include <QLabel>
 #include <QMenu>
 #include <QMessageBox>
+#include <QPushButton>
+#include <QSaveFile>
+#include <QSettings>
 #include <QTextEdit>
 #include <QThread>
 #include <QTimer>
@@ -30,15 +39,21 @@ CircuitWorkflow::CircuitWorkflow(QWidget* host, QMenu* menu, DesignCanvas* schem
         return action;
     };
     auto* net = add("hatteda.action.netlist", tr("Show netlist"), &CircuitWorkflow::showNetlist);
-    auto* transfer = add("hatteda.action.update-pcb", tr("Update PCB from schematic"), &CircuitWorkflow::updateBoard);
+    auto* exportNet = add("hatteda.action.export-netlist", tr("Export netlist..."), &CircuitWorkflow::exportNetlist);
+    menu->addSeparator();
+    auto* transfer = add("hatteda.action.update-pcb", tr("Netlist to PCB"), &CircuitWorkflow::updateBoard);
+    transfer->setShortcut(QKeySequence(QStringLiteral("Alt+A")));
+    transfer->setToolTip(tr("Update PCB from schematic: refresh linked footprints and auto place new parts"));
+    auto* placer = add("hatteda.action.auto-place", tr("Auto placer..."), &CircuitWorkflow::showAutoPlacer);
     menu->addSeparator();
     run_ = add("hatteda.action.run-dc", tr("Run DC operating point"), &CircuitWorkflow::runDc);
     cancel_ = add("hatteda.action.cancel-dc", tr("Cancel simulation"), &CircuitWorkflow::cancelDc);
     auto* example = add("hatteda.action.dc-example", tr("Load DC divider example (empty schematic)"), &CircuitWorkflow::loadExample);
     cancel_->setEnabled(false);
-    connect(menu, &QMenu::aboutToShow, this, [this, net, transfer, example] {
+    connect(menu, &QMenu::aboutToShow, this, [this, net, exportNet, transfer, placer, example] {
         const bool open = projectOpen_();
-        net->setEnabled(open); transfer->setEnabled(open); example->setEnabled(open && !running_);
+        net->setEnabled(open); exportNet->setEnabled(open); transfer->setEnabled(open); placer->setEnabled(open);
+        example->setEnabled(open && !running_);
         run_->setEnabled(open && !running_); cancel_->setEnabled(running_);
     });
     connect(schematic_, &DesignCanvas::documentChanged, this, &CircuitWorkflow::schematicChanged);
@@ -111,6 +126,84 @@ void CircuitWorkflow::updateBoard() {
     refreshGuidance();
     showBoard_();
     if (transfer.added) board_->zoomToFit();
+}
+
+int CircuitWorkflow::autoPlace(double grid, double spacing) {
+    if (!projectOpen_()) return 0;
+    const auto waiting = unplacedBoardParts(schematic_->document(), board_->document());
+    if (!waiting.parts.isEmpty()) {
+        board_->applyDocumentEdit(tr("Auto place components"),
+                                  autoPlaceParts(board_->document(), waiting.parts, grid, spacing));
+        refreshGuidance();
+    }
+    showBoard_();
+    if (!waiting.parts.isEmpty()) board_->zoomToFit();
+    return static_cast<int>(waiting.parts.size());
+}
+
+void CircuitWorkflow::showAutoPlacer() {
+    if (!projectOpen_()) return;
+    const auto waiting = unplacedBoardParts(schematic_->document(), board_->document());
+    const LengthUnit unit = board_->lengthUnit();
+    QSettings settings;
+    QDialog dialog(host_);
+    dialog.setObjectName(QStringLiteral("AutoPlacerDialog"));
+    dialog.setWindowTitle(tr("Auto placer"));
+    auto* form = new QFormLayout(&dialog);
+    auto* summary = new QLabel(&dialog);
+    summary->setWordWrap(true);
+    summary->setText(waiting.parts.isEmpty()
+                         ? tr("Every schematic component is already on the board.")
+                         : tr("%n component(s) will be placed inside the board outline, or next to the "
+                              "design when there is no outline.", nullptr, static_cast<int>(waiting.parts.size())));
+    form->addRow(summary);
+    auto length = [&](const QString& name, const QString& key, double fallback) {
+        auto* field = new QDoubleSpinBox(&dialog);
+        field->setObjectName(name);
+        field->setRange(0.0, toDisplayUnit(50.0, unit));
+        field->setDecimals(unitDecimals(unit));
+        field->setSuffix(QLatin1Char(' ') + unitSymbol(unit));
+        field->setValue(toDisplayUnit(settings.value(key, fallback).toDouble(), unit));
+        return field;
+    };
+    auto* grid = length(QStringLiteral("AutoPlacerGrid"), QStringLiteral("pcb/autoPlacer/grid"), 1.27);
+    auto* spacing = length(QStringLiteral("AutoPlacerSpacing"), QStringLiteral("pcb/autoPlacer/spacing"), 2.54);
+    form->addRow(tr("Placement grid"), grid);
+    form->addRow(tr("Spacing between components"), spacing);
+    if (!waiting.problems.isEmpty()) {
+        auto* problems = new QLabel(waiting.problems.join(QLatin1Char('\n')), &dialog);
+        problems->setWordWrap(true);
+        form->addRow(tr("Not placed"), problems);
+    }
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+    buttons->button(QDialogButtonBox::Ok)->setText(tr("Place"));
+    buttons->button(QDialogButtonBox::Ok)->setEnabled(!waiting.parts.isEmpty());
+    connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    form->addRow(buttons);
+    if (dialog.exec() != QDialog::Accepted) return;
+    const double gridMm = fromDisplayUnit(grid->value(), unit);
+    const double spacingMm = fromDisplayUnit(spacing->value(), unit);
+    settings.setValue(QStringLiteral("pcb/autoPlacer/grid"), gridMm);
+    settings.setValue(QStringLiteral("pcb/autoPlacer/spacing"), spacingMm);
+    autoPlace(gridMm, spacingMm);
+}
+
+void CircuitWorkflow::exportNetlist() {
+    if (!projectOpen_()) return;
+    QStringList errors;
+    const QString text = netlistText(schematic_->document(), &errors);
+    if (!errors.isEmpty()) {
+        QMessageBox::warning(host_, tr("Export netlist"), errors.join(QLatin1Char('\n')));
+        return;
+    }
+    const QString path = QFileDialog::getSaveFileName(host_, tr("Export netlist"), QString(),
+                                                      tr("Netlist (*.net);;All files (*.*)"));
+    if (path.isEmpty()) return;
+    QSaveFile file(path);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text) || file.write(text.toUtf8()) < 0 || !file.commit()) {
+        QMessageBox::warning(host_, tr("Export netlist"), tr("Cannot write %1: %2").arg(path, file.errorString()));
+    }
 }
 void CircuitWorkflow::loadExample() {
     if (!projectOpen_() || running_) return;

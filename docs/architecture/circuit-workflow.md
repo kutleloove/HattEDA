@@ -12,7 +12,9 @@ Aktif çizim/yerleştirme/taşıma sırasında sağ tık taslağı iptal eder ve
 - Yeni yerleştirilen parçaya varsayılan değer (direnç `1k`, kaynak `5`, kondansatör `100n`...) ve pin sayısı uyan kılıf (`r0603`, `header-1x2`, `c0805`, `sot23`, `soic8`) atanır; pin→pad eşlemesi 1'e 1'dir. Özelliklerden değiştirilebilir.
 - **PCB:** Kayra'da Component modu yalnızca şemaya yerleştirilmiş ve kartta henüz olmayan parçaları tasarımcı sırasıyla (R1, R2, V1) listeler. Tıklanan yere yerleştirilen kılıf şema parçasına bağlanır (`sourceId`, etiket, değer, eşleme) ve listeden düşer; geri alınınca tekrar görünür. Kılıfı atanmamış parçalar listelenmez, ipucu alanında bildirilir.
 - **PCB'den hariç tut:** Özellikler penceresindeki bu seçenek parçayı PCB listesinden, aktarımdan ve bağlantı rehberinden çıkarır; parça netlistte ve simülasyonda kalır.
-- **Update PCB from schematic** kartta olmayan parçaları otomatik yerleştiriciyle (`autoPlaceParts`) ekler: kart dış çizgisi varsa içine, yoksa tasarımın sağına, mevcut nesnelerle çakışmadan satır satır ve 1.27 mm ızgaraya.
+- **Netlist to PCB** (Alt+A, `hatteda.action.update-pcb`) bağlı kılıfların etiket/değerini yeniler ve kartta olmayan parçaları otomatik yerleştiriciyle (`autoPlaceParts`) ekler: kart dış çizgisi varsa içine, yoksa tasarımın sağına, mevcut nesnelerle çakışmadan satır satır ve 1.27 mm ızgaraya.
+- **Auto placer...** (`hatteda.action.auto-place`, PCB component modunda `hatteda.parts.auto-place` düğmesi) `AutoPlacerDialog` açar: yerleşim ızgarası (`AutoPlacerGrid`) ve elemanlar arası boşluk (`AutoPlacerSpacing`) PCB biriminde girilir, `pcb/autoPlacer/grid|spacing` ayarlarında hatırlanır; tüm bekleyen parçalar tek undo adımıyla yerleşir.
+- **Export netlist...** (`hatteda.action.export-netlist`) `.net` metin dosyası yazar: `*PARTS` (referans, eleman, değer, kılıf) ve `*NETS` (`net: R1.1 V1.2`) bölümleri. Portlar/raylar net adı verir ama parça olarak listelenmez.
 
 ## Çalışan örnek
 

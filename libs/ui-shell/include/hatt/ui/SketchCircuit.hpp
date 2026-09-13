@@ -40,9 +40,13 @@ struct BoardParts {
 BoardParts unplacedBoardParts(const SketchDocument& schematic, const SketchDocument& board);
 // Returns `board` with `parts` appended at positions that do not overlap existing items: in rows
 // inside the board outline when there is one, otherwise to the right of the design. Origins are
-// rounded to `grid` (0 disables rounding).
+// rounded to `grid` (0 disables rounding); `spacing` is the clearance between part bounds and to
+// the outline.
 SketchDocument autoPlaceParts(const SketchDocument& board, const SketchDocument& parts,
-                              double grid = 0.0);
+                              double grid = 0.0, double spacing = 2.54);
+
+// Plain-text netlist (one line per net: name and component.pin members) for export.
+QString netlistText(const SketchDocument& schematic, QStringList* errors = nullptr);
 struct BoardGuidance {
     QVector<QLineF> airwires;
     QStringList errors;

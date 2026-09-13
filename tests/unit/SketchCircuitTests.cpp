@@ -3,7 +3,11 @@
 #include "hatt/ui/MainWindow.hpp"
 #include "hatt/ui/Theme.hpp"
 #include <QDialog>
+#include <QDialogButtonBox>
 #include <QDir>
+#include <QDoubleSpinBox>
+#include <QPushButton>
+#include <QRegularExpression>
 #include <QFontDatabase>
 #include <QSettings>
 #include <QTemporaryDir>
@@ -206,6 +210,57 @@ private slots:
             const QPointF origin = placed[i].points.first();
             QVERIFY(std::abs(origin.x() / 1.27 - std::round(origin.x() / 1.27)) < 1e-6);
         }
+    }
+    void netlistTextListsPartsAndNets() {
+        const auto text = netlistText(dcDividerExample());
+        QVERIFY(text.contains("*PARTS"));
+        QVERIFY(text.contains("R1 schematic.resistor 1k board.r0603"));
+        QVERIFY(text.contains("*NETS"));
+        QVERIFY(text.contains(QRegularExpression("\\n0: .*V1\\.2")));
+        QStringList errors;
+        auto broken = dcDividerExample();
+        broken[1].label = "V1";
+        QVERIFY(netlistText(broken, &errors).isEmpty());
+        QVERIFY(!errors.isEmpty());
+    }
+    void autoPlacerDialogPlacesPartsInOneStep() {
+        MainWindow window;
+        window.resize(1440, 900);
+        window.show();
+        QTimer::singleShot(0, [] {
+            if (auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget())) dialog->accept();
+        });
+        window.createNewProject();
+        auto* flow = window.findChild<CircuitWorkflow*>();
+        flow->loadExample();
+        window.showKayraWorkspace();
+        auto* board = window.activeCanvas();
+        SketchItem outline;
+        outline.kind = SketchItem::Kind::Polyline;
+        outline.variant = BoardOutlineVariant;
+        outline.closed = true;
+        outline.points = {{0, 0}, {50, 0}, {50, 40}, {0, 40}};
+        board->applyDocumentEdit("outline", {outline});
+
+        QTimer::singleShot(0, [] {
+            auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+            QVERIFY(dialog);
+            QCOMPARE(dialog->objectName(), QString("AutoPlacerDialog"));
+            dialog->findChild<QDoubleSpinBox*>("AutoPlacerGrid")->setValue(2.54);
+            dialog->findChild<QDoubleSpinBox*>("AutoPlacerSpacing")->setValue(5.0);
+            dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Ok)->click();
+        });
+        window.findChild<QAction*>("hatteda.action.auto-place")->trigger();
+        QCOMPARE(board->document().size(), 4);
+        QCOMPARE(board->undoStack()->count(), 2);
+        for (int i = 1; i < 4; ++i) {
+            QVERIFY(QRectF(0, 0, 50, 40).contains(itemBounds(board->document()[i])));
+            QVERIFY(!board->document()[i].sourceId.isEmpty());
+        }
+        QCOMPARE(QSettings().value("pcb/autoPlacer/spacing").toDouble(), 5.0);
+        QCOMPARE(board->airwires().size(), 3);
+        QCOMPARE(flow->autoPlace(1.27, 2.54), 0);
+        QCOMPARE(board->undoStack()->count(), 2);
     }
     void duplicateCreatesNewIdentity() {
         DesignCanvas canvas(Workspace::Schematic);
