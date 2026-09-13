@@ -44,10 +44,7 @@ QStringList validateFootprint(const SketchItem& item) {
     }
     return errors;
 }
-}
-
-CircuitSnapshot analyzeSchematic(const SketchDocument& document) {
-    CircuitSnapshot result;
+void collectSchematicInput(const SketchDocument& document, CircuitSnapshot& result) {
     QSet<QString> ids;
     QSet<QString> references;
     for (const auto& item : document) {
@@ -83,6 +80,12 @@ CircuitSnapshot analyzeSchematic(const SketchDocument& document) {
             }
         }
     }
+}
+}
+
+CircuitSnapshot analyzeSchematic(const SketchDocument& document) {
+    CircuitSnapshot result;
+    collectSchematicInput(document, result);
     result.connectivity = electrical::buildConnectivity(result.input);
     for (const auto& error : result.connectivity.errors) result.errors << QString::fromStdString(error);
     if (!result.errors.isEmpty()) return result;
@@ -106,6 +109,14 @@ CircuitSnapshot analyzeSchematic(const SketchDocument& document) {
             result.simulationErrors << tr("%1: invalid value '%2'.").arg(item.label, item.value);
         result.dc.elements.push_back(e);
     }
+    return result;
+}
+
+QVector<QPointF> schematicJunctions(const SketchDocument& document) {
+    CircuitSnapshot snapshot;
+    collectSchematicInput(document, snapshot);
+    QVector<QPointF> result;
+    for (const auto p : electrical::junctionPoints(snapshot.input)) result.append(QPointF(p.x, p.y));
     return result;
 }
 

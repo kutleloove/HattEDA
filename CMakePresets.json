@@ -31,11 +31,47 @@
         "CMAKE_BUILD_TYPE": "Release",
         "BUILD_TESTING": "OFF"
       }
+    },
+    {
+      "name": "ci-mingw-base",
+      "hidden": true,
+      "displayName": "CI MinGW (toolchain from environment)",
+      "description": "Requires QT_ROOT_DIR (Qt MinGW kit, e.g. C:/Qt/6.11.2/mingw_64) and HATTEDA_MINGW_DIR (e.g. C:/Qt/Tools/mingw1310_64); ninja must be on PATH.",
+      "generator": "Ninja",
+      "environment": {
+        "PATH": "$penv{HATTEDA_MINGW_DIR}/bin;$penv{QT_ROOT_DIR}/bin;$penv{PATH}"
+      },
+      "cacheVariables": {
+        "CMAKE_PREFIX_PATH": "$penv{QT_ROOT_DIR}",
+        "CMAKE_CXX_COMPILER": "$penv{HATTEDA_MINGW_DIR}/bin/g++.exe"
+      }
+    },
+    {
+      "name": "ci-mingw-debug",
+      "inherits": "ci-mingw-base",
+      "displayName": "CI MinGW Debug",
+      "binaryDir": "${sourceDir}/build/ci-mingw-debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "BUILD_TESTING": "ON"
+      }
+    },
+    {
+      "name": "ci-mingw-release",
+      "inherits": "ci-mingw-base",
+      "displayName": "CI MinGW Release",
+      "binaryDir": "${sourceDir}/build/ci-mingw-release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "BUILD_TESTING": "OFF"
+      }
     }
   ],
   "buildPresets": [
     { "name": "debug", "configurePreset": "windows-mingw-debug" },
-    { "name": "release", "configurePreset": "windows-mingw-release" }
+    { "name": "release", "configurePreset": "windows-mingw-release" },
+    { "name": "ci-debug", "configurePreset": "ci-mingw-debug" },
+    { "name": "ci-release", "configurePreset": "ci-mingw-release" }
   ],
   "testPresets": [
     {
@@ -44,6 +80,20 @@
       "output": { "outputOnFailure": true },
       "environment": {
         "PATH": "C:/Qt/6.11.2/mingw_64/bin;$penv{PATH}",
+        "QT_QPA_PLATFORM": "offscreen"
+      }
+    },
+    {
+      "name": "ci-debug",
+      "configurePreset": "ci-mingw-debug",
+      "output": {
+        "outputOnFailure": true,
+        "outputLogFile": "${sourceDir}/build/ci-mingw-debug/test-logs/ctest.log",
+        "outputJUnitFile": "${sourceDir}/build/ci-mingw-debug/test-logs/ctest-junit.xml"
+      },
+      "execution": { "noTestsAction": "error", "timeout": 300 },
+      "environment": {
+        "PATH": "$penv{QT_ROOT_DIR}/bin;$penv{HATTEDA_MINGW_DIR}/bin;$penv{PATH}",
         "QT_QPA_PLATFORM": "offscreen"
       }
     }

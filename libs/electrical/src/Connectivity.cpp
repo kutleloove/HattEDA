@@ -150,4 +150,30 @@ ConnectivityResult buildConnectivity(const ConnectivityInput& input) {
     }
     return result;
 }
+
+std::vector<Point> junctionPoints(const ConnectivityInput& input) {
+    std::vector<Point> result;
+    auto seen = [&](Point p) {
+        return std::any_of(result.begin(), result.end(), [&](Point q) { return near(p, q); }) ||
+               std::any_of(input.junctions.begin(), input.junctions.end(),
+                           [&](Point q) { return near(p, q); });
+    };
+    for (const auto& candidate : input.wires) {
+        if (candidate.points.size() < 2) continue;
+        for (Point p : {candidate.points.front(), candidate.points.back()}) {
+            if (!finite(p) || seen(p)) continue;
+            int branches = 0;
+            for (const auto& wire : input.wires) {
+                if (wire.points.size() < 2) continue;
+                const int ends = int(near(p, wire.points.front())) + int(near(p, wire.points.back()));
+                if (ends > 0) branches += ends;
+                else if (onWire(p, wire)) branches += 2;
+            }
+            for (const auto& pin : input.pins)
+                if (near(p, pin.position)) ++branches;
+            if (branches >= 3) result.push_back(p);
+        }
+    }
+    return result;
+}
 } // namespace hatt::electrical

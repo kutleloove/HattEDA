@@ -13,11 +13,11 @@ Aktif çizim/yerleştirme/taşıma sırasında sağ tık taslağı iptal eder ve
 3. **Update PCB from schematic** örnekteki üç bileşeni Kayra'ya taşır. Kesikli çizgiler eksik bağlantılardır; rota çekildikçe ve bileşenler taşındıkça yeniden hesaplanır. Tekrar aktarım yerleşimi çoğaltmaz; PCB undo/redo desteklenir.
 4. **Run DC operating point** sonucu ayrı sekmede açar: V1=5 V, R1=R2=1k için orta düğüm 2.5 V ve direnç akımları 2.5 mA olur. Kaynak akımı pin 1→pin 2 yönünde -2.5 mA'dır.
 
-Kendi devrenizde bileşen değerlerini ve footprint atamalarını özelliklerden yapın. Genel sembollere otomatik footprint/model tahmini yapılmaz. Aynı isimli port/güç etiketleri aynı neti paylaşır; ground adı `0` ayrılmıştır. Salt tel kesişimi junction olmadan şemada bağlanmaz; PCB tek bakır katman olduğu için kesişen yollar birleşir.
+Kendi devrenizde bileşen değerlerini ve footprint atamalarını özelliklerden yapın. Genel sembollere otomatik footprint/model tahmini yapılmaz. Aynı isimli port/güç etiketleri aynı neti paylaşır; ground adı `0` ayrılmıştır. Salt tel kesişimi junction olmadan şemada bağlanmaz; PCB tek bakır katman olduğu için kesişen yollar birleşir. Şemada bağlantı dolu bir nokta ile gösterilir: bir telin ucu başka bir tele değdiğinde veya üç ya da daha fazla kol birleştiğinde nokta çıkar, noktasız kesişim bağlı değildir. Tel çizerken başka bir telin üstüne tıklayıp devam ederseniz tel orada bölünür ve bağlanır; tıklamadan üstünden geçerseniz kesişim olarak kalır. Çizim sırasında oluşacak noktalar önizleme renginde görünür.
 
 ## Sınırlar
 
-- Bu sürüm kalıcı `.hatt` kaydı sağlamaz (#6). Oturumdaki devre verisini diske kaydedilmiş saymayın.
+- Proje `.hatt` dosyasına kaydedilir (Ctrl+S, Farklı kaydet Ctrl+Shift+S; ADR-0004). Kaydedilmemiş değişiklik varken pencere başlığında `*` görünür ve kapatma/yeni/aç işlemleri kaydetmeyi sorar. Otomatik kayıt ve çökme kurtarma henüz yoktur.
 - Netlist uygulama içinde hesaplanır; harici netlist import/export ve genel SPICE formatı yoktur.
 - Bağlantı rehberi otomatik router veya tam ERC/DRC değildir. Pad merkezi ve tel geometrisi kullanılır; bakır alanı/clearance/via/multilayer kontrolleri yoktur.
 - Footprint/pin eşlemesi değişen veya şemadan silinen bileşenlerin mevcut PCB bağlantıları sessizce dönüştürülmez; kullanıcı incelemesi gerekir.

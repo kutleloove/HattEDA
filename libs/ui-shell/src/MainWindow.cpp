@@ -2,6 +2,7 @@
 #include "hatt/ui/CircuitWorkflow.hpp"
 
 #include "hatt/ui/DesignCanvas.hpp"
+#include "hatt/ui/ProjectSafety.hpp"
 #include "hatt/ui/Theme.hpp"
 
 #include <QAction>
@@ -12,11 +13,13 @@
 #include <QDialogButtonBox>
 #include <QDoubleSpinBox>
 #include <QComboBox>
+#include <QCloseEvent>
 #include <QDir>
 #include <QEvent>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QFormLayout>
+#include <QSpinBox>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QKeySequence>
@@ -30,6 +33,7 @@
 #include <QPainterPath>
 #include <QPushButton>
 #include <QSettings>
+#include <tuple>
 #include <QSet>
 #include <QSignalBlocker>
 #include <QStackedWidget>
@@ -322,11 +326,14 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     for (auto* canvas : canvases_) {
         connect(canvas, &DesignCanvas::selectionChanged, this, &MainWindow::updateEditActions);
         connect(canvas->undoStack(), &QUndoStack::indexChanged, this, &MainWindow::updateEditActions);
+        connect(canvas->undoStack(), &QUndoStack::cleanChanged, this, &MainWindow::updateProjectState);
         connect(canvas, &DesignCanvas::cursorMoved, this, [this, canvas](QPointF world) {
             if (canvas == activeCanvas()) {
-                coordinateLabel_->setText(tr("X %1   Y %2 mm")
-                                              .arg(world.x(), 0, 'f', 3)
-                                              .arg(-world.y(), 0, 'f', 3));
+                const LengthUnit unit = canvas->lengthUnit();
+                coordinateLabel_->setText(tr("X %1   Y %2 %3")
+                                              .arg(formatCoordinate(world.x(), unit),
+                                                   formatCoordinate(-world.y(), unit),
+                                                   unitSymbol(unit)));
             }
         });
         connect(canvas, &DesignCanvas::statusMessage, this, [this, canvas](const QString& message) {
@@ -353,9 +360,15 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
         [this](const QString& id, const QString& title, QWidget* content) { openToolWorkspace(id, title, content); },
         [this] { return shellPages_ && shellPages_->currentIndex() == 1; },
         [this] { showKayraWorkspace(); });
+    projectGuard_ = new ProjectGuard(
+        this, [this] { return currentProjectData(projectPath_); },
+        [this] { return hasUnsavedChanges(); });
+    connect(projectGuard_, &ProjectGuard::statusMessage, statusBar(), &QStatusBar::showMessage);
     applySnapSettings();
+    applyLengthUnits();
     refreshIcons();
     workspaceChanged();
+    updateProjectState();
     statusBar()->showMessage(tr("Start by creating or opening a project"));
 }
 
@@ -372,6 +385,7 @@ void MainWindow::showCanvasContextMenu(DesignCanvas* canvas, QPoint position, in
                 [this, canvas, index] { editItemProperties(canvas, index); });
         menu->addAction(actions_.value(QStringLiteral("hatteda.action.rotate")));
         menu->addAction(actions_.value(QStringLiteral("hatteda.action.duplicate")));
+        menu->addAction(actions_.value(QStringLiteral("hatteda.action.array")));
         menu->addAction(actions_.value(QStringLiteral("hatteda.action.delete")));
     } else {
         menu->addAction(actions_.value(QStringLiteral("hatteda.action.undo")));
@@ -381,6 +395,52 @@ void MainWindow::showCanvasContextMenu(DesignCanvas* canvas, QPoint position, in
         menu->addAction(actions_.value(QStringLiteral("hatteda.action.fit")));
     }
     menu->popup(position);
+}
+
+void MainWindow::showArrayDialog(DesignCanvas* canvas) {
+    const QRectF bounds = canvas->selectionBounds();
+    if (bounds.isNull()) return;
+    const LengthUnit unit = canvas->lengthUnit();
+    const double grid = canvas->gridSize();
+    // Default pitch: the selection size rounded up to the grid plus one grid step of clearance.
+    auto defaultPitch = [grid](double size) { return (std::ceil(size / grid - 1e-9) + 1.0) * grid; };
+
+    QDialog dialog(this);
+    dialog.setObjectName(QStringLiteral("ArrayDialog"));
+    dialog.setWindowTitle(tr("Create array"));
+    auto* form = new QFormLayout(&dialog);
+    auto count = [&](const QString& name, int value) {
+        auto* field = new QSpinBox(&dialog);
+        field->setObjectName(name);
+        field->setRange(1, 50);
+        field->setValue(value);
+        return field;
+    };
+    auto pitch = [&](const QString& name, double millimetres) {
+        auto* field = new QDoubleSpinBox(&dialog);
+        field->setObjectName(name);
+        field->setRange(-toDisplayUnit(1000.0, unit), toDisplayUnit(1000.0, unit));
+        field->setDecimals(unitDecimals(unit));
+        field->setSuffix(QLatin1Char(' ') + unitSymbol(unit));
+        field->setValue(toDisplayUnit(millimetres, unit));
+        return field;
+    };
+    auto* rows = count(QStringLiteral("ArrayRows"), 2);
+    auto* columns = count(QStringLiteral("ArrayColumns"), 2);
+    auto* pitchX = pitch(QStringLiteral("ArrayPitchX"), defaultPitch(bounds.width()));
+    auto* pitchY = pitch(QStringLiteral("ArrayPitchY"), defaultPitch(bounds.height()));
+    form->addRow(tr("Rows"), rows);
+    form->addRow(tr("Columns"), columns);
+    form->addRow(tr("Column pitch (X)"), pitchX);
+    form->addRow(tr("Row pitch (Y, positive down)"), pitchY);
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+    form->addRow(buttons);
+    connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    if (dialog.exec() == QDialog::Accepted) {
+        canvas->createArray(rows->value(), columns->value(),
+                            {fromDisplayUnit(pitchX->value(), unit), fromDisplayUnit(pitchY->value(), unit)});
+    }
 }
 
 void MainWindow::editItemProperties(DesignCanvas* canvas, int index) {
@@ -421,13 +481,14 @@ void MainWindow::editItemProperties(DesignCanvas* canvas, int index) {
         mapping->setObjectName(QStringLiteral("ItemPinPadMap"));
         form->addRow(tr("Pin to pad (1-based, comma-separated)"), mapping);
     }
-    auto coordinate = [&](const QString& name, double value) {
+    const LengthUnit unit = canvas->lengthUnit();
+    auto coordinate = [&](const QString& name, double millimetres) {
         auto* field = new QDoubleSpinBox(&dialog);
         field->setObjectName(name);
         field->setRange(-1e9, 1e9);
         field->setDecimals(6);
-        field->setSuffix(tr(" mm"));
-        field->setValue(value);
+        field->setSuffix(QLatin1Char(' ') + unitSymbol(unit));
+        field->setValue(toDisplayUnit(millimetres, unit));
         return field;
     };
     auto* x = coordinate(QStringLiteral("ItemPositionX"), item.points.value(0).x());
@@ -475,7 +536,7 @@ void MainWindow::editItemProperties(DesignCanvas* canvas, int index) {
     if (dialog.exec() == QDialog::Accepted) {
         auto properties = item;
         properties.label = label->text();
-        properties.points[0] = {x->value(), y->value()};
+        properties.points[0] = {fromDisplayUnit(x->value(), unit), fromDisplayUnit(y->value(), unit)};
         properties.quarterTurns = rotation->currentIndex();
         if (value) properties.value = value->text();
         if (footprint) properties.footprint = footprint->currentData().toString();
@@ -586,6 +647,8 @@ void MainWindow::createActions() {
     canvasAction("hatteda.action.duplicate", tr("Duplicate"), "duplicate",
                  {QKeySequence(QStringLiteral("Ctrl+D"))},
                  [](DesignCanvas* canvas) { canvas->duplicateSelection(); });
+    canvasAction("hatteda.action.array", tr("Create array..."), "", {},
+                 [this](DesignCanvas* canvas) { showArrayDialog(canvas); });
     canvasAction("hatteda.action.rotate", tr("Rotate 90°"), "rotate",
                  {QKeySequence(QStringLiteral("Ctrl+R"))},
                  [](DesignCanvas* canvas) { canvas->rotateSelection(); });
@@ -626,10 +689,49 @@ void MainWindow::createActions() {
                      [operation](DesignCanvas* canvas) { canvas->align(operation); });
     }
 
+    // Proteus style snap grid steps: Ctrl+F1 (finest), F2, F3 (default), F4 (coarsest).
+    gridActions_ = new QActionGroup(this);
+    gridActions_->setExclusive(true);
+    gridLevel_ = std::clamp(
+        QSettings().value(QStringLiteral("editor/snap/gridLevel"), gridLevel_).toInt(), 0,
+        DesignCanvas::GridLevelCount - 1);
+    const char* gridShortcuts[DesignCanvas::GridLevelCount] = {"Ctrl+F1", "F2", "F3", "F4"};
+    for (int level = 0; level < DesignCanvas::GridLevelCount; ++level) {
+        auto* action = makeAction(QStringLiteral("hatteda.grid.step-%1").arg(level + 1), QString(),
+                                  QString());
+        action->setCheckable(true);
+        action->setChecked(level == gridLevel_);
+        action->setShortcut(QKeySequence(QString::fromLatin1(gridShortcuts[level])));
+        action->setShortcutContext(Qt::WindowShortcut);
+        action->setData(level);
+        gridActions_->addAction(action);
+        addAction(action);
+        connect(action, &QAction::triggered, this, [this, level] { setGridLevel(level); });
+    }
+
+    // PCB length units are a user preference; the schematic always uses mil (see Units.hpp).
+    unitActions_ = new QActionGroup(this);
+    unitActions_->setExclusive(true);
+    boardUnit_ = unitFromSetting(QSettings().value(QStringLiteral("editor/units/board")).toString());
+    for (const auto& [id, text, unit] :
+         {std::tuple{"hatteda.units.board-mm", tr("Millimetres (mm)"), LengthUnit::Millimetre},
+          std::tuple{"hatteda.units.board-in", tr("Inches (in)"), LengthUnit::Inch}}) {
+        auto* action = makeAction(QString::fromLatin1(id), text, QString());
+        action->setCheckable(true);
+        action->setChecked(unit == boardUnit_);
+        unitActions_->addAction(action);
+        const LengthUnit chosen = unit;
+        connect(action, &QAction::triggered, this, [this, chosen] { setBoardUnit(chosen); });
+    }
+
     auto* save = makeAction(QStringLiteral("hatteda.action.save"), tr("Save"), QString());
     save->setShortcut(QKeySequence::Save);
     save->setEnabled(false);
-    save->setToolTip(tr("Project files are not available yet"));
+    connect(save, &QAction::triggered, this, &MainWindow::saveProject);
+    auto* saveAs = makeAction(QStringLiteral("hatteda.action.save-as"), tr("Save as..."), QString());
+    saveAs->setShortcut(QKeySequence(QStringLiteral("Ctrl+Shift+S")));
+    saveAs->setEnabled(false);
+    connect(saveAs, &QAction::triggered, this, &MainWindow::saveProjectAs);
 
     auto* checks = makeAction(QStringLiteral("hatteda.action.run-checks"), tr("Run design checks"),
                               QStringLiteral("check"));
@@ -788,6 +890,10 @@ QWidget* MainWindow::createEditor() {
         {"objects", tr("Objects"), tr("Snap to pins, pads, vertices and corners"), true},
         {"edges", tr("Edges"), tr("Snap to the nearest point on object edges"), false},
         {"centers", tr("Centres"), tr("Snap to object centres"), false},
+        {"guides", tr("Guides"),
+         tr("Show alignment guides to other pins, vertices and symbol centres while placing, "
+            "moving and drawing"),
+         true},
         {"diagonal", tr("45°"), tr("Constrain wires and lines to 45° steps"), true},
         {"orthogonal", tr("Orthogonal"), tr("Constrain wires and lines to horizontal and vertical"), false},
     };
@@ -803,6 +909,15 @@ QWidget* MainWindow::createEditor() {
         toggle->setChecked(settings.value(QStringLiteral("editor/snap/") + key, spec.enabledByDefault).toBool());
         snapToggles_.append(toggle);
         alignmentLayout->addWidget(toggle);
+        if (key == QLatin1String("grid")) {
+            gridStepButton_ = new QPushButton(alignmentBar);
+            gridStepButton_->setObjectName(QStringLiteral("GridStepButton"));
+            gridStepButton_->setProperty("snap", true);
+            auto* gridMenu = new QMenu(gridStepButton_);
+            gridMenu->addActions(gridActions_->actions());
+            gridStepButton_->setMenu(gridMenu);
+            alignmentLayout->addWidget(gridStepButton_);
+        }
         connect(toggle, &QPushButton::toggled, this, [this, key](bool checked) {
             if (checked && (key == QLatin1String("diagonal") || key == QLatin1String("orthogonal"))) {
                 const QString other = key == QLatin1String("diagonal") ? QStringLiteral("orthogonal")
@@ -819,8 +934,13 @@ QWidget* MainWindow::createEditor() {
             applySnapSettings();
         });
     }
-    if (snapToggles_[4]->isChecked() && snapToggles_[5]->isChecked()) {
-        snapToggles_[4]->setChecked(false);
+    auto snapToggle = [this](const char* key) {
+        return *std::find_if(snapToggles_.begin(), snapToggles_.end(), [key](QPushButton* button) {
+            return button->property("snapKey").toString() == QLatin1String(key);
+        });
+    };
+    if (snapToggle("diagonal")->isChecked() && snapToggle("orthogonal")->isChecked()) {
+        snapToggle("diagonal")->setChecked(false);
     }
     alignmentLayout->addStretch();
     alignmentLayout->addWidget(label(tr("ALIGN"), QStringLiteral("SectionLabel"), alignmentBar));
@@ -861,6 +981,13 @@ void MainWindow::createMenus() {
     connect(open, &QAction::triggered, this, &MainWindow::openProject);
     fileMenu->addSeparator();
     fileMenu->addAction(actions_.value(QStringLiteral("hatteda.action.save")));
+    fileMenu->addAction(actions_.value(QStringLiteral("hatteda.action.save-as")));
+    fileMenu->addSeparator();
+    // Quitting closes the window, so closeEvent asks about unsaved changes.
+    auto* quit = fileMenu->addAction(tr("Quit"));
+    quit->setObjectName(QStringLiteral("hatteda.action.quit"));
+    quit->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_Q));
+    connect(quit, &QAction::triggered, this, &QWidget::close);
 
     auto* editMenu = menuBar()->addMenu(tr("&Edit"));
     editMenu->addAction(actions_.value(QStringLiteral("hatteda.action.undo")));
@@ -868,6 +995,7 @@ void MainWindow::createMenus() {
     editMenu->addSeparator();
     editMenu->addAction(actions_.value(QStringLiteral("hatteda.action.rotate")));
     editMenu->addAction(actions_.value(QStringLiteral("hatteda.action.duplicate")));
+    editMenu->addAction(actions_.value(QStringLiteral("hatteda.action.array")));
     editMenu->addAction(actions_.value(QStringLiteral("hatteda.action.delete")));
     editMenu->addSeparator();
     editMenu->addAction(actions_.value(QStringLiteral("hatteda.action.select-all")));
@@ -876,6 +1004,9 @@ void MainWindow::createMenus() {
     viewMenu->addAction(actions_.value(QStringLiteral("hatteda.action.zoom-in")));
     viewMenu->addAction(actions_.value(QStringLiteral("hatteda.action.zoom-out")));
     viewMenu->addAction(actions_.value(QStringLiteral("hatteda.action.fit")));
+    viewMenu->addSeparator();
+    viewMenu->addMenu(tr("Snap grid"))->addActions(gridActions_->actions());
+    viewMenu->addMenu(tr("PCB units"))->addActions(unitActions_->actions());
     viewMenu->addSeparator();
     auto* diagnostics = viewMenu->addAction(tr("Simulation diagnostics"));
     connect(diagnostics, &QAction::triggered, this, &MainWindow::openDiagnosticsWorkspace);
@@ -1067,6 +1198,7 @@ void MainWindow::workspaceChanged() {
                             : withShortcut(probe->text(), probe->shortcut()));
     activateToolMode(board && toolMode_ == ToolMode::Probe ? ToolMode::Select : toolMode_);
     zoomLabel_->setText(tr("Zoom %1%").arg(canvas->zoomPercent()));
+    updateGridActions();
     if (editingCanvas() != nullptr) {
         canvas->setFocus();
     }
@@ -1083,9 +1215,63 @@ void MainWindow::applySnapSettings() {
         else if (key == QLatin1String("centers")) settings.centers = on;
         else if (key == QLatin1String("diagonal")) settings.diagonal = on;
         else if (key == QLatin1String("orthogonal")) settings.orthogonal = on;
+        else if (key == QLatin1String("guides")) settings.guides = on;
     }
+    settings.gridLevel = gridLevel_;
     for (auto* canvas : canvases_) {
         canvas->setSnapSettings(settings);
+    }
+    updateGridActions();
+}
+
+void MainWindow::setBoardUnit(LengthUnit unit) {
+    boardUnit_ = unit;
+    QSettings().setValue(QStringLiteral("editor/units/board"), unitSettingValue(unit));
+    applyLengthUnits();
+}
+
+void MainWindow::applyLengthUnits() {
+    for (auto* canvas : canvases_) {
+        canvas->setLengthUnit(displayUnit(canvas->workspace(), boardUnit_));
+    }
+    for (auto* action : unitActions_->actions()) {
+        action->setChecked(action->objectName() == QLatin1String("hatteda.units.board-") +
+                                                       unitSettingValue(boardUnit_));
+    }
+    updateGridActions();
+}
+
+void MainWindow::setGridLevel(int level) {
+    level = std::clamp(level, 0, DesignCanvas::GridLevelCount - 1);
+    gridLevel_ = level;
+    QSettings().setValue(QStringLiteral("editor/snap/gridLevel"), level);
+    applySnapSettings();
+    if (auto* canvas = activeCanvas()) {
+        statusBar()->showMessage(
+            tr("Snap grid %1").arg(formatLength(DesignCanvas::gridStep(canvas->workspace(), level),
+                                                canvas->lengthUnit())),
+            3000);
+    }
+}
+
+void MainWindow::updateGridActions() {
+    const auto* canvas = activeCanvas();
+    if (gridActions_ == nullptr || canvas == nullptr) {
+        return;
+    }
+    const auto actions = gridActions_->actions();
+    for (auto* action : actions) {
+        const int level = action->data().toInt();
+        const QString text = tr("Snap grid %1").arg(
+            formatLength(DesignCanvas::gridStep(canvas->workspace(), level), canvas->lengthUnit()));
+        action->setText(text);
+        action->setToolTip(withShortcut(text, action->shortcut()));
+        action->setChecked(level == gridLevel_);
+    }
+    if (gridStepButton_ != nullptr) {
+        gridStepButton_->setText(formatLength(DesignCanvas::gridStep(canvas->workspace(), gridLevel_),
+                                              canvas->lengthUnit()));
+        gridStepButton_->setToolTip(tr("Snap grid step (Ctrl+F1, F2, F3, F4)"));
     }
 }
 
@@ -1102,6 +1288,7 @@ void MainWindow::updateEditActions() {
     };
     enable("hatteda.action.delete", selected > 0);
     enable("hatteda.action.duplicate", selected > 0);
+    enable("hatteda.action.array", selected > 0);
     enable("hatteda.action.rotate", selected > 0 || (canvas != nullptr && canvas->tool() == CanvasTool::Symbol));
     enable("hatteda.action.select-all", canvas != nullptr && !canvas->document().isEmpty());
     for (const char* id : {"hatteda.action.zoom-in", "hatteda.action.zoom-out", "hatteda.action.fit"}) {
@@ -1199,10 +1386,7 @@ QWidget* MainWindow::createWelcomePage() {
     recentProjects_->setObjectName(QStringLiteral("RecentProjects"));
     recentProjects_->setMinimumWidth(480);
     connect(recentProjects_, &QListWidget::itemDoubleClicked, this, [this](QListWidgetItem* item) {
-        const QString path = item->data(Qt::UserRole).toString();
-        if (!path.isEmpty()) {
-            activateProject(QFileInfo(path).completeBaseName(), path);
-        }
+        openRecentProject(item->data(Qt::UserRole).toString());
     });
     recentColumn->addWidget(recentProjects_, 1);
     columns->addLayout(recentColumn, 1);
@@ -1212,15 +1396,32 @@ QWidget* MainWindow::createWelcomePage() {
 }
 
 void MainWindow::createNewProject() {
+    if (!maybeSaveChanges()) {
+        return;
+    }
+    const QString defaultLocation = QSettings()
+                                        .value(QStringLiteral("projects/location"),
+                                               QDir::homePath() + QStringLiteral("/Documents"))
+                                        .toString();
+    // Suggest a name that does not overwrite an existing project in the default location.
+    QString suggested = tr("My Project");
+    for (int n = 2; QFileInfo::exists(QDir(defaultLocation).filePath(suggested + QStringLiteral(".hatt")));
+         ++n) {
+        suggested = tr("My Project %1").arg(n);
+    }
+
     QDialog dialog(this);
+    dialog.setObjectName(QStringLiteral("NewProjectDialog"));
     dialog.setWindowTitle(tr("New project"));
     dialog.setMinimumWidth(500);
     auto* layout = new QVBoxLayout(&dialog);
     layout->addWidget(label(tr("Create a HattEDA project"), QStringLiteral("WorkspaceTitle"), &dialog));
     auto* form = new QFormLayout;
-    auto* name = new QLineEdit(tr("My Project"), &dialog);
+    auto* name = new QLineEdit(suggested, &dialog);
+    name->setObjectName(QStringLiteral("NewProjectName"));
     name->selectAll();
-    auto* location = new QLineEdit(QDir::homePath() + QStringLiteral("/Documents"), &dialog);
+    auto* location = new QLineEdit(defaultLocation, &dialog);
+    location->setObjectName(QStringLiteral("NewProjectLocation"));
     form->addRow(tr("Project name"), name);
     form->addRow(tr("Location"), location);
     layout->addLayout(form);
@@ -1233,37 +1434,222 @@ void MainWindow::createNewProject() {
         return;
     }
     const QString projectName = name->text().trimmed();
-    activateProject(projectName,
-                    QDir(location->text().trimmed()).filePath(projectName + QStringLiteral(".hatt")));
+    const QDir directory(location->text().trimmed());
+    const QString path = directory.filePath(projectName + QStringLiteral(".hatt"));
+    if (QFileInfo::exists(path) &&
+        QMessageBox::question(this, tr("New project"),
+                              tr("%1 already exists. Replace it with an empty project?")
+                                  .arg(QDir::toNativeSeparators(path))) != QMessageBox::Yes) {
+        return;
+    }
+    ProjectData project;
+    project.name = projectName;
+    QString error = QDir().mkpath(directory.absolutePath())
+                        ? projectGuard_->save(path, project)
+                        : tr("Cannot create the folder %1.").arg(QDir::toNativeSeparators(directory.absolutePath()));
+    if (!error.isEmpty()) {
+        QMessageBox::warning(this, tr("New project"), error);
+        return;
+    }
+    QSettings().setValue(QStringLiteral("projects/location"), directory.absolutePath());
+    addRecentProject(path);
+    activateProject(path, project);
 }
 
 void MainWindow::openProject() {
+    if (!maybeSaveChanges()) {
+        return;
+    }
     const QString path = QFileDialog::getOpenFileName(this, tr("Open HattEDA project"), QString(),
                                                       tr("HattEDA projects (*.hatt);;All files (*.*)"));
+    if (!path.isEmpty()) {
+        openProjectFile(path);
+    }
+}
+
+bool MainWindow::openProjectFile(const QString& path) {
+    if (!projectGuard_->confirmLock(path)) {
+        return false;
+    }
+    ProjectLoad load = loadProjectFile(path);
+    if (!load.ok()) {
+        QMessageBox::warning(this, tr("Open project"),
+                             tr("%1 could not be opened.\n\n%2")
+                                 .arg(QDir::toNativeSeparators(path), load.error));
+        return false;
+    }
+    const auto recovery = projectGuard_->resolveRecovery(path, load.project);
+    if (recovery == ProjectGuard::Recovery::Cancelled) {
+        return false;
+    }
+    addRecentProject(path);
+    activateProject(path, load.project);
+    if (recovery == ProjectGuard::Recovery::Restored) {
+        // Recovered content is not on disk yet: keep the window modified until it is saved.
+        for (auto* canvas : canvases_) canvas->undoStack()->resetClean();
+        updateProjectState();
+    }
+    return true;
+}
+
+void MainWindow::openRecentProject(const QString& path) {
     if (path.isEmpty()) {
         return;
     }
+    if (!QFileInfo::exists(path)) {
+        const auto answer = QMessageBox::warning(
+            this, tr("Project not found"),
+            tr("%1 no longer exists. It may have been moved, renamed or deleted.\n\nRemove it from "
+               "the recent projects list?")
+                .arg(QDir::toNativeSeparators(path)),
+            QMessageBox::Yes | QMessageBox::No, QMessageBox::Yes);
+        if (answer == QMessageBox::Yes) {
+            QSettings settings;
+            QStringList recent = settings.value(QStringLiteral("recentProjects")).toStringList();
+            recent.removeAll(path);
+            settings.setValue(QStringLiteral("recentProjects"), recent);
+            refreshRecentProjects();
+        }
+        return;
+    }
+    if (maybeSaveChanges()) {
+        openProjectFile(path);
+    }
+}
+
+void MainWindow::activateProject(const QString& projectPath, const ProjectData& project) {
+    projectPath_ = projectPath;
+    projectGuard_->projectActivated(projectPath);
+    // The file name is the project name, so renaming or "Save as" is reflected everywhere.
+    projectName_ = QFileInfo(projectPath).completeBaseName();
+    const SketchDocument* documents[] = {&project.schematic, &project.board};
+    for (int i = 0; i < canvases_.size() && i < 2; ++i) {
+        canvases_[i]->restore(*documents[i], {});
+        canvases_[i]->undoStack()->clear();
+        canvases_[i]->undoStack()->setClean();
+    }
+    shellPages_->setCurrentIndex(1);
+    coordinateLabel_->show();
+    zoomLabel_->show();
+    showMergenWorkspace();
+    for (auto* canvas : canvases_) {
+        if (!canvas->document().isEmpty()) canvas->zoomToFit();
+    }
+    updateProjectState();
+}
+
+bool MainWindow::saveProject() {
+    if (projectPath_.isEmpty()) {
+        return false;
+    }
+    return writeProject(projectPath_);
+}
+
+bool MainWindow::saveProjectAs() {
+    if (projectPath_.isEmpty()) {
+        return false;
+    }
+    QString path = QFileDialog::getSaveFileName(this, tr("Save HattEDA project as"), projectPath_,
+                                                tr("HattEDA projects (*.hatt)"));
+    if (path.isEmpty()) {
+        return false;
+    }
+    if (!path.endsWith(QStringLiteral(".hatt"), Qt::CaseInsensitive)) {
+        path += QStringLiteral(".hatt");
+    }
+    if (!writeProject(path)) {
+        return false;
+    }
+    projectPath_ = path;
+    projectGuard_->projectActivated(path);
+    projectName_ = QFileInfo(path).completeBaseName();
+    addRecentProject(path);
+    updateProjectState();
+    return true;
+}
+
+ProjectData MainWindow::currentProjectData(const QString& path) const {
+    ProjectData project;
+    project.name = QFileInfo(path).completeBaseName();
+    project.schematic = canvases_.value(0)->document();
+    project.board = canvases_.value(1)->document();
+    return project;
+}
+
+bool MainWindow::writeProject(const QString& path) {
+    const ProjectData project = currentProjectData(path);
+    const QString error = projectGuard_->save(path, project);
+    if (!error.isEmpty()) {
+        QMessageBox::warning(this, tr("Save project"), error);
+        return false;
+    }
+    projectGuard_->projectSaved(path);
+    for (auto* canvas : canvases_) {
+        canvas->undoStack()->setClean();
+    }
+    statusBar()->showMessage(tr("Saved %1").arg(QDir::toNativeSeparators(path)), 4000);
+    updateProjectState();
+    return true;
+}
+
+bool MainWindow::hasUnsavedChanges() const {
+    return !projectPath_.isEmpty() &&
+           std::any_of(canvases_.begin(), canvases_.end(),
+                       [](const DesignCanvas* canvas) { return !canvas->undoStack()->isClean(); });
+}
+
+bool MainWindow::maybeSaveChanges() {
+    if (!hasUnsavedChanges()) {
+        return true;
+    }
+    const auto answer = QMessageBox::warning(
+        this, tr("Unsaved changes"),
+        tr("%1 has unsaved changes. Save them before continuing?").arg(projectName_),
+        QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel, QMessageBox::Save);
+    if (answer == QMessageBox::Save) {
+        // A failed save reports its error and cancels whatever asked (close, open, new).
+        return saveProject();
+    }
+    if (answer == QMessageBox::Discard) {
+        projectGuard_->discardRecovery();
+        return true;
+    }
+    return false;
+}
+
+void MainWindow::updateProjectState() {
+    const bool open = !projectPath_.isEmpty();
+    if (open) {
+        projectTitle_->setText(projectName_);
+        projectTitle_->setToolTip(QDir::toNativeSeparators(projectPath_));
+        setWindowTitle(QStringLiteral("HattEDA - %1[*]").arg(projectName_));
+    }
+    setWindowModified(hasUnsavedChanges());
+    if (auto* save = actions_.value(QStringLiteral("hatteda.action.save"))) {
+        save->setEnabled(open);
+        save->setToolTip(open ? withShortcut(tr("Save"), save->shortcut()) : QString());
+    }
+    if (auto* saveAs = actions_.value(QStringLiteral("hatteda.action.save-as"))) {
+        saveAs->setEnabled(open);
+    }
+}
+
+void MainWindow::addRecentProject(const QString& path) {
     QSettings settings;
     QStringList recent = settings.value(QStringLiteral("recentProjects")).toStringList();
     recent.removeAll(path);
     recent.prepend(path);
     settings.setValue(QStringLiteral("recentProjects"), recent.mid(0, 10));
     refreshRecentProjects();
-    activateProject(QFileInfo(path).completeBaseName(), path);
 }
 
-void MainWindow::activateProject(const QString& projectName, const QString& projectPath) {
-    projectTitle_->setText(projectName);
-    projectTitle_->setToolTip(QDir::toNativeSeparators(projectPath));
-    setWindowTitle(QStringLiteral("HattEDA - %1").arg(projectName));
-    for (auto* canvas : canvases_) {
-        canvas->restore({}, {});
-        canvas->undoStack()->clear();
+void MainWindow::closeEvent(QCloseEvent* event) {
+    if (maybeSaveChanges()) {
+        projectGuard_->projectClosed();
+        event->accept();
+    } else {
+        event->ignore();
     }
-    shellPages_->setCurrentIndex(1);
-    coordinateLabel_->show();
-    zoomLabel_->show();
-    showMergenWorkspace();
 }
 
 void MainWindow::refreshRecentProjects() {

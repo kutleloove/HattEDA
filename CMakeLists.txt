@@ -7,6 +7,12 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_AUTOMOC ON)
 
+# CI turns this on (see .github/workflows/ci.yml); local builds keep warnings non-fatal.
+option(HATTEDA_WERROR "Treat compiler warnings as errors" OFF)
+if(HATTEDA_WERROR)
+    set(CMAKE_COMPILE_WARNING_AS_ERROR ON)
+endif()
+
 include(CTest)
 find_package(Qt6 6.11 REQUIRED COMPONENTS Widgets LinguistTools)
 

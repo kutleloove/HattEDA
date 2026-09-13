@@ -11,11 +11,15 @@
 #include <QLineEdit>
 #include <QMenu>
 #include <QDockWidget>
+#include <QFile>
+#include <QFileInfo>
+#include <QMessageBox>
 #include <QImage>
 #include <QListWidget>
 #include <QMouseEvent>
 #include <QPushButton>
 #include <QSettings>
+#include <QSpinBox>
 #include <QStackedWidget>
 #include <QTemporaryDir>
 #include <QTimer>
@@ -75,6 +79,10 @@ private slots:
     void keyboardShortcutsDriveToolsAndUndo();
     void escapeReturnsWindowToSelectionMode();
     void snapSettingsArePersisted();
+    void gridStepShortcutsChangeSnapGrid();
+    void boardUnitsFollowPreference();
+    void arrayDialogCreatesGrid();
+    void projectSaveOpenAndUnsavedChanges();
     void contextPropertiesAcceptAndCancel();
     void selectionStatesFollowTheme_data();
     void selectionStatesFollowTheme();
@@ -102,7 +110,10 @@ void MainWindowTests::contextPropertiesAcceptAndCancel() {
             auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
             QVERIFY(dialog);
             dialog->findChild<QLineEdit*>(QStringLiteral("ItemLabel"))->setText(QStringLiteral("R99"));
-            dialog->findChild<QDoubleSpinBox*>(QStringLiteral("ItemPositionX"))->setValue(42);
+            // Schematic coordinates are edited in mil: 1000 mil is 25.4 mm.
+            auto* x = dialog->findChild<QDoubleSpinBox*>(QStringLiteral("ItemPositionX"));
+            QCOMPARE(x->suffix(), QStringLiteral(" mil"));
+            x->setValue(1000);
             dialog->findChild<QLineEdit*>(QStringLiteral("ItemValue"))->setText(QStringLiteral("4.7k"));
             auto* footprint = dialog->findChild<QComboBox*>(QStringLiteral("ItemFootprint"));
             footprint->setCurrentIndex(footprint->findData(QStringLiteral("board.r0603")));
@@ -126,7 +137,7 @@ void MainWindowTests::contextPropertiesAcceptAndCancel() {
     QCOMPARE(canvas->undoStack()->count(), 1);
     openProperties(true);
     QCOMPARE(canvas->document().first().label, QStringLiteral("R99"));
-    QCOMPARE(canvas->document().first().points.first().x(), 42.0);
+    QCOMPARE(canvas->document().first().points.first().x(), 25.4);
     QCOMPARE(canvas->document().first().value, QStringLiteral("4.7k"));
     QCOMPARE(canvas->document().first().footprint, QStringLiteral("board.r0603"));
     QCOMPARE(canvas->document().first().pinPadMap, QVector<int>({2, 1}));
@@ -163,6 +174,86 @@ void MainWindowTests::initTestCase() {
     QCoreApplication::setApplicationName(QStringLiteral("hatt-ui-shell-tests"));
     QSettings::setDefaultFormat(QSettings::IniFormat);
     QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, settingsDir_.path());
+    // New projects are real files; keep them out of the user's Documents folder.
+    QSettings().setValue(QStringLiteral("projects/location"), settingsDir_.filePath(QStringLiteral("projects")));
+}
+
+void MainWindowTests::projectSaveOpenAndUnsavedChanges() {
+    hatt::ui::MainWindow window;
+    QVERIFY(showActive(window));
+    QVERIFY(!action(window, "hatteda.action.save")->isEnabled());
+    activateEditor(window);
+    const QString path = window.projectPath();
+    QVERIFY(path.startsWith(settingsDir_.path()));
+    QVERIFY2(QFileInfo::exists(path), "New project creates the file");
+    QVERIFY(action(window, "hatteda.action.save")->isEnabled());
+    QVERIFY(!window.isWindowModified());
+
+    // Edit both workspaces: the window is marked modified until saved.
+    auto* schematic = window.activeCanvas();
+    schematic->setTool(CanvasTool::Symbol, QStringLiteral("schematic.resistor"));
+    clickCanvas(schematic, {20.32, 20.32});
+    QVERIFY(window.isWindowModified());
+    window.showKayraWorkspace();
+    auto* board = window.activeCanvas();
+    board->setTool(CanvasTool::Symbol, QStringLiteral("board.r0603"));
+    clickCanvas(board, {10.16, 10.16});
+    action(window, "hatteda.action.save")->trigger();
+    QVERIFY(!window.isWindowModified());
+
+    hatt::ui::MainWindow reopened;
+    // `window` still holds the project lock, so the second window warns first (ADR-0005).
+    QTimer::singleShot(0, [] {
+        auto* box = QApplication::activeModalWidget();
+        QVERIFY(box);
+        box->findChild<QAbstractButton*>(QStringLiteral("hatteda.lock.open-anyway"))->click();
+    });
+    QVERIFY(reopened.openProjectFile(path));
+    QCOMPARE(reopened.projectPath(), path);
+    QVERIFY(!reopened.isWindowModified());
+    reopened.showMergenWorkspace();
+    QCOMPARE(reopened.activeCanvas()->document().size(), 1);
+    const auto& saved = schematic->document().first();
+    const auto& loaded = reopened.activeCanvas()->document().first();
+    QCOMPARE(loaded.id, saved.id);
+    QCOMPARE(loaded.label, saved.label);
+    QCOMPARE(loaded.points, saved.points);
+    reopened.showKayraWorkspace();
+    QCOMPARE(reopened.activeCanvas()->document().first().variant, QStringLiteral("board.r0603"));
+    QVERIFY(QSettings().value(QStringLiteral("recentProjects")).toStringList().contains(path));
+
+    // Unsaved changes: Cancel keeps the window open, Discard lets it close.
+    schematic->undoStack()->undo();
+    window.showMergenWorkspace();
+    QVERIFY(window.isWindowModified());
+    auto answer = [](QMessageBox::StandardButton button) {
+        QTimer::singleShot(0, [button] {
+            auto* box = qobject_cast<QMessageBox*>(QApplication::activeModalWidget());
+            QVERIFY(box);
+            box->button(button)->click();
+        });
+    };
+    answer(QMessageBox::Cancel);
+    QVERIFY(!window.close());
+    QVERIFY(window.isVisible());
+    answer(QMessageBox::Discard);
+    QVERIFY(window.close());
+    // Discarding did not touch the file.
+    QVERIFY(reopened.openProjectFile(path));
+    reopened.showMergenWorkspace();
+    QCOMPARE(reopened.activeCanvas()->document().size(), 1);
+
+    // A corrupted file is reported and leaves the open project untouched.
+    const QString broken = settingsDir_.filePath(QStringLiteral("broken.hatt"));
+    {
+        QFile file(broken);
+        QVERIFY(file.open(QIODevice::WriteOnly));
+        file.write("{ not json");
+    }
+    answer(QMessageBox::Ok);
+    QVERIFY(!reopened.openProjectFile(broken));
+    QCOMPARE(reopened.projectPath(), path);
+    QCOMPARE(reopened.activeCanvas()->document().size(), 1);
 }
 
 void MainWindowTests::keyboardShortcutsDriveToolsAndUndo() {
@@ -290,6 +381,109 @@ void MainWindowTests::snapSettingsArePersisted() {
     QCOMPARE(canvas->document().size(), 1);
     QVERIFY(QLineF(canvas->document().first().points.at(1), QPointF(20.3, 5.0)).length() < 1e-3);
     QSettings().remove(QStringLiteral("editor/snap"));
+}
+
+void MainWindowTests::gridStepShortcutsChangeSnapGrid() {
+    QSettings().remove(QStringLiteral("editor/snap"));
+    {
+        hatt::ui::MainWindow window;
+        QVERIFY(showActive(window));
+        activateEditor(window);
+        QVERIFY(showActive(window));
+        auto* canvas = window.activeCanvas();
+        canvas->setFocus();
+        QTRY_VERIFY(canvas->hasFocus());
+        QCOMPARE(canvas->gridSize(), 2.54);
+        QVERIFY(window.findChild<QPushButton*>(QStringLiteral("hatteda.snap.guides"))->isChecked());
+
+        QCOMPARE(action(window, "hatteda.grid.step-1")->shortcut(), QKeySequence(QStringLiteral("Ctrl+F1")));
+        QTest::keySequence(&window, QKeySequence(QStringLiteral("F2")));
+        QCOMPARE(canvas->gridSize(), 1.27);
+        QTest::keySequence(&window, QKeySequence(QStringLiteral("F4")));
+        QCOMPARE(canvas->gridSize(), 12.7);
+        QTest::keySequence(&window, QKeySequence(QStringLiteral("Ctrl+F1")));
+        QCOMPARE(canvas->gridSize(), 0.254);
+        QVERIFY(action(window, "hatteda.grid.step-1")->isChecked());
+
+        window.showKayraWorkspace();
+        QCOMPARE(window.activeCanvas()->gridSize(), 0.127);
+        auto* button = window.findChild<QPushButton*>(QStringLiteral("GridStepButton"));
+        QVERIFY(button != nullptr);
+        QVERIFY(button->text().contains(QStringLiteral("0.127")));
+    }
+    QCOMPARE(QSettings().value(QStringLiteral("editor/snap/gridLevel")).toInt(), 0);
+    hatt::ui::MainWindow reopened;
+    QCOMPARE(reopened.activeCanvas()->gridSize(), 0.254);
+    QSettings().remove(QStringLiteral("editor/snap"));
+}
+
+void MainWindowTests::arrayDialogCreatesGrid() {
+    QSettings().remove(QStringLiteral("editor/snap"));
+    hatt::ui::MainWindow window;
+    QVERIFY(showActive(window));
+    activateEditor(window);
+    auto* canvas = window.activeCanvas();
+    canvas->setTool(CanvasTool::Symbol, QStringLiteral("schematic.resistor"));
+    clickCanvas(canvas, {20.32, 20.32});
+    canvas->setTool(CanvasTool::Select);
+    auto* array = action(window, "hatteda.action.array");
+    QVERIFY(!array->isEnabled());
+    canvas->selectItem(0);
+    QVERIFY(array->isEnabled());
+
+    QTimer::singleShot(0, [] {
+        auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+        QVERIFY(dialog);
+        QCOMPARE(dialog->objectName(), QStringLiteral("ArrayDialog"));
+        dialog->findChild<QSpinBox*>(QStringLiteral("ArrayRows"))->setValue(3);
+        dialog->findChild<QSpinBox*>(QStringLiteral("ArrayColumns"))->setValue(3);
+        auto* pitchY = dialog->findChild<QDoubleSpinBox*>(QStringLiteral("ArrayPitchY"));
+        QCOMPARE(pitchY->suffix(), QStringLiteral(" mil"));
+        pitchY->setValue(300); // 7.62 mm
+        dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Ok)->click();
+    });
+    array->trigger();
+
+    const auto& document = canvas->document();
+    QCOMPARE(document.size(), 9);
+    const double width = hatt::ui::itemBounds(document.first()).width();
+    const double pitchX = (std::ceil(width / 2.54 - 1e-9) + 1.0) * 2.54;
+    QVERIFY(QLineF(document.at(8).points.first(), QPointF(20.32 + 2 * pitchX, 20.32 + 2 * 7.62)).length() < 1e-6);
+    QCOMPARE(document.at(8).label, QStringLiteral("R9"));
+    QCOMPARE(canvas->undoStack()->count(), 2);
+}
+
+void MainWindowTests::boardUnitsFollowPreference() {
+    using hatt::ui::LengthUnit;
+    QSettings().remove(QStringLiteral("editor/units"));
+    QSettings().remove(QStringLiteral("editor/snap"));
+    {
+        hatt::ui::MainWindow window;
+        QVERIFY(showActive(window));
+        activateEditor(window);
+        QCOMPARE(window.activeCanvas()->lengthUnit(), LengthUnit::Mil);
+        auto* button = window.findChild<QPushButton*>(QStringLiteral("GridStepButton"));
+        QCOMPARE(button->text(), QStringLiteral("100 mil"));
+
+        window.showKayraWorkspace();
+        auto* board = window.activeCanvas();
+        QCOMPARE(board->lengthUnit(), LengthUnit::Millimetre);
+        QVERIFY(action(window, "hatteda.units.board-mm")->isChecked());
+
+        action(window, "hatteda.units.board-in")->trigger();
+        QCOMPARE(board->lengthUnit(), LengthUnit::Inch);
+        QVERIFY(button->text().endsWith(QStringLiteral(" in")));
+        QCOMPARE(QSettings().value(QStringLiteral("editor/units/board")).toString(), QStringLiteral("in"));
+
+        // The preference only affects the PCB; the schematic stays in mil.
+        window.showMergenWorkspace();
+        QCOMPARE(window.activeCanvas()->lengthUnit(), LengthUnit::Mil);
+    }
+    hatt::ui::MainWindow reopened;
+    reopened.showKayraWorkspace();
+    QCOMPARE(reopened.activeCanvas()->lengthUnit(), LengthUnit::Inch);
+    QVERIFY(action(reopened, "hatteda.units.board-in")->isChecked());
+    QSettings().remove(QStringLiteral("editor/units"));
 }
 
 void MainWindowTests::startsOnWelcomePageWithoutProjectChrome() {

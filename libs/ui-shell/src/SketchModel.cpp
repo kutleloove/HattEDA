@@ -3,10 +3,13 @@
 #include <QCoreApplication>
 #include <QPolygonF>
 #include <QRegularExpression>
+#include <QSet>
 
 #include <algorithm>
 #include <cmath>
+#include <functional>
 #include <initializer_list>
+#include <limits>
 
 namespace hatt::ui {
 namespace {
@@ -65,6 +68,55 @@ SymbolShape hole(QPointF center, double diameter) {
     SymbolShape shape = circle(center, diameter / 2);
     shape.hole = true;
     return shape;
+}
+
+// v2 pad helpers — build PadDefinition for footprint pad lists.
+PadDefinition makePad(int number, double w, double h) {
+    PadDefinition p;
+    p.number = number;
+    p.shape = PadShape::Rect;
+    p.width = w;
+    p.height = h;
+    p.drillDiameter = 0.0;
+    p.layers = (1 << static_cast<int>(BoardLayer::TopCopper));
+    return p;
+}
+
+PadDefinition makeRoundPad(int number, double diameter) {
+    PadDefinition p;
+    p.number = number;
+    p.shape = PadShape::Round;
+    p.width = diameter;
+    p.height = diameter;
+    p.drillDiameter = 0.0;
+    p.layers = (1 << static_cast<int>(BoardLayer::TopCopper));
+    return p;
+}
+
+PadDefinition makeThroughPad(int number, double diameter, double drill) {
+    const int bothCopper = (1 << static_cast<int>(BoardLayer::TopCopper))
+                         | (1 << static_cast<int>(BoardLayer::BottomCopper));
+    PadDefinition p;
+    p.number = number;
+    p.shape = PadShape::Round;
+    p.width = diameter;
+    p.height = diameter;
+    p.drillDiameter = drill;
+    p.layers = bothCopper;
+    return p;
+}
+
+PadDefinition makeSquareThroughPad(int number, double size, double drill) {
+    const int bothCopper = (1 << static_cast<int>(BoardLayer::TopCopper))
+                         | (1 << static_cast<int>(BoardLayer::BottomCopper));
+    PadDefinition p;
+    p.number = number;
+    p.shape = PadShape::Rect;
+    p.width = size;
+    p.height = size;
+    p.drillDiameter = drill;
+    p.layers = bothCopper;
+    return p;
 }
 
 SymbolDefinition define(const char* id, const char* name, Workspace workspace,
@@ -222,23 +274,30 @@ QVector<SymbolDefinition> buildLibrary() {
     currentProbe.pins = {{0, 0}};
     library.append(currentProbe);
 
+    // --- Board footprints ---
+    // Each footprint defines both `shapes` (visual, for DesignCanvas) and `pads`
+    // (structural, for PCB algorithms). Full visual migration is Issue #28.
+
     auto header2 = define("board.header-1x2", QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Pin header 1x2"),
                            W::Board, C::Component, "J");
     header2.shapes = {rectangle(-1.27, -1.27, 5.08, 2.54), pad({0, 0}, 1.6, 1.6),
                       roundPad({2.54, 0}, 1.6), hole({0, 0}, 0.8), hole({2.54, 0}, 0.8)};
     header2.pins = {{0, 0}, {2.54, 0}};
+    header2.pads = {makeSquareThroughPad(1, 1.6, 0.8), makeThroughPad(2, 1.6, 0.8)};
     library.append(header2);
 
     auto r0603 = define("board.r0603", QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Resistor 0603"),
                         W::Board, C::Component, "R");
     r0603.shapes = {rectangle(-1.45, -0.8, 2.9, 1.6), pad({-0.8, 0}, 0.8, 0.95), pad({0.8, 0}, 0.8, 0.95)};
     r0603.pins = {{-0.8, 0}, {0.8, 0}};
+    r0603.pads = {makePad(1, 0.8, 0.95), makePad(2, 0.8, 0.95)};
     library.append(r0603);
 
     auto c0805 = define("board.c0805", QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Capacitor 0805"),
                         W::Board, C::Component, "C");
     c0805.shapes = {rectangle(-1.8, -1.0, 3.6, 2.0), pad({-0.95, 0}, 1.0, 1.3), pad({0.95, 0}, 1.0, 1.3)};
     c0805.pins = {{-0.95, 0}, {0.95, 0}};
+    c0805.pads = {makePad(1, 1.0, 1.3), makePad(2, 1.0, 1.3)};
     library.append(c0805);
 
     auto sot23 = define("board.sot23", QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "SOT-23"),
@@ -246,43 +305,54 @@ QVector<SymbolDefinition> buildLibrary() {
     sot23.shapes = {rectangle(-1.6, -0.7, 3.2, 1.4), pad({-0.95, 1.1}, 0.8, 0.9),
                     pad({0.95, 1.1}, 0.8, 0.9), pad({0, -1.1}, 0.8, 0.9)};
     sot23.pins = {{-0.95, 1.1}, {0.95, 1.1}, {0, -1.1}};
+    sot23.pads = {makePad(1, 0.8, 0.9), makePad(2, 0.8, 0.9), makePad(3, 0.8, 0.9)};
     library.append(sot23);
 
     auto soic8 = define("board.soic8", QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "SOIC-8"),
                         W::Board, C::Component, "U");
     soic8.shapes = {rectangle(-1.95, -2.5, 3.9, 5.0), circle({-1.4, -1.95}, 0.2, true)};
+    int soic8PadNum = 1;
     for (double y : {-1.905, -0.635, 0.635, 1.905}) {
         soic8.shapes.append(pad({-2.7, y}, 1.55, 0.6));
         soic8.pins.append({-2.7, y});
+        soic8.pads.append(makePad(soic8PadNum++, 1.55, 0.6));
     }
     for (double y : {1.905, 0.635, -0.635, -1.905}) {
         soic8.shapes.append(pad({2.7, y}, 1.55, 0.6));
         soic8.pins.append({2.7, y});
+        soic8.pads.append(makePad(soic8PadNum++, 1.55, 0.6));
     }
     library.append(soic8);
 
     auto dip8 = define("board.dip8", QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "DIP-8"),
                        W::Board, C::Component, "U");
     dip8.shapes = {rectangle(-2.6, -5.1, 5.2, 10.2)};
+    int dip8PadNum = 1;
     for (double y : {-3.81, -1.27, 1.27, 3.81}) {
         dip8.shapes.append(roundPad({-3.81, y}, 1.6));
         dip8.shapes.append(hole({-3.81, y}, 0.8));
         dip8.pins.append({-3.81, y});
+        dip8.pads.append(dip8PadNum == 1 ? makeSquareThroughPad(dip8PadNum++, 1.6, 0.8)
+                                         : makeThroughPad(dip8PadNum++, 1.6, 0.8));
     }
     for (double y : {3.81, 1.27, -1.27, -3.81}) {
         dip8.shapes.append(roundPad({3.81, y}, 1.6));
         dip8.shapes.append(hole({3.81, y}, 0.8));
         dip8.pins.append({3.81, y});
+        dip8.pads.append(makeThroughPad(dip8PadNum++, 1.6, 0.8));
     }
     library.append(dip8);
 
     auto header = define("board.header-1x4", QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Pin header 1x4"),
                          W::Board, C::Component, "J");
     header.shapes = {rectangle(-1.27, -5.08, 2.54, 10.16)};
+    int headerPadNum = 1;
     for (double y : {-3.81, -1.27, 1.27, 3.81}) {
         header.shapes.append(roundPad({0, y}, 1.7));
         header.shapes.append(hole({0, y}, 1.0));
         header.pins.append({0, y});
+        header.pads.append(headerPadNum == 1 ? makeSquareThroughPad(headerPadNum++, 1.7, 1.0)
+                                             : makeThroughPad(headerPadNum++, 1.7, 1.0));
     }
     library.append(header);
 
@@ -290,12 +360,14 @@ QVector<SymbolDefinition> buildLibrary() {
                       W::Board, C::Terminal, "");
     via.shapes = {roundPad({0, 0}, 0.8), hole({0, 0}, 0.4)};
     via.pins = {{0, 0}};
+    via.pads = {makeThroughPad(1, 0.8, 0.4)};
     library.append(via);
 
     auto testPoint = define("board.test-point", QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Test point"),
                             W::Board, C::Terminal, "TP");
     testPoint.shapes = {roundPad({0, 0}, 1.5)};
     testPoint.pins = {{0, 0}};
+    testPoint.pads = {makeRoundPad(1, 1.5)};
     library.append(testPoint);
 
     auto mountingHole = define("board.mounting-hole",
@@ -303,6 +375,7 @@ QVector<SymbolDefinition> buildLibrary() {
                                W::Board, C::Terminal, "H");
     mountingHole.shapes = {roundPad({0, 0}, 6.0), hole({0, 0}, 3.2)};
     mountingHole.pins = {{0, 0}};
+    mountingHole.pads = {makeThroughPad(1, 6.0, 3.2)};
     library.append(mountingHole);
 
     return library;
@@ -411,6 +484,31 @@ QVector<QLineF> itemSegments(const SketchItem& item) {
                        true);
         break;
     }
+    case SketchItem::Kind::Pad: {
+        if (!item.points.isEmpty()) {
+            const QPointF center = item.points.value(0);
+            const double hw = item.pad.width / 2.0;
+            const double hh = item.pad.height / 2.0;
+            appendPolyline(segments,
+                           {center + QPointF(-hw, -hh), center + QPointF(hw, -hh),
+                            center + QPointF(hw, hh),  center + QPointF(-hw, hh)},
+                           true);
+        }
+        break;
+    }
+    case SketchItem::Kind::Via: {
+        if (!item.points.isEmpty()) {
+            const QPointF center = item.points.value(0);
+            const double radius = item.drillDiameter > 0 ? item.drillDiameter / 2.0 + 0.2 : 0.4;
+            for (int i = 0; i < 24; ++i) {
+                const double angle = 2 * Pi * i / 24;
+                segments.append(QLineF(
+                    center + QPointF(radius * std::cos(angle), radius * std::sin(angle)),
+                    center + QPointF(radius * std::cos(angle + 2*Pi/24), radius * std::sin(angle + 2*Pi/24))));
+            }
+        }
+        break;
+    }
     }
     return segments;
 }
@@ -439,6 +537,9 @@ QVector<QPointF> itemAnchors(const SketchItem& item) {
         return {center, center + QPointF(radius, 0), center + QPointF(0, radius),
                 center - QPointF(radius, 0), center - QPointF(0, radius)};
     }
+    case SketchItem::Kind::Pad:
+    case SketchItem::Kind::Via:
+        return {item.points.value(0)};
     default:
         return item.points;
     }
@@ -534,6 +635,409 @@ void rotateItemQuarterTurn(SketchItem& item, QPointF pivot) {
     if (item.kind == SketchItem::Kind::Symbol) {
         item.quarterTurns = (item.quarterTurns + 1) % 4;
     }
+}
+
+namespace {
+
+constexpr double Epsilon = 1e-6;
+
+struct PointMove {
+    QPointF from;
+    QPointF to;
+};
+
+bool coincident(QPointF a, QPointF b) { return QLineF(a, b).length() < Epsilon; }
+bool isHorizontal(QPointF a, QPointF b) {
+    return std::abs(a.y() - b.y()) < Epsilon && std::abs(a.x() - b.x()) >= Epsilon;
+}
+bool isVertical(QPointF a, QPointF b) {
+    return std::abs(a.x() - b.x()) < Epsilon && std::abs(a.y() - b.y()) >= Epsilon;
+}
+bool isWire(const SketchItem& item) {
+    return item.kind == SketchItem::Kind::Wire && item.points.size() >= 2;
+}
+
+bool onPin(const SketchDocument& document, QPointF point) {
+    for (const auto& item : document) {
+        if (item.kind != SketchItem::Kind::Symbol) continue;
+        for (const QPointF& anchor : itemAnchors(item)) {
+            if (coincident(anchor, point)) return true;
+        }
+    }
+    return false;
+}
+
+// True when a pin or another wire touches `point`. With `ignoreWireEnds`, another wire that only
+// ends there does not count, because it follows the point instead of holding it in place.
+bool attachedElsewhere(const SketchDocument& document, int wire, QPointF point,
+                       bool ignoreWireEnds) {
+    if (onPin(document, point)) return true;
+    for (int i = 0; i < document.size(); ++i) {
+        const auto& item = document[i];
+        if (i == wire || !isWire(item)) continue;
+        const bool atEnd = coincident(item.points.first(), point) || coincident(item.points.last(), point);
+        if (ignoreWireEnds && atEnd) continue;
+        for (qsizetype p = 1; p < item.points.size(); ++p) {
+            if (distanceToSegment(point, QLineF(item.points[p - 1], item.points[p])) < Epsilon) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+double bendCoordinate(double from, double to, double grid) {
+    double middle = (from + to) / 2.0;
+    if (grid > 0.0) middle = std::round(middle / grid) * grid;
+    return std::clamp(middle, std::min(from, to), std::max(from, to));
+}
+
+// Moves the first (or last) vertex of a wire to `target` while keeping an axis-aligned end run
+// axis-aligned.
+void stretchWireEnd(QVector<QPointF>& points, bool atStart, QPointF target,
+                    const std::function<bool(QPointF)>& pinned, double grid) {
+    if (!atStart) std::reverse(points.begin(), points.end());
+    const QPointF start = points[0];
+    const QPointF next = points[1];
+    const QPointF delta = target - start;
+    const bool freeCorner = points.size() >= 3 && !pinned(next);
+    points[0] = target;
+    if (isHorizontal(start, next) && std::abs(delta.y()) >= Epsilon) {
+        if (freeCorner && isVertical(next, points[2])) {
+            points[1].ry() += delta.y();
+        } else {
+            const double x = bendCoordinate(target.x(), next.x(), grid);
+            points.insert(1, QPointF(x, next.y()));
+            points.insert(1, QPointF(x, target.y()));
+        }
+    } else if (isVertical(start, next) && std::abs(delta.x()) >= Epsilon) {
+        if (freeCorner && isHorizontal(next, points[2])) {
+            points[1].rx() += delta.x();
+        } else {
+            const double y = bendCoordinate(target.y(), next.y(), grid);
+            points.insert(1, QPointF(next.x(), y));
+            points.insert(1, QPointF(target.x(), y));
+        }
+    }
+    if (!atStart) std::reverse(points.begin(), points.end());
+}
+
+// Makes unfixed wires follow moved points. Interior vertices on a moved point move with it; wire
+// ends stretch. A wire whose both ends move by the same offset is translated as a whole.
+void followMovedPoints(SketchDocument& result, const SketchDocument& original,
+                       const QSet<int>& fixed, const QVector<PointMove>& moves,
+                       QSet<int>& modified, double grid) {
+    if (moves.isEmpty()) return;
+    auto moveAt = [&moves](QPointF point) -> const PointMove* {
+        for (const auto& move : moves) {
+            if (coincident(move.from, point)) return &move;
+        }
+        return nullptr;
+    };
+    for (int i = 0; i < original.size(); ++i) {
+        if (fixed.contains(i) || !isWire(original[i])) continue;
+        const QVector<QPointF>& before = original[i].points;
+        QVector<QPointF>& points = result[i].points;
+        const PointMove* head = moveAt(before.first());
+        const PointMove* tail = moveAt(before.last());
+        bool changed = false;
+        for (qsizetype p = 1; p + 1 < before.size(); ++p) {
+            if (const PointMove* move = moveAt(before[p])) {
+                points[p] = move->to;
+                changed = true;
+            }
+        }
+        if (head != nullptr && tail != nullptr && !changed &&
+            coincident(head->to - head->from, tail->to - tail->from)) {
+            translateItem(result[i], head->to - head->from);
+            modified.insert(i);
+            continue;
+        }
+        auto pinned = [&original, i](QPointF point) { return attachedElsewhere(original, i, point, false); };
+        if (head != nullptr) {
+            stretchWireEnd(points, true, head->to, pinned, grid);
+            changed = true;
+        }
+        if (tail != nullptr) {
+            stretchWireEnd(points, false, tail->to, pinned, grid);
+            changed = true;
+        }
+        if (changed) modified.insert(i);
+    }
+}
+
+void removeDuplicateVertices(QVector<QPointF>& points) {
+    for (qsizetype p = 1; p < points.size() && points.size() > 2;) {
+        if (coincident(points[p - 1], points[p])) {
+            points.removeAt(p == points.size() - 1 ? p - 1 : p);
+        } else {
+            ++p;
+        }
+    }
+}
+
+// Removes straight-through corners for which `keep` returns false.
+void removeStraightVertices(QVector<QPointF>& points, const std::function<bool(QPointF)>& keep) {
+    for (qsizetype p = 1; p + 1 < points.size();) {
+        const QPointF in = points[p] - points[p - 1];
+        const QPointF out = points[p + 1] - points[p];
+        const double cross = in.x() * out.y() - in.y() * out.x();
+        const double scale =
+            std::max(1.0, QLineF(QPointF(), in).length() + QLineF(QPointF(), out).length());
+        const bool straight = std::abs(cross) < Epsilon * scale && QPointF::dotProduct(in, out) > 0;
+        if (straight && !keep(points[p])) {
+            points.removeAt(p);
+        } else {
+            ++p;
+        }
+    }
+}
+
+// Removes zero-length segments and straight-through corners that nothing else connects to.
+void simplifyWires(SketchDocument& document, const QSet<int>& wires) {
+    for (int index : wires) {
+        QVector<QPointF>& points = document[index].points;
+        removeDuplicateVertices(points);
+        removeStraightVertices(points, [&document, index](QPointF point) {
+            return attachedElsewhere(document, index, point, false);
+        });
+    }
+}
+
+bool validWire(const SketchDocument& document, int wire) {
+    return wire >= 0 && wire < document.size() && isWire(document[wire]);
+}
+
+bool onPath(const QVector<QPointF>& points, QPointF point) {
+    for (qsizetype p = 1; p < points.size(); ++p) {
+        if (distanceToSegment(point, QLineF(points[p - 1], points[p])) < Epsilon) return true;
+    }
+    return false;
+}
+
+// Ends of other, unfixed wires that form a T join on `wire` between its vertices. Vertex joins are
+// already followed through the vertex moves; ends held by a pin stay where they are.
+QVector<QPointF> teeEnds(const SketchDocument& document, int wire, const QSet<int>& fixed) {
+    QVector<QPointF> ends;
+    const QVector<QPointF>& path = document[wire].points;
+    for (int i = 0; i < document.size(); ++i) {
+        if (i == wire || fixed.contains(i) || !isWire(document[i])) continue;
+        for (QPointF end : {document[i].points.first(), document[i].points.last()}) {
+            const bool atVertex = std::any_of(path.begin(), path.end(),
+                                              [end](QPointF v) { return coincident(v, end); });
+            if (atVertex || !onPath(path, end) || onPin(document, end)) continue;
+            if (std::none_of(ends.begin(), ends.end(), [end](QPointF e) { return coincident(e, end); }))
+                ends.append(end);
+        }
+    }
+    return ends;
+}
+
+QPointF nearestOnPath(const QVector<QPointF>& points, QPointF point) {
+    QPointF best = point;
+    double bestDistance = std::numeric_limits<double>::infinity();
+    for (qsizetype p = 1; p < points.size(); ++p) {
+        QPointF nearest;
+        const double distance = distanceToSegment(point, QLineF(points[p - 1], points[p]), &nearest);
+        if (distance < bestDistance) {
+            bestDistance = distance;
+            best = nearest;
+        }
+    }
+    return best;
+}
+
+// T joins on a reshaped wire: an end still on the new path stays, otherwise it moves to the
+// nearest point of the new path.
+void followTeeJoins(const SketchDocument& original, const SketchDocument& result, int wire,
+                    QVector<PointMove>& moves) {
+    for (QPointF end : teeEnds(original, wire, {})) {
+        const bool moved = std::any_of(moves.begin(), moves.end(),
+                                       [end](const PointMove& m) { return coincident(m.from, end); });
+        if (moved || onPath(result[wire].points, end)) continue;
+        moves.append({end, nearestOnPath(result[wire].points, end)});
+    }
+}
+
+} // namespace
+
+SketchDocument moveItemsKeepingConnections(const SketchDocument& document, const QList<int>& items,
+                                           QPointF delta, double grid) {
+    SketchDocument result = document;
+    if (QLineF(QPointF(), delta).length() < Epsilon) return result;
+    QSet<int> moving;
+    QVector<PointMove> moves;
+    for (int index : items) {
+        if (index < 0 || index >= document.size() || moving.contains(index)) continue;
+        moving.insert(index);
+        translateItem(result[index], delta);
+        const SketchItem& item = document[index];
+        if (item.kind == SketchItem::Kind::Symbol || item.kind == SketchItem::Kind::Wire) {
+            for (const QPointF& anchor : itemAnchors(item)) moves.append({anchor, anchor + delta});
+        }
+    }
+    for (int index : moving) {
+        if (!isWire(document[index])) continue;
+        for (QPointF end : teeEnds(document, index, moving)) moves.append({end, end + delta});
+    }
+    QSet<int> modified;
+    followMovedPoints(result, document, moving, moves, modified, grid);
+    simplifyWires(result, modified);
+    return result;
+}
+
+SketchDocument dragWireSegment(const SketchDocument& document, int wire, int segment, QPointF delta,
+                               double grid) {
+    SketchDocument result = document;
+    if (!validWire(document, wire) || segment < 0 || segment + 1 >= document[wire].points.size()) {
+        return result;
+    }
+    const QVector<QPointF>& before = document[wire].points;
+    const QPointF a = before[segment];
+    const QPointF b = before[segment + 1];
+    const bool axisAligned = isHorizontal(a, b) || isVertical(a, b);
+    QPointF offset = delta;
+    if (isHorizontal(a, b)) offset.setX(0.0);
+    if (isVertical(a, b)) offset.setY(0.0);
+    if (QLineF(QPointF(), offset).length() < Epsilon) return result;
+
+    // A segment end slides with the segment unless it is held by a pin or another wire, or moving
+    // it would bend the neighbouring axis-aligned segment.
+    auto slides = [&](qsizetype vertex, qsizetype neighbour) {
+        if (attachedElsewhere(document, wire, before[vertex], true)) return false;
+        if (vertex == 0 || vertex == before.size() - 1 || !axisAligned) return true;
+        const QPointF run = before[neighbour] - before[vertex];
+        return std::abs(run.x() * offset.y() - run.y() * offset.x()) < Epsilon;
+    };
+
+    QVector<QPointF> points(before.begin(), before.begin() + segment);
+    QVector<PointMove> moves;
+    if (slides(segment, segment - 1)) {
+        moves.append({a, a + offset});
+    } else {
+        points.append(a);
+    }
+    points.append(a + offset);
+    points.append(b + offset);
+    if (slides(segment + 1, segment + 2)) {
+        moves.append({b, b + offset});
+    } else {
+        points.append(b);
+    }
+    points.append(QVector<QPointF>(before.begin() + segment + 2, before.end()));
+    result[wire].points = points;
+    // T joins on the dragged segment move with it; others stay on (or snap back onto) the wire.
+    for (QPointF end : teeEnds(document, wire, {})) {
+        if (distanceToSegment(end, QLineF(a, b)) < Epsilon) moves.append({end, end + offset});
+    }
+    followTeeJoins(document, result, wire, moves);
+
+    QSet<int> modified{wire};
+    followMovedPoints(result, document, {wire}, moves, modified, grid);
+    simplifyWires(result, modified);
+    return result;
+}
+
+SketchDocument dragWireVertex(const SketchDocument& document, int wire, int vertex, QPointF delta,
+                              double grid) {
+    SketchDocument result = document;
+    if (!validWire(document, wire) || vertex < 0 || vertex >= document[wire].points.size() ||
+        QLineF(QPointF(), delta).length() < Epsilon) {
+        return result;
+    }
+    const QPointF from = document[wire].points[vertex];
+    result[wire].points[vertex] = from + delta;
+    QVector<PointMove> moves;
+    if (!onPin(document, from)) moves.append({from, from + delta});
+    followTeeJoins(document, result, wire, moves);
+    QSet<int> modified{wire};
+    followMovedPoints(result, document, {wire}, moves, modified, grid);
+    simplifyWires(result, modified);
+    return result;
+}
+
+QVector<QPointF> orthogonalRoute(QPointF from, QPointF to, QPointF leaving, QPointF entering,
+                                 double grid) {
+    const double dx = to.x() - from.x();
+    const double dy = to.y() - from.y();
+    if (std::abs(dx) < Epsilon || std::abs(dy) < Epsilon) {
+        return {};
+    }
+    enum class Leg { None, Horizontal, Vertical };
+    // A preferred direction pointing away from the other end flips to the other axis, so the
+    // route turns immediately instead of running back through the symbol.
+    auto firstLeg = [](QPointF direction, QPointF along) {
+        if (std::abs(direction.x()) >= Epsilon) {
+            return direction.x() * along.x() > 0 ? Leg::Horizontal : Leg::Vertical;
+        }
+        if (std::abs(direction.y()) >= Epsilon) {
+            return direction.y() * along.y() > 0 ? Leg::Vertical : Leg::Horizontal;
+        }
+        return Leg::None;
+    };
+    const Leg start = firstLeg(leaving, QPointF(dx, dy));
+    const Leg end = firstLeg(entering, QPointF(-dx, -dy));
+    const QPointF horizontalFirst(to.x(), from.y());
+    const QPointF verticalFirst(from.x(), to.y());
+    if (start == Leg::Horizontal && end == Leg::Horizontal) {
+        const double x = bendCoordinate(from.x(), to.x(), grid);
+        return {QPointF(x, from.y()), QPointF(x, to.y())};
+    }
+    if (start == Leg::Vertical && end == Leg::Vertical) {
+        const double y = bendCoordinate(from.y(), to.y(), grid);
+        return {QPointF(from.x(), y), QPointF(to.x(), y)};
+    }
+    if (start == Leg::Horizontal) return {horizontalFirst};
+    if (start == Leg::Vertical) return {verticalFirst};
+    if (end == Leg::Horizontal) return {verticalFirst};
+    if (end == Leg::Vertical) return {horizontalFirst};
+    return {std::abs(dx) >= std::abs(dy) ? horizontalFirst : verticalFirst};
+}
+
+QPointF pinDirectionAt(const SketchDocument& document, QPointF point) {
+    for (const auto& item : document) {
+        if (item.kind != SketchItem::Kind::Symbol) continue;
+        const auto* symbol = findSymbol(item.variant);
+        if (symbol == nullptr) continue;
+        for (const QPointF& pin : symbol->pins) {
+            if (!coincident(symbolToWorld(item, pin), point)) continue;
+            const QPointF outward = point - itemBounds(item).center();
+            if (std::abs(outward.x()) < Epsilon && std::abs(outward.y()) < Epsilon) return {};
+            return std::abs(outward.x()) >= std::abs(outward.y())
+                       ? QPointF(std::copysign(1.0, outward.x()), 0.0)
+                       : QPointF(0.0, std::copysign(1.0, outward.y()));
+        }
+    }
+    return {};
+}
+
+void simplifyPath(QVector<QPointF>& points) {
+    removeDuplicateVertices(points);
+    removeStraightVertices(points, [](QPointF) { return false; });
+}
+
+QVector<QVector<QPointF>> splitPathAtWires(const SketchDocument& document,
+                                           const QVector<QPointF>& path) {
+    auto onExistingWire = [&](QPointF point) {
+        for (const auto& item : document) {
+            if (item.kind != SketchItem::Kind::Wire) continue;
+            for (const QLineF& segment : itemSegments(item))
+                if (distanceToSegment(point, segment) < Epsilon) return true;
+        }
+        return false;
+    };
+    QVector<QVector<QPointF>> pieces;
+    QVector<QPointF> piece;
+    for (qsizetype i = 0; i < path.size(); ++i) {
+        if (!piece.isEmpty() && coincident(piece.last(), path[i])) continue;
+        piece.append(path[i]);
+        if (i > 0 && i + 1 < path.size() && piece.size() >= 2 && onExistingWire(path[i])) {
+            pieces.append(piece);
+            piece = {path[i]};
+        }
+    }
+    if (piece.size() >= 2) pieces.append(piece);
+    return pieces;
 }
 
 } // namespace hatt::ui

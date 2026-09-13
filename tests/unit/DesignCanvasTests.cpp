@@ -1,4 +1,6 @@
 #include "hatt/ui/DesignCanvas.hpp"
+#include "hatt/ui/SketchCircuit.hpp"
+#include "hatt/ui/Units.hpp"
 
 #include <QApplication>
 #include <QContextMenuEvent>
@@ -47,6 +49,30 @@ void placeResistor(DesignCanvas& canvas, QPointF world) {
     click(canvas, world);
 }
 
+SketchItem resistorAt(QPointF world) {
+    SketchItem item;
+    item.kind = SketchItem::Kind::Symbol;
+    item.variant = Resistor;
+    item.points = {world};
+    return item;
+}
+
+SketchItem wireThrough(std::initializer_list<QPointF> points) {
+    SketchItem item;
+    item.kind = SketchItem::Kind::Wire;
+    item.points = points;
+    return item;
+}
+
+bool samePoints(const QVector<QPointF>& actual, std::initializer_list<QPointF> expected) {
+    if (actual.size() != static_cast<qsizetype>(expected.size())) return false;
+    qsizetype i = 0;
+    for (const QPointF& point : expected) {
+        if (!samePoint(actual[i++], point)) return false;
+    }
+    return true;
+}
+
 } // namespace
 
 class DesignCanvasTests final : public QObject {
@@ -88,6 +114,20 @@ private slots:
     void rotateBeforePlacingSymbol();
     void wheelZoomKeepsPointUnderCursor();
     void middleButtonPans();
+
+    void movingSymbolDragsConnectedWires();
+    void draggingWireSegmentKeepsPinConnections();
+    void draggingWireCornerMovesJoinedWires();
+    void wiresBetweenPinsAreRoutedAtRightAngles();
+    void placementGuidesAlignAndPinsJoin();
+    void movingUsesGuidesAndShiftLocksAxis();
+    void gridLevelChangesSnapStep();
+    void wireCornerOnAnotherWireJoinsIt();
+    void teeJoinsFollowMovedWires();
+    void lengthUnitsFormat();
+    void spacingShownWhileMovingAndPlacing();
+    void equalSpacingSnapsWhileMovingAndPlacing();
+    void createArrayCopiesInRowOrder();
 
 private:
     DesignCanvas* canvas_ = nullptr;
@@ -145,9 +185,8 @@ void DesignCanvasTests::wireSnapsToGridAndEndsOnPin() {
     QCOMPARE(canvas_->document().size(), 2);
     const SketchItem& wire = canvas_->document().at(1);
     QCOMPARE(wire.kind, SketchItem::Kind::Wire);
-    QCOMPARE(wire.points.size(), 2);
-    QVERIFY(samePoint(wire.points.at(0), {35.56, 30.48}));
-    QVERIFY(samePoint(wire.points.at(1), {25.4, 20.32}));
+    // The wire is routed at right angles and enters the pin along its axis.
+    QVERIFY(samePoints(wire.points, {{35.56, 30.48}, {35.56, 20.32}, {25.4, 20.32}}));
 }
 
 void DesignCanvasTests::polylineSupportsBackspaceAndEnter() {
@@ -593,6 +632,319 @@ void DesignCanvasTests::middleButtonPans() {
     QVERIFY(QLineF(canvas_->worldToScreen(world), before + (end - start)).length() < 1e-6);
     QCOMPARE(canvas_->document().size(), 0);
     QVERIFY(!canvas_->hasPendingOperation());
+}
+
+void DesignCanvasTests::wireCornerOnAnotherWireJoinsIt() {
+    canvas_->applyDocumentEdit(QStringLiteral("Setup"),
+                               {wireThrough({{10.16, 20.32}, {50.8, 20.32}})});
+    canvas_->setTool(CanvasTool::Wire);
+
+    // Clicking on the existing wire and continuing joins it: the wire is split there.
+    click(*canvas_, {30.48, 10.16});
+    click(*canvas_, {30.48, 20.32});
+    click(*canvas_, {30.48, 30.48});
+    QTest::keyClick(canvas_, Qt::Key_Return);
+    QCOMPARE(canvas_->document().size(), 3);
+    QVERIFY(samePoints(canvas_->document().at(1).points, {{30.48, 10.16}, {30.48, 20.32}}));
+    QVERIFY(samePoints(canvas_->document().at(2).points, {{30.48, 20.32}, {30.48, 30.48}}));
+
+    // Passing straight over it without a corner stays a crossing.
+    click(*canvas_, {40.64, 10.16});
+    click(*canvas_, {40.64, 30.48});
+    QTest::keyClick(canvas_, Qt::Key_Return);
+    QCOMPARE(canvas_->document().size(), 4);
+
+    const auto junctions = hatt::ui::schematicJunctions(canvas_->document());
+    QCOMPARE(junctions.size(), 1);
+    QVERIFY(samePoint(junctions.first(), {30.48, 20.32}));
+
+    canvas_->undoStack()->undo();
+    canvas_->undoStack()->undo();
+    QCOMPARE(canvas_->document().size(), 1);
+}
+
+void DesignCanvasTests::teeJoinsFollowMovedWires() {
+    // A (index 1) ends on the middle of B (index 0): a T join with a junction dot.
+    const hatt::ui::SketchDocument tee{wireThrough({{10.16, 20.32}, {50.8, 20.32}}),
+                                       wireThrough({{30.48, 20.32}, {30.48, 30.48}})};
+    const auto joinedOnce = [](const hatt::ui::SketchDocument& document) {
+        const auto dots = hatt::ui::schematicJunctions(document);
+        return dots.size() == 1 && samePoint(dots.first(), document.at(1).points.first());
+    };
+    QVERIFY(joinedOnce(tee));
+
+    // Dragging B's segment carries A's end along, A only gets shorter.
+    auto document = hatt::ui::dragWireSegment(tee, 0, 0, {0.0, -5.08}, 2.54);
+    QVERIFY(samePoints(document.at(0).points, {{10.16, 15.24}, {50.8, 15.24}}));
+    QVERIFY(samePoints(document.at(1).points, {{30.48, 15.24}, {30.48, 30.48}}));
+    QVERIFY(joinedOnce(document));
+
+    // Moving B as a whole moves A's end with it; A's far end stays.
+    document = hatt::ui::moveItemsKeepingConnections(tee, {0}, {2.54, -5.08}, 2.54);
+    QVERIFY(samePoint(document.at(1).points.first(), {33.02, 15.24}));
+    QVERIFY(samePoint(document.at(1).points.last(), {30.48, 30.48}));
+    QVERIFY(joinedOnce(document));
+
+    // Reshaping B at a corner keeps A's end on the new segment.
+    hatt::ui::SketchDocument bent = tee;
+    bent[0].points.append({50.8, 40.64});
+    document = hatt::ui::dragWireVertex(bent, 0, 1, {0.0, -5.08}, 2.54);
+    QVERIFY(samePoint(document.at(0).points.at(1), {50.8, 15.24}));
+    QVERIFY(hatt::ui::distanceToSegment(document.at(1).points.first(),
+                                        QLineF(document.at(0).points.at(0),
+                                               document.at(0).points.at(1))) < 1e-6);
+    QVERIFY(samePoint(document.at(1).points.last(), {30.48, 30.48}));
+    QVERIFY(joinedOnce(document));
+
+    // Through the canvas: a lone segment drag is one undo step and keeps the join.
+    canvas_->applyDocumentEdit(QStringLiteral("Setup"), tee);
+    canvas_->setTool(CanvasTool::Select);
+    drag(*canvas_, {15.24, 20.32}, {15.24, 30.48});
+    QVERIFY(joinedOnce(canvas_->document()));
+    QVERIFY(samePoint(canvas_->document().at(1).points.first(),
+                      {30.48, canvas_->document().at(0).points.first().y()}));
+}
+
+void DesignCanvasTests::lengthUnitsFormat() {
+    using hatt::ui::LengthUnit;
+    QCOMPARE(hatt::ui::formatLength(2.54, LengthUnit::Mil), QStringLiteral("100 mil"));
+    QCOMPARE(hatt::ui::formatLength(2.54, LengthUnit::Inch), QStringLiteral("0.1 in"));
+    QCOMPARE(hatt::ui::formatLength(0.127, LengthUnit::Inch), QStringLiteral("0.005 in"));
+    QCOMPARE(hatt::ui::formatLength(0.635, LengthUnit::Millimetre), QStringLiteral("0.635 mm"));
+    QCOMPARE(hatt::ui::formatLength(25.4, LengthUnit::Millimetre), QStringLiteral("25.4 mm"));
+    QCOMPARE(hatt::ui::formatCoordinate(-0.0001, LengthUnit::Millimetre), QStringLiteral("0.000"));
+    QCOMPARE(hatt::ui::formatCoordinate(12.7, LengthUnit::Mil), QStringLiteral("500.0"));
+    QCOMPARE(hatt::ui::fromDisplayUnit(hatt::ui::toDisplayUnit(20.32, LengthUnit::Inch),
+                                       LengthUnit::Inch), 20.32);
+    QCOMPARE(hatt::ui::displayUnit(Workspace::Schematic, LengthUnit::Inch), LengthUnit::Mil);
+    QCOMPARE(hatt::ui::displayUnit(Workspace::Board, LengthUnit::Inch), LengthUnit::Inch);
+    QCOMPARE(canvas_->lengthUnit(), LengthUnit::Mil);
+}
+
+void DesignCanvasTests::spacingShownWhileMovingAndPlacing() {
+    canvas_->applyDocumentEdit(QStringLiteral("Setup"),
+                               {resistorAt({20.32, 20.32}), resistorAt({60.96, 20.32})});
+    const QRectF left = hatt::ui::itemBounds(canvas_->document().at(0));
+    canvas_->setTool(CanvasTool::Select);
+    QVERIFY(canvas_->activeSpacings().isEmpty());
+
+    // While R2 is dragged towards R1, the horizontal gap between their boxes is measured.
+    sendMouse(*canvas_, QEvent::MouseButtonPress, {60.96, 20.32}, Qt::LeftButton, Qt::LeftButton);
+    for (int step = 1; step <= 4; ++step) {
+        sendMouse(*canvas_, QEvent::MouseMove, {60.96 - 2.54 * step, 20.32}, Qt::NoButton,
+                  Qt::LeftButton);
+    }
+    const auto spacings = canvas_->activeSpacings();
+    QCOMPARE(spacings.size(), 1);
+    const auto& gap = spacings.first();
+    QVERIFY(std::abs(gap.line.dy()) < 1e-6);
+    QVERIFY(std::abs(gap.line.x1() - left.right()) < 1e-6);
+    QVERIFY(std::abs(gap.distance - gap.line.length()) < 1e-6);
+    QVERIFY(gap.distance > 0.0 && gap.distance < 60.96 - 20.32);
+    sendMouse(*canvas_, QEvent::MouseButtonRelease, {50.8, 20.32}, Qt::LeftButton, Qt::NoButton);
+    QVERIFY(canvas_->activeSpacings().isEmpty());
+
+    // Placing a symbol below R1 shows the vertical gap to it.
+    canvas_->setTool(CanvasTool::Symbol, Resistor);
+    sendMouse(*canvas_, QEvent::MouseMove, {20.32, 40.64}, Qt::NoButton, Qt::NoButton);
+    const auto placing = canvas_->activeSpacings();
+    const bool below = std::any_of(placing.begin(), placing.end(), [&](const auto& s) {
+        return std::abs(s.line.dx()) < 1e-6 && std::abs(s.line.y1() - left.bottom()) < 1e-6;
+    });
+    QVERIFY(below);
+}
+
+void DesignCanvasTests::equalSpacingSnapsWhileMovingAndPlacing() {
+    // Free movement so only the equal-spacing snap can land the symbol exactly.
+    SnapSettings settings;
+    settings.grid = false;
+    settings.objects = false;
+    canvas_->setSnapSettings(settings);
+    // R1–R2 centres are 20.32 apart, so R3 is equally spaced when its centre is at 60.96.
+    canvas_->applyDocumentEdit(QStringLiteral("Setup"),
+                               {resistorAt({20.32, 20.32}), resistorAt({40.64, 20.32}),
+                                resistorAt({71.12, 20.32})});
+    const double pixel = 1.0 / (canvas_->worldToScreen({1, 0}).x() - canvas_->worldToScreen({0, 0}).x());
+    const QPointF nearEqual(60.96 + 4 * pixel, 20.32);
+
+    canvas_->setTool(CanvasTool::Select);
+    sendMouse(*canvas_, QEvent::MouseButtonPress, {71.12, 20.32}, Qt::LeftButton, Qt::LeftButton);
+    for (int step = 1; step <= 4; ++step) {
+        sendMouse(*canvas_, QEvent::MouseMove, QPointF(71.12, 20.32) + (nearEqual - QPointF(71.12, 20.32)) * step / 4.0,
+                  Qt::NoButton, Qt::LeftButton);
+    }
+    const auto spacings = canvas_->activeSpacings();
+    const auto equal = std::count_if(spacings.begin(), spacings.end(), [](const auto& s) { return s.equal; });
+    QCOMPARE(equal, 2); // R2–R3 while moving, and the R1–R2 gap it matches
+    sendMouse(*canvas_, QEvent::MouseButtonRelease, nearEqual, Qt::LeftButton, Qt::NoButton);
+    QVERIFY(samePoint(canvas_->document().at(2).points.first(), {60.96, 20.32}));
+
+    // Placing a new symbol after R3 snaps to the same pitch.
+    canvas_->setTool(CanvasTool::Symbol, Resistor);
+    click(*canvas_, {81.28 - 3 * pixel, 20.32});
+    QCOMPARE(canvas_->document().size(), 4);
+    QVERIFY(samePoint(canvas_->document().at(3).points.first(), {81.28, 20.32}));
+
+    // Far from any matching gap nothing is snapped.
+    click(*canvas_, {110.0, 20.32});
+    QVERIFY(samePoint(canvas_->document().at(4).points.first(), {110.0, 20.32}));
+}
+
+void DesignCanvasTests::createArrayCopiesInRowOrder() {
+    placeResistor(*canvas_, {20.32, 20.32});
+    canvas_->setTool(CanvasTool::Select);
+    canvas_->selectItem(0);
+    canvas_->createArray(1, 1, {12.7, 7.62});
+    QCOMPARE(canvas_->undoStack()->count(), 1);
+
+    canvas_->createArray(2, 3, {12.7, 7.62});
+    const auto& document = canvas_->document();
+    QCOMPARE(document.size(), 6);
+    const QPointF expected[] = {{20.32, 20.32}, {33.02, 20.32}, {45.72, 20.32},
+                                {20.32, 27.94}, {33.02, 27.94}, {45.72, 27.94}};
+    QSet<QString> ids;
+    for (int i = 0; i < 6; ++i) {
+        QVERIFY(samePoint(document.at(i).points.first(), expected[i]));
+        QCOMPARE(document.at(i).label, QStringLiteral("R%1").arg(i + 1));
+        ids.insert(document.at(i).id);
+    }
+    QCOMPARE(ids.size(), 6);
+    QCOMPARE(canvas_->selection().size(), 6);
+    QCOMPARE(canvas_->undoStack()->count(), 2);
+    canvas_->undoStack()->undo();
+    QCOMPARE(canvas_->document().size(), 1);
+}
+
+void DesignCanvasTests::movingSymbolDragsConnectedWires() {
+    // R1 pins are at (15.24, 20.32) and (25.4, 20.32).
+    canvas_->applyDocumentEdit(QStringLiteral("Setup"),
+                               {resistorAt({20.32, 20.32}),
+                                wireThrough({{25.4, 20.32}, {40.64, 20.32}}),
+                                wireThrough({{15.24, 20.32}, {10.16, 20.32}, {10.16, 30.48}}),
+                                wireThrough({{60.96, 60.96}, {71.12, 60.96}})});
+    canvas_->setTool(CanvasTool::Select);
+    drag(*canvas_, {20.32, 20.32}, {20.32, 25.4});
+
+    const auto& document = canvas_->document();
+    QVERIFY(samePoint(document.at(0).points.first(), {20.32, 25.4}));
+    // A straight wire gets an orthogonal dogleg on the grid; its far end stays put.
+    QVERIFY(samePoints(document.at(1).points,
+                       {{25.4, 25.4}, {33.02, 25.4}, {33.02, 20.32}, {40.64, 20.32}}));
+    // An L-shaped wire keeps its shape by sliding its free corner.
+    QVERIFY(samePoints(document.at(2).points, {{15.24, 25.4}, {10.16, 25.4}, {10.16, 30.48}}));
+    QVERIFY(samePoints(document.at(3).points, {{60.96, 60.96}, {71.12, 60.96}}));
+    QCOMPARE(canvas_->undoStack()->count(), 2);
+
+    canvas_->undoStack()->undo();
+    QVERIFY(samePoints(canvas_->document().at(1).points, {{25.4, 20.32}, {40.64, 20.32}}));
+
+    // Keyboard nudges keep connections too; moving along a straight wire just stretches it.
+    click(*canvas_, {20.32, 20.32});
+    QTest::keyClick(canvas_, Qt::Key_Right);
+    QVERIFY(samePoints(canvas_->document().at(1).points, {{27.94, 20.32}, {40.64, 20.32}}));
+    QVERIFY(samePoints(canvas_->document().at(2).points, {{17.78, 20.32}, {10.16, 20.32}, {10.16, 30.48}}));
+}
+
+void DesignCanvasTests::draggingWireSegmentKeepsPinConnections() {
+    canvas_->applyDocumentEdit(QStringLiteral("Setup"),
+                               {resistorAt({20.32, 20.32}), resistorAt({50.8, 20.32}),
+                                wireThrough({{25.4, 20.32}, {45.72, 20.32}})});
+    canvas_->setTool(CanvasTool::Select);
+    // The horizontal segment only moves vertically; its pin ends get stubs.
+    drag(*canvas_, {35.56, 20.32}, {38.1, 30.48});
+
+    QCOMPARE(canvas_->selection(), QList<int>{2});
+    QVERIFY(samePoints(canvas_->document().at(2).points,
+                       {{25.4, 20.32}, {25.4, 30.48}, {45.72, 30.48}, {45.72, 20.32}}));
+    QVERIFY(samePoint(canvas_->document().at(0).points.first(), {20.32, 20.32}));
+    QVERIFY(samePoint(canvas_->document().at(1).points.first(), {50.8, 20.32}));
+    QCOMPARE(canvas_->undoStack()->count(), 2);
+
+    // Dragging it back collapses the stubs into the original straight wire.
+    drag(*canvas_, {35.56, 30.48}, {35.56, 20.32});
+    QVERIFY(samePoints(canvas_->document().at(2).points, {{25.4, 20.32}, {45.72, 20.32}}));
+    QCOMPARE(canvas_->undoStack()->count(), 3);
+    canvas_->undoStack()->undo();
+    QCOMPARE(canvas_->document().at(2).points.size(), 4);
+}
+
+void DesignCanvasTests::draggingWireCornerMovesJoinedWires() {
+    canvas_->applyDocumentEdit(QStringLiteral("Setup"),
+                               {wireThrough({{5.08, 5.08}, {15.24, 5.08}, {15.24, 15.24}}),
+                                wireThrough({{15.24, 5.08}, {25.4, 5.08}})});
+    canvas_->setTool(CanvasTool::Select);
+    drag(*canvas_, {15.24, 5.08}, {17.78, 10.16});
+
+    QVERIFY(samePoints(canvas_->document().at(1).points, {{17.78, 10.16}, {25.4, 5.08}}));
+    QVERIFY(samePoints(canvas_->document().at(0).points,
+                       {{5.08, 5.08}, {17.78, 10.16}, {15.24, 15.24}}));
+    QCOMPARE(canvas_->undoStack()->count(), 2);
+}
+
+void DesignCanvasTests::wiresBetweenPinsAreRoutedAtRightAngles() {
+    // R1 right pin (25.4, 20.32) points right; R2 left pin (45.72, 30.48) points left.
+    canvas_->applyDocumentEdit(QStringLiteral("Setup"),
+                               {resistorAt({20.32, 20.32}), resistorAt({50.8, 30.48})});
+    canvas_->setTool(CanvasTool::Wire);
+    click(*canvas_, {25.4, 20.32});
+    click(*canvas_, {45.72, 30.48});
+    QVERIFY(!canvas_->hasPendingOperation());
+    QCOMPARE(canvas_->document().size(), 3);
+    QVERIFY(samePoints(canvas_->document().at(2).points,
+                       {{25.4, 20.32}, {35.56, 20.32}, {35.56, 30.48}, {45.72, 30.48}}));
+
+    // Ctrl draws the segment at a free angle, as in Proteus.
+    click(*canvas_, {25.4, 20.32}, Qt::ControlModifier);
+    click(*canvas_, {45.72, 30.48}, Qt::ControlModifier);
+    QCOMPARE(canvas_->document().size(), 4);
+    QVERIFY(samePoints(canvas_->document().at(3).points, {{25.4, 20.32}, {45.72, 30.48}}));
+}
+
+void DesignCanvasTests::placementGuidesAlignAndPinsJoin() {
+    SnapSettings settings;
+    settings.grid = false;
+    canvas_->setSnapSettings(settings);
+    canvas_->applyDocumentEdit(QStringLiteral("Setup"), {resistorAt({20.32, 20.32})});
+    canvas_->setTool(CanvasTool::Symbol, Resistor);
+
+    // Close to the first resistor's row: the preview is pulled onto it and a guide is shown.
+    sendMouse(*canvas_, QEvent::MouseMove, {40.0, 20.6}, Qt::NoButton, Qt::NoButton);
+    QVERIFY(!canvas_->activeGuides().isEmpty());
+    click(*canvas_, {40.0, 20.6});
+    QVERIFY(samePoint(canvas_->document().at(1).points.first(), {40.0, 20.32}));
+
+    // A pin near another pin joins it exactly.
+    click(*canvas_, {30.8, 20.9});
+    QVERIFY(samePoint(canvas_->document().at(2).points.first(), {30.48, 20.32}));
+}
+
+void DesignCanvasTests::movingUsesGuidesAndShiftLocksAxis() {
+    SnapSettings settings;
+    settings.grid = false;
+    canvas_->setSnapSettings(settings);
+    canvas_->applyDocumentEdit(QStringLiteral("Setup"),
+                               {resistorAt({20.32, 20.32}), resistorAt({40.64, 30.48})});
+    canvas_->setTool(CanvasTool::Select);
+    drag(*canvas_, {40.64, 30.48}, {40.64, 20.9});
+    QVERIFY(samePoint(canvas_->document().at(1).points.first(), {40.64, 20.32}));
+
+    canvas_->setSnapSettings(SnapSettings{});
+    const QPointF from(40.64, 20.32);
+    const QPointF to(50.8, 24.0);
+    sendMouse(*canvas_, QEvent::MouseButtonPress, from, Qt::LeftButton, Qt::LeftButton);
+    sendMouse(*canvas_, QEvent::MouseMove, to, Qt::NoButton, Qt::LeftButton, Qt::ShiftModifier);
+    sendMouse(*canvas_, QEvent::MouseButtonRelease, to, Qt::LeftButton, Qt::NoButton, Qt::ShiftModifier);
+    QVERIFY(samePoint(canvas_->document().at(1).points.first(), {50.8, 20.32}));
+}
+
+void DesignCanvasTests::gridLevelChangesSnapStep() {
+    SnapSettings settings;
+    settings.gridLevel = 1;
+    canvas_->setSnapSettings(settings);
+    QCOMPARE(canvas_->gridSize(), 1.27);
+    placeResistor(*canvas_, {10.9, 10.0});
+    QVERIFY(samePoint(canvas_->document().first().points.first(), {11.43, 10.16}));
+    QCOMPARE(DesignCanvas::gridStep(Workspace::Board, 2), 0.635);
 }
 
 QTEST_MAIN(DesignCanvasTests)

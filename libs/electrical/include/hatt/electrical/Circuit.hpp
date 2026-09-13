@@ -24,6 +24,10 @@ struct ConnectivityResult {
     std::vector<std::string> errors;
 };
 ConnectivityResult buildConnectivity(const ConnectivityInput& input);
+// Points where a junction dot must be drawn: a wire end that joins three or more conductor
+// branches (wire ends, wires passing through, pins). Plain crossings never qualify, matching
+// buildConnectivity. Explicit junctions are excluded; they are drawn by their own symbol.
+std::vector<Point> junctionPoints(const ConnectivityInput& input);
 
 enum class DcKind { Resistor, VoltageSource };
 struct DcElement {
