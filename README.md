@@ -77,3 +77,11 @@ docs/                   HATT-SPEC-0001 ana gereksinim belgesi
 6. `HATT-034`: güvenilir native Qt plugin loader ve örnek plugin
 
 İlk kabuk yalnız UI mimarisini kanıtlar; şematik çizim, PCB düzenleme, dosya formatları ve gerçek plugin yükleme henüz uygulanmamıştır.
+
+## Katkı
+
+Hata bildirimleri, öneriler ve pull request'ler memnuniyetle karşılanır. Açık işler [Issues](https://github.com/kutleloove/HattEDA/issues) sekmesinde takip edilir. Büyük değişikliklerden önce ilgili issue üzerinde tartışma açılması ve yukarıdaki mimari kurallara uyulması beklenir.
+
+## Lisans
+
+HattEDA, [GNU General Public License v3.0](LICENSE) altında lisanslanmıştır. Copyright (C) 2026 Murat Çuka.
