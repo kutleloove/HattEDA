@@ -252,6 +252,11 @@ void drawItem(QPainter& painter, const SketchItem& item, const CanvasColors& col
                          Qt::AlignLeft | Qt::AlignVCenter, item.label);
         break;
     }
+    case SketchItem::Kind::Pad:
+    case SketchItem::Kind::Via:
+        // v2 item kinds — visual rendering deferred to Issue #28 (Pad tools).
+        // itemSegments already returns a bounding box for hit-testing and selection.
+        break;
     }
 
     if (selected && !preview) {

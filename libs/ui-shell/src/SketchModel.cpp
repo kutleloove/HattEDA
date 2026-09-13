@@ -70,6 +70,55 @@ SymbolShape hole(QPointF center, double diameter) {
     return shape;
 }
 
+// v2 pad helpers — build PadDefinition for footprint pad lists.
+PadDefinition makePad(int number, double w, double h) {
+    PadDefinition p;
+    p.number = number;
+    p.shape = PadShape::Rect;
+    p.width = w;
+    p.height = h;
+    p.drillDiameter = 0.0;
+    p.layers = (1 << static_cast<int>(BoardLayer::TopCopper));
+    return p;
+}
+
+PadDefinition makeRoundPad(int number, double diameter) {
+    PadDefinition p;
+    p.number = number;
+    p.shape = PadShape::Round;
+    p.width = diameter;
+    p.height = diameter;
+    p.drillDiameter = 0.0;
+    p.layers = (1 << static_cast<int>(BoardLayer::TopCopper));
+    return p;
+}
+
+PadDefinition makeThroughPad(int number, double diameter, double drill) {
+    const int bothCopper = (1 << static_cast<int>(BoardLayer::TopCopper))
+                         | (1 << static_cast<int>(BoardLayer::BottomCopper));
+    PadDefinition p;
+    p.number = number;
+    p.shape = PadShape::Round;
+    p.width = diameter;
+    p.height = diameter;
+    p.drillDiameter = drill;
+    p.layers = bothCopper;
+    return p;
+}
+
+PadDefinition makeSquareThroughPad(int number, double size, double drill) {
+    const int bothCopper = (1 << static_cast<int>(BoardLayer::TopCopper))
+                         | (1 << static_cast<int>(BoardLayer::BottomCopper));
+    PadDefinition p;
+    p.number = number;
+    p.shape = PadShape::Rect;
+    p.width = size;
+    p.height = size;
+    p.drillDiameter = drill;
+    p.layers = bothCopper;
+    return p;
+}
+
 SymbolDefinition define(const char* id, const char* name, Workspace workspace,
                         SymbolCategory category, const char* prefix, const char* label = "") {
     SymbolDefinition symbol;
@@ -225,23 +274,30 @@ QVector<SymbolDefinition> buildLibrary() {
     currentProbe.pins = {{0, 0}};
     library.append(currentProbe);
 
+    // --- Board footprints ---
+    // Each footprint defines both `shapes` (visual, for DesignCanvas) and `pads`
+    // (structural, for PCB algorithms). Full visual migration is Issue #28.
+
     auto header2 = define("board.header-1x2", QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Pin header 1x2"),
                            W::Board, C::Component, "J");
     header2.shapes = {rectangle(-1.27, -1.27, 5.08, 2.54), pad({0, 0}, 1.6, 1.6),
                       roundPad({2.54, 0}, 1.6), hole({0, 0}, 0.8), hole({2.54, 0}, 0.8)};
     header2.pins = {{0, 0}, {2.54, 0}};
+    header2.pads = {makeSquareThroughPad(1, 1.6, 0.8), makeThroughPad(2, 1.6, 0.8)};
     library.append(header2);
 
     auto r0603 = define("board.r0603", QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Resistor 0603"),
                         W::Board, C::Component, "R");
     r0603.shapes = {rectangle(-1.45, -0.8, 2.9, 1.6), pad({-0.8, 0}, 0.8, 0.95), pad({0.8, 0}, 0.8, 0.95)};
     r0603.pins = {{-0.8, 0}, {0.8, 0}};
+    r0603.pads = {makePad(1, 0.8, 0.95), makePad(2, 0.8, 0.95)};
     library.append(r0603);
 
     auto c0805 = define("board.c0805", QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Capacitor 0805"),
                         W::Board, C::Component, "C");
     c0805.shapes = {rectangle(-1.8, -1.0, 3.6, 2.0), pad({-0.95, 0}, 1.0, 1.3), pad({0.95, 0}, 1.0, 1.3)};
     c0805.pins = {{-0.95, 0}, {0.95, 0}};
+    c0805.pads = {makePad(1, 1.0, 1.3), makePad(2, 1.0, 1.3)};
     library.append(c0805);
 
     auto sot23 = define("board.sot23", QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "SOT-23"),
@@ -249,43 +305,54 @@ QVector<SymbolDefinition> buildLibrary() {
     sot23.shapes = {rectangle(-1.6, -0.7, 3.2, 1.4), pad({-0.95, 1.1}, 0.8, 0.9),
                     pad({0.95, 1.1}, 0.8, 0.9), pad({0, -1.1}, 0.8, 0.9)};
     sot23.pins = {{-0.95, 1.1}, {0.95, 1.1}, {0, -1.1}};
+    sot23.pads = {makePad(1, 0.8, 0.9), makePad(2, 0.8, 0.9), makePad(3, 0.8, 0.9)};
     library.append(sot23);
 
     auto soic8 = define("board.soic8", QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "SOIC-8"),
                         W::Board, C::Component, "U");
     soic8.shapes = {rectangle(-1.95, -2.5, 3.9, 5.0), circle({-1.4, -1.95}, 0.2, true)};
+    int soic8PadNum = 1;
     for (double y : {-1.905, -0.635, 0.635, 1.905}) {
         soic8.shapes.append(pad({-2.7, y}, 1.55, 0.6));
         soic8.pins.append({-2.7, y});
+        soic8.pads.append(makePad(soic8PadNum++, 1.55, 0.6));
     }
     for (double y : {1.905, 0.635, -0.635, -1.905}) {
         soic8.shapes.append(pad({2.7, y}, 1.55, 0.6));
         soic8.pins.append({2.7, y});
+        soic8.pads.append(makePad(soic8PadNum++, 1.55, 0.6));
     }
     library.append(soic8);
 
     auto dip8 = define("board.dip8", QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "DIP-8"),
                        W::Board, C::Component, "U");
     dip8.shapes = {rectangle(-2.6, -5.1, 5.2, 10.2)};
+    int dip8PadNum = 1;
     for (double y : {-3.81, -1.27, 1.27, 3.81}) {
         dip8.shapes.append(roundPad({-3.81, y}, 1.6));
         dip8.shapes.append(hole({-3.81, y}, 0.8));
         dip8.pins.append({-3.81, y});
+        dip8.pads.append(dip8PadNum == 1 ? makeSquareThroughPad(dip8PadNum++, 1.6, 0.8)
+                                         : makeThroughPad(dip8PadNum++, 1.6, 0.8));
     }
     for (double y : {3.81, 1.27, -1.27, -3.81}) {
         dip8.shapes.append(roundPad({3.81, y}, 1.6));
         dip8.shapes.append(hole({3.81, y}, 0.8));
         dip8.pins.append({3.81, y});
+        dip8.pads.append(makeThroughPad(dip8PadNum++, 1.6, 0.8));
     }
     library.append(dip8);
 
     auto header = define("board.header-1x4", QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Pin header 1x4"),
                          W::Board, C::Component, "J");
     header.shapes = {rectangle(-1.27, -5.08, 2.54, 10.16)};
+    int headerPadNum = 1;
     for (double y : {-3.81, -1.27, 1.27, 3.81}) {
         header.shapes.append(roundPad({0, y}, 1.7));
         header.shapes.append(hole({0, y}, 1.0));
         header.pins.append({0, y});
+        header.pads.append(headerPadNum == 1 ? makeSquareThroughPad(headerPadNum++, 1.7, 1.0)
+                                             : makeThroughPad(headerPadNum++, 1.7, 1.0));
     }
     library.append(header);
 
@@ -293,12 +360,14 @@ QVector<SymbolDefinition> buildLibrary() {
                       W::Board, C::Terminal, "");
     via.shapes = {roundPad({0, 0}, 0.8), hole({0, 0}, 0.4)};
     via.pins = {{0, 0}};
+    via.pads = {makeThroughPad(1, 0.8, 0.4)};
     library.append(via);
 
     auto testPoint = define("board.test-point", QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Test point"),
                             W::Board, C::Terminal, "TP");
     testPoint.shapes = {roundPad({0, 0}, 1.5)};
     testPoint.pins = {{0, 0}};
+    testPoint.pads = {makeRoundPad(1, 1.5)};
     library.append(testPoint);
 
     auto mountingHole = define("board.mounting-hole",
@@ -306,6 +375,7 @@ QVector<SymbolDefinition> buildLibrary() {
                                W::Board, C::Terminal, "H");
     mountingHole.shapes = {roundPad({0, 0}, 6.0), hole({0, 0}, 3.2)};
     mountingHole.pins = {{0, 0}};
+    mountingHole.pads = {makeThroughPad(1, 6.0, 3.2)};
     library.append(mountingHole);
 
     return library;
@@ -414,6 +484,31 @@ QVector<QLineF> itemSegments(const SketchItem& item) {
                        true);
         break;
     }
+    case SketchItem::Kind::Pad: {
+        if (!item.points.isEmpty()) {
+            const QPointF center = item.points.value(0);
+            const double hw = item.pad.width / 2.0;
+            const double hh = item.pad.height / 2.0;
+            appendPolyline(segments,
+                           {center + QPointF(-hw, -hh), center + QPointF(hw, -hh),
+                            center + QPointF(hw, hh),  center + QPointF(-hw, hh)},
+                           true);
+        }
+        break;
+    }
+    case SketchItem::Kind::Via: {
+        if (!item.points.isEmpty()) {
+            const QPointF center = item.points.value(0);
+            const double radius = item.drillDiameter > 0 ? item.drillDiameter / 2.0 + 0.2 : 0.4;
+            for (int i = 0; i < 24; ++i) {
+                const double angle = 2 * Pi * i / 24;
+                segments.append(QLineF(
+                    center + QPointF(radius * std::cos(angle), radius * std::sin(angle)),
+                    center + QPointF(radius * std::cos(angle + 2*Pi/24), radius * std::sin(angle + 2*Pi/24))));
+            }
+        }
+        break;
+    }
     }
     return segments;
 }
@@ -442,6 +537,9 @@ QVector<QPointF> itemAnchors(const SketchItem& item) {
         return {center, center + QPointF(radius, 0), center + QPointF(0, radius),
                 center - QPointF(radius, 0), center - QPointF(0, radius)};
     }
+    case SketchItem::Kind::Pad:
+    case SketchItem::Kind::Via:
+        return {item.points.value(0)};
     default:
         return item.points;
     }

@@ -1,9 +1,11 @@
 #include "hatt/ui/ProjectFile.hpp"
 
+#include <QDir>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QTemporaryDir>
+#include <QUuid>
 #include <QtTest>
 
 using namespace hatt::ui;
@@ -66,6 +68,20 @@ void compareDocuments(const SketchDocument& actual, const SketchDocument& expect
         QCOMPARE(a.footprint, e.footprint);
         QCOMPARE(a.pinPadMap, e.pinPadMap);
         QCOMPARE(a.sourceId, e.sourceId);
+        // v2 fields
+        QCOMPARE(a.layer, e.layer);
+        QCOMPARE(a.onBottom, e.onBottom);
+        QCOMPARE(a.excludeFromBoard, e.excludeFromBoard);
+        if (e.kind == SketchItem::Kind::Pad) {
+            QCOMPARE(a.pad.number, e.pad.number);
+            QCOMPARE(a.pad.shape, e.pad.shape);
+            QVERIFY(a.pad.width == e.pad.width);
+            QVERIFY(a.pad.height == e.pad.height);
+            QVERIFY(a.pad.drillDiameter == e.pad.drillDiameter);
+            QCOMPARE(a.pad.layers, e.pad.layers);
+        }
+        if (e.kind == SketchItem::Kind::Via)
+            QVERIFY(a.drillDiameter == e.drillDiameter);
     }
 }
 
@@ -189,6 +205,86 @@ private slots:
 
         QVERIFY(!loadProjectFile(directory.filePath(QStringLiteral("missing.hatt"))).ok());
         QVERIFY(!saveProjectFile(directory.filePath(QStringLiteral("no/such/dir/x.hatt")), {}).isEmpty());
+    }
+
+    // v2 tests
+
+    void v2RoundTripsNewFields() {
+        // Build a project with v2-specific fields set.
+        ProjectData project;
+        project.name = QStringLiteral("V2Test");
+        SketchItem comp = item(SketchItem::Kind::Symbol, {{0, 0}}, QStringLiteral("schematic.resistor"));
+        comp.excludeFromBoard = true;
+        SketchItem board = item(SketchItem::Kind::Symbol, {{10, 10}}, QStringLiteral("board.r0603"));
+        board.onBottom = true;
+        board.layer = BoardLayer::BottomCopper;
+        project.schematic = {comp};
+        project.board = {board};
+
+        const ProjectLoad load = parseProject(serializeProject(project));
+        QVERIFY2(load.ok(), qPrintable(load.error));
+        compareDocuments(load.project.schematic, project.schematic);
+        compareDocuments(load.project.board, project.board);
+        // Deterministic re-serialise
+        QCOMPARE(serializeProject(load.project), serializeProject(project));
+    }
+
+    void v1FileIsUpgradedToV2() {
+        // Craft a minimal v1 file (formatVersion=1, no v2 fields).
+        QJsonObject root;
+        root[QStringLiteral("format")] = QStringLiteral("hatteda-project");
+        root[QStringLiteral("formatVersion")] = 1;
+        root[QStringLiteral("name")] = QStringLiteral("OldProject");
+        QJsonArray items;
+        QJsonObject wire;
+        wire[QStringLiteral("id")] = QUuid::createUuid().toString(QUuid::WithoutBraces);
+        wire[QStringLiteral("kind")] = QStringLiteral("wire");
+        wire[QStringLiteral("points")] = QJsonArray{QJsonArray{0.0, 0.0}, QJsonArray{1.0, 0.0}};
+        items.append(wire);
+        QJsonObject schematicSection;
+        schematicSection[QStringLiteral("items")] = items;
+        root[QStringLiteral("schematic")] = schematicSection;
+        root[QStringLiteral("board")] = QJsonObject{{QStringLiteral("items"), QJsonArray{}}};
+
+        const ProjectLoad load = parseProject(QJsonDocument(root).toJson());
+        QVERIFY2(load.ok(), qPrintable(load.error));
+        QCOMPARE(load.project.schematic.size(), 1);
+        // v2 defaults applied
+        QCOMPARE(load.project.schematic[0].layer, BoardLayer::TopCopper);
+        QVERIFY(!load.project.schematic[0].onBottom);
+        QVERIFY(!load.project.schematic[0].excludeFromBoard);
+    }
+
+    void padItemRoundTrip() {
+        ProjectData project;
+        project.name = QStringLiteral("PadTest");
+        SketchItem padItem;
+        padItem.kind = SketchItem::Kind::Pad;
+        padItem.points = {{5.0, 3.0}};
+        padItem.pad.number = 2;
+        padItem.pad.shape = PadShape::Round;
+        padItem.pad.width = 1.2;
+        padItem.pad.height = 1.2;
+        padItem.pad.drillDiameter = 0.6;
+        padItem.pad.layers = (1 << static_cast<int>(BoardLayer::TopCopper))
+                           | (1 << static_cast<int>(BoardLayer::BottomCopper));
+        padItem.layer = BoardLayer::TopCopper;
+        SketchItem viaItem;
+        viaItem.kind = SketchItem::Kind::Via;
+        viaItem.points = {{8.0, 4.0}};
+        viaItem.drillDiameter = 0.4;
+        project.board = {padItem, viaItem};
+
+        const ProjectLoad load = parseProject(serializeProject(project));
+        QVERIFY2(load.ok(), qPrintable(load.error));
+        compareDocuments(load.project.board, project.board);
+    }
+
+    void libraryStubIsWritten() {
+        const QJsonObject root = sampleJson();
+        // v2 format must write the library key (even if empty).
+        QVERIFY(root.contains(QStringLiteral("library")));
+        QVERIFY(root[QStringLiteral("library")].isObject());
     }
 };
 

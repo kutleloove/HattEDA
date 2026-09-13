@@ -28,6 +28,30 @@ constexpr KindName KindNames[] = {
     {SketchItem::Kind::Line, "line", 2},         {SketchItem::Kind::Polyline, "polyline", 2},
     {SketchItem::Kind::Rectangle, "rectangle", 2}, {SketchItem::Kind::Circle, "circle", 2},
     {SketchItem::Kind::Arc, "arc", 3},           {SketchItem::Kind::Text, "text", 1},
+    // v2 kinds
+    {SketchItem::Kind::Pad, "pad", 1},           {SketchItem::Kind::Via, "via", 1},
+};
+
+// Stable file names of BoardLayer values; never reuse or rename.
+struct LayerName { BoardLayer layer; const char* name; };
+constexpr LayerName LayerNames[] = {
+    {BoardLayer::TopCopper,    "top-copper"},
+    {BoardLayer::BottomCopper, "bottom-copper"},
+    {BoardLayer::TopSilk,      "top-silk"},
+    {BoardLayer::BottomSilk,   "bottom-silk"},
+    {BoardLayer::TopResist,    "top-resist"},
+    {BoardLayer::BottomResist, "bottom-resist"},
+    {BoardLayer::TopPaste,     "top-paste"},
+    {BoardLayer::BottomPaste,  "bottom-paste"},
+    {BoardLayer::BoardEdge,    "board-edge"},
+};
+
+// Stable file names of PadShape values.
+struct PadShapeName { PadShape shape; const char* name; };
+constexpr PadShapeName PadShapeNames[] = {
+    {PadShape::Round, "round"},
+    {PadShape::Rect,  "rect"},
+    {PadShape::Oval,  "oval"},
 };
 
 const KindName* kindByValue(SketchItem::Kind kind) {
@@ -44,6 +68,53 @@ const KindName* kindByName(const QString& name) {
     return nullptr;
 }
 
+const char* layerToString(BoardLayer layer) {
+    for (const auto& entry : LayerNames)
+        if (entry.layer == layer) return entry.name;
+    return "top-copper";
+}
+
+BoardLayer layerFromString(const QString& s) {
+    for (const auto& entry : LayerNames)
+        if (s == QLatin1String(entry.name)) return entry.layer;
+    return BoardLayer::TopCopper;
+}
+
+const char* padShapeToString(PadShape shape) {
+    for (const auto& entry : PadShapeNames)
+        if (entry.shape == shape) return entry.name;
+    return "rect";
+}
+
+PadShape padShapeFromString(const QString& s) {
+    for (const auto& entry : PadShapeNames)
+        if (s == QLatin1String(entry.name)) return entry.shape;
+    return PadShape::Rect;
+}
+
+QJsonObject padToJson(const PadDefinition& pad) {
+    QJsonObject o;
+    o[QStringLiteral("number")] = pad.number;
+    o[QStringLiteral("shape")] = QLatin1String(padShapeToString(pad.shape));
+    o[QStringLiteral("width")] = pad.width;
+    o[QStringLiteral("height")] = pad.height;
+    if (pad.drillDiameter != 0.0) o[QStringLiteral("drill")] = pad.drillDiameter;
+    o[QStringLiteral("layers")] = pad.layers;
+    return o;
+}
+
+PadDefinition padFromJson(const QJsonObject& o) {
+    PadDefinition pad;
+    pad.number = o.value(QStringLiteral("number")).toInt(1);
+    pad.shape = padShapeFromString(o.value(QStringLiteral("shape")).toString());
+    pad.width = o.value(QStringLiteral("width")).toDouble(1.0);
+    pad.height = o.value(QStringLiteral("height")).toDouble(pad.width);
+    pad.drillDiameter = o.value(QStringLiteral("drill")).toDouble(0.0);
+    pad.layers = o.value(QStringLiteral("layers")).toInt(
+        1 << static_cast<int>(BoardLayer::TopCopper));
+    return pad;
+}
+
 QJsonObject itemToJson(const SketchItem& item) {
     QJsonObject object;
     object[QStringLiteral("id")] = item.id;
@@ -51,7 +122,7 @@ QJsonObject itemToJson(const SketchItem& item) {
     QJsonArray points;
     for (const QPointF& point : item.points) points.append(QJsonArray{point.x(), point.y()});
     object[QStringLiteral("points")] = points;
-    // Optional fields are written only when they differ from the default.
+    // Optional v1 fields are written only when they differ from the default.
     if (!item.variant.isEmpty()) object[QStringLiteral("variant")] = item.variant;
     if (!item.label.isEmpty()) object[QStringLiteral("label")] = item.label;
     if (item.quarterTurns != 0) object[QStringLiteral("quarterTurns")] = item.quarterTurns;
@@ -64,6 +135,15 @@ QJsonObject itemToJson(const SketchItem& item) {
         object[QStringLiteral("pinPadMap")] = map;
     }
     if (!item.sourceId.isEmpty()) object[QStringLiteral("sourceId")] = item.sourceId;
+    // v2 fields
+    if (item.layer != BoardLayer::TopCopper)
+        object[QStringLiteral("layer")] = QLatin1String(layerToString(item.layer));
+    if (item.onBottom) object[QStringLiteral("onBottom")] = true;
+    if (item.excludeFromBoard) object[QStringLiteral("excludeFromBoard")] = true;
+    if (item.kind == SketchItem::Kind::Pad)
+        object[QStringLiteral("pad")] = padToJson(item.pad);
+    if (item.kind == SketchItem::Kind::Via && item.drillDiameter != 0.0)
+        object[QStringLiteral("drillDiameter")] = item.drillDiameter;
     return object;
 }
 
@@ -146,6 +226,19 @@ QString documentFromJson(const QJsonValue& value, Workspace workspace, const QSt
                 item.pinPadMap.append(pad.toInt());
             }
         }
+        // v2 optional fields; silently ignored on v1 files (they won't be present).
+        const QJsonValue layerVal = object.value(QStringLiteral("layer"));
+        if (!layerVal.isUndefined())
+            item.layer = layerFromString(layerVal.toString());
+        const QJsonValue onBottom = object.value(QStringLiteral("onBottom"));
+        if (!onBottom.isUndefined()) item.onBottom = onBottom.toBool();
+        const QJsonValue exclude = object.value(QStringLiteral("excludeFromBoard"));
+        if (!exclude.isUndefined()) item.excludeFromBoard = exclude.toBool();
+        const QJsonValue padVal = object.value(QStringLiteral("pad"));
+        if (!padVal.isUndefined() && padVal.isObject())
+            item.pad = padFromJson(padVal.toObject());
+        const QJsonValue drillVal = object.value(QStringLiteral("drillDiameter"));
+        if (!drillVal.isUndefined()) item.drillDiameter = drillVal.toDouble();
         if (item.kind == SketchItem::Kind::Symbol) {
             const auto* symbol = findSymbol(item.variant);
             if (symbol == nullptr || symbol->workspace != workspace) {
@@ -166,6 +259,7 @@ QByteArray serializeProject(const ProjectData& project) {
     root[QStringLiteral("name")] = project.name;
     root[QStringLiteral("schematic")] = documentToJson(project.schematic);
     root[QStringLiteral("board")] = documentToJson(project.board);
+    root[QStringLiteral("library")] = QJsonObject{}; // v2 placeholder; extended in #27/#29
     return QJsonDocument(root).toJson(QJsonDocument::Indented);
 }
 
@@ -195,6 +289,7 @@ ProjectLoad parseProject(const QByteArray& bytes) {
                            .arg(ProjectFormatVersion);
         return result;
     }
+    // v1 files are silently upgraded: new v2 fields take their defaults during item parsing.
     result.project.name = root.value(QStringLiteral("name")).toString();
     QString error = documentFromJson(root.value(QStringLiteral("schematic")), Workspace::Schematic,
                                      tr("schematic"), result.project.schematic);
@@ -206,6 +301,8 @@ ProjectLoad parseProject(const QByteArray& bytes) {
         result.project = {};
         result.error = error;
     }
+    // v2: library stub (currently empty; no error if absent for v1 compat)
+    // Extended in Issues #27/#29.
     return result;
 }
 

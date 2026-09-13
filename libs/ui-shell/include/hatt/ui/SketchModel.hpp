@@ -18,6 +18,34 @@ enum class Workspace { Schematic, Board };
 
 enum class SymbolCategory { Component, Terminal, Probe };
 
+// PCB layer identifiers (data model v2, ADR-0006). Named after Proteus conventions.
+// Stable file tokens — never reuse or rename an entry.
+enum class BoardLayer {
+    TopCopper,
+    BottomCopper,
+    TopSilk,
+    BottomSilk,
+    TopResist,
+    BottomResist,
+    TopPaste,
+    BottomPaste,
+    BoardEdge,
+};
+
+// Pad shape for footprint pads and via annular rings.
+enum class PadShape { Round, Rect, Oval };
+
+// Describes one pad in a footprint definition or a placed Pad/Via item.
+// `layers` is a bitmask of BoardLayer values represented as (1 << int(layer)).
+struct PadDefinition {
+    int number = 1;              // Pad number (1-based, matches SymbolDefinition::pins index)
+    PadShape shape = PadShape::Rect;
+    double width = 1.0;          // mm
+    double height = 1.0;         // mm (== width for Round)
+    double drillDiameter = 0.0;  // mm, 0 = SMD (no hole)
+    int layers = (1 << static_cast<int>(BoardLayer::TopCopper)); // bitmask
+};
+
 struct SymbolShape {
     QVector<QPointF> points;
     bool closed = false;
@@ -35,10 +63,13 @@ struct SymbolDefinition {
     QString defaultLabel;
     QVector<SymbolShape> shapes;
     QVector<QPointF> pins;
+    // v2: footprint pad list. Coexists with shapes for backward compatibility;
+    // full visual migration is Issue #28 (Pad tools).
+    QVector<PadDefinition> pads;
 };
 
 struct SketchItem {
-    enum class Kind { Symbol, Wire, Line, Polyline, Rectangle, Circle, Arc, Text };
+    enum class Kind { Symbol, Wire, Line, Polyline, Rectangle, Circle, Arc, Text, Pad, Via };
 
     Kind kind = Kind::Line;
     QVector<QPointF> points;
@@ -52,6 +83,12 @@ struct SketchItem {
     QString footprint;
     QVector<int> pinPadMap;
     QString sourceId;
+    // v2 fields (ADR-0006)
+    BoardLayer layer = BoardLayer::TopCopper;  // Active layer for board items
+    bool onBottom = false;                     // Footprint placed on bottom side
+    bool excludeFromBoard = false;             // Schematic component excluded from PCB transfer
+    PadDefinition pad;                         // For Kind::Pad items
+    double drillDiameter = 0.0;               // For Kind::Via items (mm)
 };
 
 using SketchDocument = QVector<SketchItem>;
@@ -59,6 +96,10 @@ using SketchDocument = QVector<SketchItem>;
 inline const QString BoardOutlineVariant = QStringLiteral("board-outline");
 inline const QString CopperZoneVariant = QStringLiteral("copper-zone");
 inline constexpr double TextHeightMm = 2.0;
+
+// Project library placeholder (v2, ADR-0006). Will hold user-created devices and packages.
+// Serialised to/from `.hatt` as an empty object for now; extended in Issues #27/#29.
+struct ProjectLibrary {};
 
 [[nodiscard]] const QVector<SymbolDefinition>& symbolLibrary();
 [[nodiscard]] const SymbolDefinition* findSymbol(const QString& id);

@@ -7,17 +7,19 @@
 
 namespace hatt::ui {
 
-// Interim `.hatt` project file (ADR-0004): versioned UTF-8 JSON holding the schematic and board
-// sketch documents in floating-point millimetres. It will be migrated when the fixed-point domain
-// model (HATT-003) lands; readers reject files written by a newer format version.
+// Interim `.hatt` project file (ADR-0004, ADR-0006): versioned UTF-8 JSON holding the schematic
+// and board sketch documents in floating-point millimetres. Format version 2 adds BoardLayer,
+// Pad/Via item kinds, onBottom/excludeFromBoard flags, and a project library stub.
+// Readers reject files written by a newer format version; v1 files are silently upgraded to v2.
 
-inline constexpr int ProjectFormatVersion = 1;
+inline constexpr int ProjectFormatVersion = 2;
 inline const QString ProjectFormatName = QStringLiteral("hatteda-project");
 
 struct ProjectData {
     QString name;
     SketchDocument schematic;
     SketchDocument board;
+    ProjectLibrary library; // v2: user project library (placeholder)
 };
 
 struct ProjectLoad {
