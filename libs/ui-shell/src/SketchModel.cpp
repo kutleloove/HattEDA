@@ -141,6 +141,8 @@ QVector<SymbolDefinition> buildLibrary() {
     resistor.shapes = {rectangle(-2.54, -1.016, 5.08, 2.032), polyline({{-5.08, 0}, {-2.54, 0}}),
                        polyline({{2.54, 0}, {5.08, 0}})};
     resistor.pins = {{-5.08, 0}, {5.08, 0}};
+    resistor.defaultValue = QStringLiteral("1k");
+    resistor.defaultFootprint = QStringLiteral("board.r0603");
     library.append(resistor);
 
     auto voltage = define("schematic.vdc", QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "DC voltage source"),
@@ -149,6 +151,8 @@ QVector<SymbolDefinition> buildLibrary() {
                       polyline({{0, 2.54}, {0, 5.08}}), polyline({{-0.8, -1}, {0.8, -1}}),
                       polyline({{0, -1.8}, {0, -0.2}}), polyline({{-0.8, 1}, {0.8, 1}})};
     voltage.pins = {{0, -5.08}, {0, 5.08}};
+    voltage.defaultValue = QStringLiteral("5");
+    voltage.defaultFootprint = QStringLiteral("board.header-1x2");
     library.append(voltage);
 
     auto capacitor = define("schematic.capacitor", QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Capacitor"),
@@ -156,6 +160,8 @@ QVector<SymbolDefinition> buildLibrary() {
     capacitor.shapes = {polyline({{-5.08, 0}, {-0.635, 0}}), polyline({{-0.635, -2.032}, {-0.635, 2.032}}),
                         polyline({{0.635, -2.032}, {0.635, 2.032}}), polyline({{0.635, 0}, {5.08, 0}})};
     capacitor.pins = {{-5.08, 0}, {5.08, 0}};
+    capacitor.defaultValue = QStringLiteral("100n");
+    capacitor.defaultFootprint = QStringLiteral("board.c0805");
     library.append(capacitor);
 
     auto inductor = define("schematic.inductor", QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Inductor"),
@@ -165,6 +171,8 @@ QVector<SymbolDefinition> buildLibrary() {
         inductor.shapes.append(arc({x, 0}, 0.635, 180.0, -180.0, 8));
     }
     inductor.pins = {{-5.08, 0}, {5.08, 0}};
+    inductor.defaultValue = QStringLiteral("10u");
+    inductor.defaultFootprint = QStringLiteral("board.c0805");
     library.append(inductor);
 
     auto diode = define("schematic.diode", QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Diode"),
@@ -173,6 +181,7 @@ QVector<SymbolDefinition> buildLibrary() {
                     polygon({{-1.27, -1.524}, {-1.27, 1.524}, {1.27, 0}}),
                     polyline({{1.27, -1.524}, {1.27, 1.524}})};
     diode.pins = {{-5.08, 0}, {5.08, 0}};
+    diode.defaultFootprint = QStringLiteral("board.c0805");
     library.append(diode);
 
     auto led = diode;
@@ -192,6 +201,7 @@ QVector<SymbolDefinition> buildLibrary() {
                   polyline({{-0.635, 0.8}, {2.54, 2.8}, {2.54, 5.08}}),
                   polygon({{2.54, 2.8}, {1.35, 2.75}, {1.95, 1.8}}, true)};
     npn.pins = {{-5.08, 0}, {2.54, -5.08}, {2.54, 5.08}};
+    npn.defaultFootprint = QStringLiteral("board.sot23");
     library.append(npn);
 
     auto opamp = define("schematic.opamp", QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Operational amplifier"),
@@ -201,6 +211,7 @@ QVector<SymbolDefinition> buildLibrary() {
                     polyline({{5.08, 0}, {7.62, 0}}), polyline({{-3.2, -2.54}, {-2.2, -2.54}}),
                     polyline({{-3.2, 2.54}, {-2.2, 2.54}}), polyline({{-2.7, 2.04}, {-2.7, 3.04}})};
     opamp.pins = {{-7.62, -2.54}, {-7.62, 2.54}, {7.62, 0}};
+    opamp.defaultFootprint = QStringLiteral("board.sot23");
     library.append(opamp);
 
     auto ic = define("schematic.ic8", QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Integrated circuit (8 pins)"),
@@ -214,6 +225,7 @@ QVector<SymbolDefinition> buildLibrary() {
     for (double y : {2.54, 0.0, -2.54, -5.08}) {
         ic.pins.append({7.62, y});
     }
+    ic.defaultFootprint = QStringLiteral("board.soic8");
     library.append(ic);
 
     auto input = define("schematic.input", QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Input port"),
@@ -424,6 +436,31 @@ QList<const SymbolDefinition*> symbolsFor(Workspace workspace, SymbolCategory ca
 
 QString symbolDisplayName(const SymbolDefinition& symbol) {
     return QCoreApplication::translate("hatt::ui::SymbolLibrary", symbol.name);
+}
+
+bool isPickableDevice(const QString& id) {
+    const auto* symbol = findSymbol(id);
+    return symbol != nullptr && symbol->workspace == Workspace::Schematic &&
+           symbol->category == SymbolCategory::Component;
+}
+
+QStringList placedDevices(const SketchDocument& schematic) {
+    QStringList result;
+    for (const auto& item : schematic) {
+        if (item.kind == SketchItem::Kind::Symbol && isPickableDevice(item.variant) &&
+            !result.contains(item.variant)) {
+            result.append(item.variant);
+        }
+    }
+    return result;
+}
+
+QStringList projectDeviceList(const ProjectLibrary& library, const SketchDocument& schematic) {
+    QStringList result;
+    for (const auto& id : library.devices + placedDevices(schematic)) {
+        if (isPickableDevice(id) && !result.contains(id)) result.append(id);
+    }
+    return result;
 }
 
 QPointF symbolToWorld(const SketchItem& item, QPointF local) {

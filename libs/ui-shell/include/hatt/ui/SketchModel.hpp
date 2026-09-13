@@ -5,6 +5,7 @@
 #include <QPointF>
 #include <QRectF>
 #include <QString>
+#include <QStringList>
 #include <QUuid>
 #include <QVector>
 
@@ -66,6 +67,10 @@ struct SymbolDefinition {
     // v2: footprint pad list. Coexists with shapes for backward compatibility;
     // full visual migration is Issue #28 (Pad tools).
     QVector<PadDefinition> pads;
+    // Schematic components: value and footprint given to a newly placed part. The footprint has
+    // the same pin count, so pins map to pads one to one.
+    QString defaultValue;
+    QString defaultFootprint;
 };
 
 struct SketchItem {
@@ -97,9 +102,20 @@ inline const QString BoardOutlineVariant = QStringLiteral("board-outline");
 inline const QString CopperZoneVariant = QStringLiteral("copper-zone");
 inline constexpr double TextHeightMm = 2.0;
 
-// Project library placeholder (v2, ADR-0006). Will hold user-created devices and packages.
-// Serialised to/from `.hatt` as an empty object for now; extended in Issues #27/#29.
-struct ProjectLibrary {};
+// Project library (v2, ADR-0006). `devices` is the Proteus style pick list of built-in schematic
+// component ids offered by component mode; user-created devices and packages follow in #29.
+struct ProjectLibrary {
+    QStringList devices;
+};
+
+// Schematic component symbol ids placed in `schematic`, in first-use order.
+[[nodiscard]] QStringList placedDevices(const SketchDocument& schematic);
+// The project's device list: picked devices followed by any device the schematic uses that was
+// not picked (e.g. after undoing a delete), without duplicates.
+[[nodiscard]] QStringList projectDeviceList(const ProjectLibrary& library,
+                                            const SketchDocument& schematic);
+// Built-in schematic component ids that can be picked into a project.
+[[nodiscard]] bool isPickableDevice(const QString& id);
 
 [[nodiscard]] const QVector<SymbolDefinition>& symbolLibrary();
 [[nodiscard]] const SymbolDefinition* findSymbol(const QString& id);

@@ -539,6 +539,7 @@ void DesignCanvas::setTool(CanvasTool tool, const QString& variant) {
     cancelOperation();
     tool_ = tool;
     variant_ = variant;
+    placementTemplate_.reset();
     placementTurns_ = 0;
     hasMeasurement_ = false;
     if (tool_ != CanvasTool::Select) {
@@ -547,6 +548,10 @@ void DesignCanvas::setTool(CanvasTool tool, const QString& variant) {
     setCursor(tool_ == CanvasTool::Select ? Qt::ArrowCursor : Qt::CrossCursor);
     emit statusMessage(toolHint());
     update();
+}
+
+void DesignCanvas::setPlacementTemplate(const SketchItem& item) {
+    if (tool_ == CanvasTool::Symbol && item.variant == variant_) placementTemplate_ = item;
 }
 
 void DesignCanvas::setSnapSettings(const SnapSettings& settings) {
@@ -1260,14 +1265,24 @@ void DesignCanvas::placeSymbol(QPointF world) {
         return;
     }
     SketchItem item;
+    if (placementTemplate_ && placementTemplate_->variant == variant_) {
+        const QString id = item.id;
+        item = *placementTemplate_;
+        item.id = id;
+    } else {
+        item.label = symbol->prefix.isEmpty() ? symbol->defaultLabel
+                                              : nextDesignator(items_, symbol->prefix);
+        item.value = symbol->defaultValue;
+        const auto* footprint = findSymbol(symbol->defaultFootprint);
+        if (footprint != nullptr && footprint->pins.size() == symbol->pins.size()) {
+            item.footprint = footprint->id;
+            for (int pad = 1; pad <= symbol->pins.size(); ++pad) item.pinPadMap.append(pad);
+        }
+    }
     item.kind = SketchItem::Kind::Symbol;
     item.points = {world};
     item.variant = variant_;
     item.quarterTurns = placementTurns_;
-    item.label = symbol->prefix.isEmpty() ? symbol->defaultLabel
-                                          : nextDesignator(items_, symbol->prefix);
-    if (variant_ == QLatin1String("schematic.resistor")) item.value = QStringLiteral("1k");
-    if (variant_ == QLatin1String("schematic.vdc")) item.value = QStringLiteral("5");
     SketchDocument document = items_;
     document.append(item);
     pushEdit(tr("Place %1").arg(item.label.isEmpty() ? symbolDisplayName(*symbol) : item.label),

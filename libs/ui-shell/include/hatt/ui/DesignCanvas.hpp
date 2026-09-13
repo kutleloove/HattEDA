@@ -9,6 +9,8 @@
 #include <QString>
 #include <QWidget>
 
+#include <optional>
+
 class QPainter;
 class QUndoStack;
 class QTimer;
@@ -82,6 +84,9 @@ public:
     [[nodiscard]] static double gridStep(Workspace workspace, int level);
 
     void setTool(CanvasTool tool, const QString& variant = {});
+    // Symbol tool only: the next placements copy `item` (label, value, footprint links) instead of
+    // creating a fresh part; each copy gets a new identity. Cleared by setTool.
+    void setPlacementTemplate(const SketchItem& item);
     void setSnapSettings(const SnapSettings& settings);
     void setLengthUnit(LengthUnit unit);
     void cancelOperation();
@@ -204,6 +209,7 @@ private:
     QList<int> selection_;
     CanvasTool tool_ = CanvasTool::Select;
     QString variant_;
+    std::optional<SketchItem> placementTemplate_;
     SnapSettings snap_;
     LengthUnit unit_;
     int placementTurns_ = 0;

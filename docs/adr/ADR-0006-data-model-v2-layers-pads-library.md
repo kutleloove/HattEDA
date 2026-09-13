@@ -44,13 +44,26 @@ Two new item kinds for placed pad and via items. `Pad` carries a `PadDefinition 
 
 - `layer` (`BoardLayer`, default `TopCopper`) — active layer for board items
 - `onBottom` (`bool`, default `false`) — footprint placed on bottom side
-- `excludeFromBoard` (`bool`, default `false`) — schematic symbol excluded from PCB transfer
+- `excludeFromBoard` (`bool`, default `false`) — schematic symbol excluded from PCB transfer,
+  board component mode and the connection guide (edited in the properties dialog); it still
+  takes part in the netlist and simulation
 
-### 5. `ProjectLibrary` stub
+### 5. `ProjectLibrary`
 
-An empty struct stored in `ProjectData`. Written as an empty JSON object `"library": {}` in the
-`.hatt` file. Its fields will be defined when Issues #27 (component mode) and #29 (new device
-creation) are implemented.
+Stored in `ProjectData` and written as the `"library"` object of the `.hatt` file.
+
+- `devices` (#27): the Proteus ISIS style pick list — ids of built-in schematic components
+  (`schematic.*`, category Component) offered by schematic component mode, written as
+  `"library": {"devices": ["schematic.resistor", ...]}`. The saved list always contains every device
+  the schematic uses (`projectDeviceList`); a device can only be removed from the list while no
+  part uses it. Unknown or non-component ids and a non-object library are rejected on load. A
+  missing `library` or `devices` (files written before #27) reads as an empty list, so no format
+  version bump was needed: the field is additive and older v2 readers ignore it.
+- User-created devices and packages are added by #29.
+
+Related defaults (not stored): `SymbolDefinition::defaultValue` / `defaultFootprint` give newly
+placed schematic parts a value and a pin-count-matching footprint with a one-to-one pin-to-pad
+map, so a part can reach the PCB without editing its properties.
 
 ### 6. `.hatt` format version 2
 

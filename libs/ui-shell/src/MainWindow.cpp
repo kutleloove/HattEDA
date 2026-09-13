@@ -3,12 +3,14 @@
 
 #include "hatt/ui/DesignCanvas.hpp"
 #include "hatt/ui/ProjectSafety.hpp"
+#include "hatt/ui/SketchCircuit.hpp"
 #include "hatt/ui/Theme.hpp"
 
 #include <QAction>
 #include <QActionGroup>
 #include <QApplication>
 #include <QButtonGroup>
+#include <QCheckBox>
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QDoubleSpinBox>
@@ -54,6 +56,7 @@ namespace {
 constexpr int ToolRole = Qt::UserRole;
 constexpr int VariantRole = Qt::UserRole + 1;
 constexpr int IconRole = Qt::UserRole + 2;
+constexpr int PartRole = Qt::UserRole + 3;
 
 QColor iconColor(const QPalette& palette) {
     return palette.color(QPalette::Window).lightness() < 128 ? QColor(QStringLiteral("#b4bfca"))
@@ -348,6 +351,9 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
         });
         connect(canvas, &DesignCanvas::selectToolRequested, this,
                 [this] { activateToolMode(ToolMode::Select); });
+        // Queued: the list may be rebuilt (and the tool reset) only after the edit has finished.
+        connect(canvas, &DesignCanvas::documentChanged, this, &MainWindow::refreshComponentList,
+                Qt::QueuedConnection);
         connect(canvas, &DesignCanvas::contextMenuRequested, this,
                 [this, canvas](QPoint position, int index) {
                     if (canvas == editingCanvas()) showCanvasContextMenu(canvas, position, index);
@@ -458,6 +464,7 @@ void MainWindow::editItemProperties(DesignCanvas* canvas, int index) {
     QLineEdit* value = nullptr;
     QComboBox* footprint = nullptr;
     QLineEdit* mapping = nullptr;
+    QCheckBox* excludeFromBoard = nullptr;
     const auto* symbol = findSymbol(item.variant);
     if (item.kind == SketchItem::Kind::Symbol && symbol &&
         canvas->workspace() == Workspace::Schematic && symbol->category == SymbolCategory::Component) {
@@ -480,6 +487,12 @@ void MainWindow::editItemProperties(DesignCanvas* canvas, int index) {
         mapping = new QLineEdit(pads.join(QStringLiteral(",")), &dialog);
         mapping->setObjectName(QStringLiteral("ItemPinPadMap"));
         form->addRow(tr("Pin to pad (1-based, comma-separated)"), mapping);
+        excludeFromBoard = new QCheckBox(tr("Exclude from PCB layout"), &dialog);
+        excludeFromBoard->setObjectName(QStringLiteral("ItemExcludeFromBoard"));
+        excludeFromBoard->setToolTip(
+            tr("The part stays in the schematic and simulation but is not placed on the PCB"));
+        excludeFromBoard->setChecked(item.excludeFromBoard);
+        form->addRow(QString(), excludeFromBoard);
     }
     const LengthUnit unit = canvas->lengthUnit();
     auto coordinate = [&](const QString& name, double millimetres) {
@@ -540,6 +553,7 @@ void MainWindow::editItemProperties(DesignCanvas* canvas, int index) {
         properties.quarterTurns = rotation->currentIndex();
         if (value) properties.value = value->text();
         if (footprint) properties.footprint = footprint->currentData().toString();
+        if (excludeFromBoard) properties.excludeFromBoard = excludeFromBoard->isChecked();
         properties.pinPadMap = pinPadMap;
         canvas->editItemProperties(index, properties);
     }
@@ -834,6 +848,25 @@ QWidget* MainWindow::createEditor() {
     contextLayout->addWidget(contextHint_);
     objectsLabel_ = label(tr("OBJECTS"), QStringLiteral("SectionLabel"), contextPanel);
     contextLayout->addWidget(objectsLabel_);
+    // Proteus style device list controls, shown in schematic component mode.
+    deviceBar_ = new QWidget(contextPanel);
+    deviceBar_->setObjectName(QStringLiteral("DeviceBar"));
+    auto* deviceLayout = new QHBoxLayout(deviceBar_);
+    deviceLayout->setContentsMargins(0, 0, 0, 0);
+    deviceLayout->setSpacing(6);
+    auto* pickDevices = new QPushButton(tr("Pick devices..."), deviceBar_);
+    pickDevices->setObjectName(QStringLiteral("hatteda.devices.pick"));
+    pickDevices->setToolTip(tr("Add devices from the library to this project"));
+    connect(pickDevices, &QPushButton::clicked, this, &MainWindow::pickDevices);
+    removeDeviceButton_ = new QPushButton(tr("Remove"), deviceBar_);
+    removeDeviceButton_->setObjectName(QStringLiteral("hatteda.devices.remove"));
+    removeDeviceButton_->setProperty("quiet", true);
+    removeDeviceButton_->setToolTip(
+        tr("Remove the selected device from the project list (only when the schematic does not use it)"));
+    connect(removeDeviceButton_, &QPushButton::clicked, this, &MainWindow::removeSelectedDevice);
+    deviceLayout->addWidget(pickDevices, 1);
+    deviceLayout->addWidget(removeDeviceButton_);
+    contextLayout->addWidget(deviceBar_);
     objectSelector_ = new QListWidget(contextPanel);
     objectSelector_->setObjectName(QStringLiteral("ObjectSelector"));
     objectSelector_->setIconSize(QSize(32, 32));
@@ -1051,6 +1084,12 @@ void MainWindow::createMenus() {
         alignMenu->addAction(actions_.value(QString::fromLatin1(id)));
     }
     designMenu->addSeparator();
+    auto* pick = designMenu->addAction(tr("Pick devices..."));
+    pick->setObjectName(QStringLiteral("hatteda.action.pick-devices"));
+    connect(pick, &QAction::triggered, this, [this] {
+        if (shellPages_->currentIndex() == 1) pickDevices();
+    });
+    designMenu->addSeparator();
     designMenu->addAction(actions_.value(QStringLiteral("hatteda.action.run-checks")));
 
     auto* helpMenu = menuBar()->addMenu(tr("&Help"));
@@ -1095,9 +1134,37 @@ void MainWindow::rebuildObjectSelector() {
             item->setData(VariantRole, variant);
             item->setData(IconRole, icon);
         };
+        boardParts_.clear();
+        boardPartProblems_.clear();
         switch (toolMode_) {
         case ToolMode::Component:
-            addSymbols(SymbolCategory::Component);
+            if (workspace == Workspace::Schematic) {
+                for (const auto& id : projectDevices()) {
+                    const auto* symbol = findSymbol(id);
+                    auto* item = new QListWidgetItem(symbolIcon(id, palette()), symbolDisplayName(*symbol),
+                                                     objectSelector_);
+                    item->setData(ToolRole, static_cast<int>(CanvasTool::Symbol));
+                    item->setData(VariantRole, id);
+                }
+            } else {
+                // Only schematic components that are not on the board yet, as in Proteus ARES.
+                const auto waiting = unplacedBoardParts(canvases_[0]->document(), canvases_[1]->document());
+                boardParts_ = waiting.parts;
+                boardPartProblems_ = waiting.problems;
+                for (int part = 0; part < boardParts_.size(); ++part) {
+                    const auto& footprint = boardParts_.at(part);
+                    const auto* symbol = findSymbol(footprint.variant);
+                    auto* item = new QListWidgetItem(
+                        symbolIcon(footprint.variant, palette()),
+                        QStringLiteral("%1  ·  %2").arg(footprint.label, symbolDisplayName(*symbol)),
+                        objectSelector_);
+                    item->setData(ToolRole, static_cast<int>(CanvasTool::Symbol));
+                    item->setData(VariantRole, footprint.variant);
+                    item->setData(PartRole, part);
+                    item->setToolTip(footprint.value);
+                }
+            }
+            componentKeys_ = componentListKeys();
             break;
         case ToolMode::Terminal:
             addSymbols(SymbolCategory::Terminal);
@@ -1125,8 +1192,13 @@ void MainWindow::rebuildObjectSelector() {
             break;
         }
         const bool hasObjects = objectSelector_->count() > 0;
-        objectSelector_->setVisible(hasObjects);
-        objectsLabel_->setVisible(hasObjects);
+        const bool componentMode = toolMode_ == ToolMode::Component;
+        objectSelector_->setVisible(hasObjects || componentMode);
+        objectsLabel_->setVisible(hasObjects || componentMode);
+        objectsLabel_->setText(!componentMode ? tr("OBJECTS")
+                               : workspace == Workspace::Schematic ? tr("DEVICES")
+                                                                   : tr("COMPONENTS TO PLACE"));
+        deviceBar_->setVisible(componentMode && workspace == Workspace::Schematic);
         if (hasObjects) {
             const int row = rememberedObjectRows_.value(rememberKey(static_cast<int>(toolMode_), workspace), 0);
             objectSelector_->setCurrentRow(std::clamp(row, 0, objectSelector_->count() - 1));
@@ -1176,9 +1248,154 @@ void MainWindow::applyObjectSelection() {
         break;
     }
     canvas->setTool(tool, variant);
+    QString hint = canvas->toolHint();
+    if (toolMode_ == ToolMode::Component) {
+        const auto* item = objectSelector_->currentItem();
+        if (item != nullptr && item->data(PartRole).isValid()) {
+            canvas->setPlacementTemplate(boardParts_.value(item->data(PartRole).toInt()));
+        }
+        if (workspace == Workspace::Schematic) {
+            removeDeviceButton_->setEnabled(item != nullptr);
+            if (objectSelector_->count() == 0) {
+                hint = tr("This project has no devices yet. Use Pick devices to add parts from the library.");
+            }
+        } else {
+            if (objectSelector_->count() == 0) {
+                hint = tr("Every schematic component is on the board. Components appear here after "
+                          "they are placed in the schematic.");
+            }
+            if (!boardPartProblems_.isEmpty()) {
+                hint += QLatin1Char('\n') + boardPartProblems_.join(QLatin1Char('\n'));
+            }
+        }
+    }
     static_cast<ObjectPreview*>(objectPreview_)->setContent(symbolId, iconKind, caption);
-    contextHint_->setText(canvas->toolHint());
+    contextHint_->setText(hint);
     updateEditActions();
+}
+
+QStringList MainWindow::componentListKeys() const {
+    if (activeCanvas()->workspace() == Workspace::Schematic) {
+        return projectDevices();
+    }
+    QStringList keys;
+    const auto waiting = unplacedBoardParts(canvases_[0]->document(), canvases_[1]->document());
+    for (const auto& part : waiting.parts) {
+        keys << part.sourceId + QLatin1Char('|') + part.variant + QLatin1Char('|') + part.label +
+                    QLatin1Char('|') + part.value;
+    }
+    return keys + waiting.problems;
+}
+
+void MainWindow::refreshComponentList() {
+    if (toolMode_ == ToolMode::Component && componentListKeys() != componentKeys_) {
+        rebuildObjectSelector();
+    }
+}
+
+QStringList MainWindow::projectDevices() const {
+    return projectDeviceList(library_, canvases_[0]->document());
+}
+
+void MainWindow::addProjectDevices(const QStringList& ids) {
+    QString first;
+    for (const auto& id : ids) {
+        if (isPickableDevice(id) && !projectDevices().contains(id)) {
+            library_.devices.append(id);
+            if (first.isEmpty()) first = id;
+        }
+    }
+    if (first.isEmpty()) return;
+    libraryModified_ = true;
+    rememberedObjectRows_.insert(rememberKey(static_cast<int>(ToolMode::Component), Workspace::Schematic),
+                                 static_cast<int>(projectDevices().indexOf(first)));
+    if (toolMode_ == ToolMode::Component) rebuildObjectSelector();
+    updateProjectState();
+}
+
+bool MainWindow::removeProjectDevice(const QString& id) {
+    if (placedDevices(canvases_[0]->document()).contains(id)) return false;
+    if (library_.devices.removeAll(id) == 0) return false;
+    libraryModified_ = true;
+    if (toolMode_ == ToolMode::Component) rebuildObjectSelector();
+    updateProjectState();
+    return true;
+}
+
+void MainWindow::removeSelectedDevice() {
+    const auto* item = objectSelector_->currentItem();
+    if (item == nullptr) return;
+    const QString id = item->data(VariantRole).toString();
+    if (!removeProjectDevice(id)) {
+        QMessageBox::information(this, tr("Remove device"),
+                                 tr("%1 is used in the schematic. Delete its parts from the schematic "
+                                    "before removing it from the project.")
+                                     .arg(item->text()));
+    }
+}
+
+void MainWindow::pickDevices() {
+    QDialog dialog(this);
+    dialog.setObjectName(QStringLiteral("PickDevicesDialog"));
+    dialog.setWindowTitle(tr("Pick devices"));
+    dialog.resize(520, 460);
+    auto* layout = new QVBoxLayout(&dialog);
+    auto* search = new QLineEdit(&dialog);
+    search->setObjectName(QStringLiteral("DeviceSearch"));
+    search->setPlaceholderText(tr("Search by name or designator prefix"));
+    search->setClearButtonEnabled(true);
+    layout->addWidget(search);
+    auto* results = new QListWidget(&dialog);
+    results->setObjectName(QStringLiteral("DeviceResults"));
+    results->setIconSize(QSize(32, 32));
+    results->setSelectionMode(QAbstractItemView::ExtendedSelection);
+    layout->addWidget(results, 1);
+    auto* details = new QLabel(&dialog);
+    details->setObjectName(QStringLiteral("DeviceDetails"));
+    details->setWordWrap(true);
+    layout->addWidget(details);
+    const QStringList listed = projectDevices();
+    for (const auto* symbol : symbolsFor(Workspace::Schematic, SymbolCategory::Component)) {
+        const QString name = symbolDisplayName(*symbol);
+        auto* item = new QListWidgetItem(symbolIcon(symbol->id, palette()),
+                                         listed.contains(symbol->id) ? tr("%1 (in project)").arg(name) : name,
+                                         results);
+        item->setData(VariantRole, symbol->id);
+        item->setData(Qt::UserRole + 10, name + QLatin1Char(' ') + symbol->prefix);
+    }
+    connect(search, &QLineEdit::textChanged, results, [results](const QString& text) {
+        for (int row = 0; row < results->count(); ++row) {
+            auto* item = results->item(row);
+            item->setHidden(!item->data(Qt::UserRole + 10).toString().contains(text.trimmed(), Qt::CaseInsensitive));
+        }
+    });
+    connect(results, &QListWidget::currentItemChanged, details, [details](QListWidgetItem* item) {
+        const auto* symbol = item ? findSymbol(item->data(VariantRole).toString()) : nullptr;
+        if (symbol == nullptr) {
+            details->clear();
+            return;
+        }
+        const auto* footprint = findSymbol(symbol->defaultFootprint);
+        details->setText(MainWindow::tr("Prefix %1  ·  %2 pins  ·  value %3  ·  footprint %4")
+                             .arg(symbol->prefix)
+                             .arg(symbol->pins.size())
+                             .arg(symbol->defaultValue.isEmpty() ? MainWindow::tr("none") : symbol->defaultValue,
+                                  footprint ? symbolDisplayName(*footprint) : MainWindow::tr("unassigned")));
+    });
+    results->setCurrentRow(0);
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+    buttons->button(QDialogButtonBox::Ok)->setText(tr("Add to project"));
+    connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    connect(results, &QListWidget::itemDoubleClicked, &dialog, &QDialog::accept);
+    layout->addWidget(buttons);
+    search->setFocus();
+    if (dialog.exec() != QDialog::Accepted) return;
+    QStringList ids;
+    for (const auto* item : results->selectedItems()) {
+        if (!item->isHidden()) ids << item->data(VariantRole).toString();
+    }
+    addProjectDevices(ids);
 }
 
 void MainWindow::workspaceChanged() {
@@ -1522,6 +1739,8 @@ void MainWindow::activateProject(const QString& projectPath, const ProjectData& 
     projectGuard_->projectActivated(projectPath);
     // The file name is the project name, so renaming or "Save as" is reflected everywhere.
     projectName_ = QFileInfo(projectPath).completeBaseName();
+    library_ = project.library;
+    libraryModified_ = false;
     const SketchDocument* documents[] = {&project.schematic, &project.board};
     for (int i = 0; i < canvases_.size() && i < 2; ++i) {
         canvases_[i]->restore(*documents[i], {});
@@ -1573,6 +1792,8 @@ ProjectData MainWindow::currentProjectData(const QString& path) const {
     project.name = QFileInfo(path).completeBaseName();
     project.schematic = canvases_.value(0)->document();
     project.board = canvases_.value(1)->document();
+    project.library = library_;
+    project.library.devices = projectDevices();
     return project;
 }
 
@@ -1584,6 +1805,7 @@ bool MainWindow::writeProject(const QString& path) {
         return false;
     }
     projectGuard_->projectSaved(path);
+    libraryModified_ = false;
     for (auto* canvas : canvases_) {
         canvas->undoStack()->setClean();
     }
@@ -1594,8 +1816,9 @@ bool MainWindow::writeProject(const QString& path) {
 
 bool MainWindow::hasUnsavedChanges() const {
     return !projectPath_.isEmpty() &&
-           std::any_of(canvases_.begin(), canvases_.end(),
-                       [](const DesignCanvas* canvas) { return !canvas->undoStack()->isClean(); });
+           (libraryModified_ ||
+            std::any_of(canvases_.begin(), canvases_.end(),
+                        [](const DesignCanvas* canvas) { return !canvas->undoStack()->isClean(); }));
 }
 
 bool MainWindow::maybeSaveChanges() {

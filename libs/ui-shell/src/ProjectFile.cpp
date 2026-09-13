@@ -259,7 +259,8 @@ QByteArray serializeProject(const ProjectData& project) {
     root[QStringLiteral("name")] = project.name;
     root[QStringLiteral("schematic")] = documentToJson(project.schematic);
     root[QStringLiteral("board")] = documentToJson(project.board);
-    root[QStringLiteral("library")] = QJsonObject{}; // v2 placeholder; extended in #27/#29
+    root[QStringLiteral("library")] = QJsonObject{
+        {QStringLiteral("devices"), QJsonArray::fromStringList(project.library.devices)}};
     return QJsonDocument(root).toJson(QJsonDocument::Indented);
 }
 
@@ -297,12 +298,27 @@ ProjectLoad parseProject(const QByteArray& bytes) {
         error = documentFromJson(root.value(QStringLiteral("board")), Workspace::Board, tr("board"),
                                  result.project.board);
     }
+    // The library is optional: v1 files and early v2 files have none or an empty object.
+    const QJsonValue library = root.value(QStringLiteral("library"));
+    if (error.isEmpty() && !library.isUndefined()) {
+        const QJsonValue devices = library.toObject().value(QStringLiteral("devices"));
+        if (!library.isObject() || (!devices.isUndefined() && !devices.isArray())) {
+            error = tr("The library section is invalid.");
+        }
+        for (const QJsonValue& device : devices.toArray()) {
+            if (!device.isString() || !isPickableDevice(device.toString())) {
+                error = tr("The library lists the unknown device '%1'.").arg(device.toString());
+                break;
+            }
+            if (!result.project.library.devices.contains(device.toString())) {
+                result.project.library.devices.append(device.toString());
+            }
+        }
+    }
     if (!error.isEmpty()) {
         result.project = {};
         result.error = error;
     }
-    // v2: library stub (currently empty; no error if absent for v1 compat)
-    // Extended in Issues #27/#29.
     return result;
 }
 

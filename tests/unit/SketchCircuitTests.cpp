@@ -50,6 +50,11 @@ private slots:
         QVERIFY2(transfer.errors.isEmpty(), qPrintable(transfer.errors.join("; ")));
         QCOMPARE(transfer.added, 3);
         auto board = transfer.document;
+        // Footprints are added in designator order; board[1] is linked to schematic[1] (R1).
+        const auto r1 = std::find_if(board.begin(), board.end(),
+                                     [&](const SketchItem& item) { return item.sourceId == schematic[1].id; });
+        QVERIFY(r1 != board.end());
+        std::swap(*r1, board[1]);
         translateItem(board[1], {20, 10});
         board[1].quarterTurns = 1;
         const auto guide = boardGuidance(schematic, board);
@@ -140,6 +145,67 @@ private slots:
         QTRY_VERIFY_WITH_TIMEOUT(sim->toPlainText().contains("2.5"), 5000);
         schematic.undoStack()->undo();
         QVERIFY(sim->toPlainText().contains("out of date"));
+    }
+    void boardPartsFollowSchematicPlacement() {
+        auto schematic = dcDividerExample();
+        auto waiting = unplacedBoardParts(schematic, {});
+        QVERIFY(waiting.problems.isEmpty());
+        QCOMPARE(waiting.parts.size(), 3);
+        QCOMPARE(waiting.parts[0].label, QString("R1"));
+        QCOMPARE(waiting.parts[1].label, QString("R2"));
+        QCOMPARE(waiting.parts[2].label, QString("V1"));
+        QCOMPARE(waiting.parts[0].sourceId, schematic[1].id);
+        QCOMPARE(waiting.parts[0].variant, QString("board.r0603"));
+
+        // A placed footprint leaves the list; an excluded component never enters it.
+        SketchDocument board = {waiting.parts[0]};
+        schematic[2].excludeFromBoard = true;
+        waiting = unplacedBoardParts(schematic, board);
+        QCOMPARE(waiting.parts.size(), 1);
+        QCOMPARE(waiting.parts[0].label, QString("V1"));
+        const auto transfer = transferToBoard(schematic, board);
+        QVERIFY2(transfer.errors.isEmpty(), qPrintable(transfer.errors.join("; ")));
+        QCOMPARE(transfer.added, 1);
+        const auto guide = boardGuidance(schematic, transfer.document);
+        QVERIFY(!guide.errors.join(" ").contains("R2"));
+
+        // Without a footprint the component is reported instead of listed.
+        schematic[1].footprint.clear();
+        waiting = unplacedBoardParts(schematic, {});
+        QCOMPARE(waiting.parts.size(), 1);
+        QCOMPARE(waiting.problems.size(), 1);
+    }
+    void autoPlacerKeepsPartsInsideOutlineWithoutOverlap() {
+        SketchItem outline;
+        outline.kind = SketchItem::Kind::Polyline;
+        outline.variant = BoardOutlineVariant;
+        outline.closed = true;
+        outline.points = {{0, 0}, {40, 0}, {40, 30}, {0, 30}};
+        SketchItem existing;
+        existing.kind = SketchItem::Kind::Symbol;
+        existing.variant = "board.dip8";
+        existing.points = {{8, 8}};
+        const SketchDocument board = {outline, existing};
+        SketchDocument parts;
+        for (int i = 0; i < 6; ++i) {
+            SketchItem part;
+            part.kind = SketchItem::Kind::Symbol;
+            part.variant = i % 2 ? "board.soic8" : "board.r0603";
+            part.label = QString("U%1").arg(i + 1);
+            parts.append(part);
+        }
+        const auto placed = autoPlaceParts(board, parts, 1.27);
+        QCOMPARE(placed.size(), board.size() + parts.size());
+        QVector<QRectF> bounds;
+        for (int i = 1; i < placed.size(); ++i) bounds.append(itemBounds(placed[i]));
+        for (int i = 0; i < bounds.size(); ++i) {
+            QVERIFY2(QRectF(0, 0, 40, 30).contains(bounds[i]), qPrintable(placed[i + 1].label));
+            for (int j = i + 1; j < bounds.size(); ++j) QVERIFY(!bounds[i].intersects(bounds[j]));
+        }
+        for (int i = 2; i < placed.size(); ++i) {
+            const QPointF origin = placed[i].points.first();
+            QVERIFY(std::abs(origin.x() / 1.27 - std::round(origin.x() / 1.27)) < 1e-6);
+        }
     }
     void duplicateCreatesNewIdentity() {
         DesignCanvas canvas(Workspace::Schematic);

@@ -176,6 +176,13 @@ private slots:
         schematic[QStringLiteral("items")] = items;
         root[QStringLiteral("schematic")] = schematic;
         add("duplicate id", root);
+        root = sampleJson();
+        root[QStringLiteral("library")] = QJsonObject{{QStringLiteral("devices"), QJsonArray{QStringLiteral("board.r0603")}}};
+        add("unknown device", root);
+        root[QStringLiteral("library")] = QJsonObject{{QStringLiteral("devices"), QStringLiteral("schematic.resistor")}};
+        add("devices not a list", root);
+        root[QStringLiteral("library")] = QJsonArray{};
+        add("library not an object", root);
     }
 
     void rejectsInvalidFiles() {
@@ -285,6 +292,23 @@ private slots:
         // v2 format must write the library key (even if empty).
         QVERIFY(root.contains(QStringLiteral("library")));
         QVERIFY(root[QStringLiteral("library")].isObject());
+    }
+
+    void libraryDevicesRoundTrip() {
+        ProjectData project;
+        project.library.devices = {QStringLiteral("schematic.capacitor"), QStringLiteral("schematic.resistor")};
+        const QByteArray bytes = serializeProject(project);
+        const ProjectLoad load = parseProject(bytes);
+        QVERIFY2(load.ok(), qPrintable(load.error));
+        QCOMPARE(load.project.library.devices, project.library.devices);
+        QCOMPARE(serializeProject(load.project), bytes);
+
+        // Files written before the device list (empty library object, or none) still open.
+        QJsonObject root = sampleJson();
+        root[QStringLiteral("library")] = QJsonObject{};
+        QVERIFY(errorFor(root).isEmpty());
+        root.remove(QStringLiteral("library"));
+        QVERIFY(errorFor(root).isEmpty());
     }
 };
 

@@ -182,4 +182,32 @@ Son projeler listesinden kaldırılsın mı?</translation></message>
     <message><source>DC voltage source</source><translation>DC gerilim kaynağı</translation></message>
     <message><source>Pin header 1x2</source><translation>Pin başlığı 1x2</translation></message>
   </context>
+  <context>
+    <name>hatt::ui::MainWindow</name>
+    <message><source>Pick devices...</source><translation>Eleman seç...</translation></message>
+    <message><source>Add devices from the library to this project</source><translation>Kütüphaneden bu projeye eleman ekle</translation></message>
+    <message><source>Remove</source><translation>Kaldır</translation></message>
+    <message><source>Remove the selected device from the project list (only when the schematic does not use it)</source><translation>Seçili elemanı proje listesinden kaldır (yalnızca şemada kullanılmıyorsa)</translation></message>
+    <message><source>OBJECTS</source><translation>NESNELER</translation></message>
+    <message><source>DEVICES</source><translation>ELEMANLAR</translation></message>
+    <message><source>COMPONENTS TO PLACE</source><translation>YERLEŞTİRİLECEK ELEMANLAR</translation></message>
+    <message><source>This project has no devices yet. Use Pick devices to add parts from the library.</source><translation>Bu projede henüz eleman yok. Kütüphaneden eklemek için Eleman seç'i kullanın.</translation></message>
+    <message><source>Every schematic component is on the board. Components appear here after they are placed in the schematic.</source><translation>Şemadaki tüm elemanlar kartta. Elemanlar şemaya yerleştirildikten sonra burada görünür.</translation></message>
+    <message><source>Remove device</source><translation>Elemanı kaldır</translation></message>
+    <message><source>%1 is used in the schematic. Delete its parts from the schematic before removing it from the project.</source><translation>%1 şemada kullanılıyor. Projeden kaldırmadan önce şemadaki parçalarını silin.</translation></message>
+    <message><source>Pick devices</source><translation>Eleman seç</translation></message>
+    <message><source>Search by name or designator prefix</source><translation>Ada veya referans önekine göre ara</translation></message>
+    <message><source>%1 (in project)</source><translation>%1 (projede)</translation></message>
+    <message><source>Prefix %1  ·  %2 pins  ·  value %3  ·  footprint %4</source><translation>Önek %1  ·  %2 pin  ·  değer %3  ·  kılıf %4</translation></message>
+    <message><source>none</source><translation>yok</translation></message>
+    <message><source>unassigned</source><translation>atanmamış</translation></message>
+    <message><source>Add to project</source><translation>Projeye ekle</translation></message>
+    <message><source>Exclude from PCB layout</source><translation>PCB yerleşiminden hariç tut</translation></message>
+    <message><source>The part stays in the schematic and simulation but is not placed on the PCB</source><translation>Parça şemada ve simülasyonda kalır ama PCB'ye yerleştirilmez</translation></message>
+  </context>
+  <context>
+    <name>hatt::ui::ProjectFile</name>
+    <message><source>The library section is invalid.</source><translation>Kütüphane bölümü geçersiz.</translation></message>
+    <message><source>The library lists the unknown device '%1'.</source><translation>Kütüphane bilinmeyen '%1' elemanını içeriyor.</translation></message>
+  </context>
 </TS>
