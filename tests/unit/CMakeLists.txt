@@ -20,6 +20,10 @@ add_executable(hatt-project-file-tests ProjectFileTests.cpp)
 target_link_libraries(hatt-project-file-tests PRIVATE HattEDA::UiShell Qt6::Test)
 hatt_add_qt_test(hatt-project-file-tests)
 
+add_executable(hatt-project-safety-tests ProjectSafetyTests.cpp)
+target_link_libraries(hatt-project-safety-tests PRIVATE HattEDA::UiShell Qt6::Test)
+add_test(NAME hatt-project-safety-tests COMMAND hatt-project-safety-tests)
+
 add_executable(hatt-connectivity-tests ConnectivityTests.cpp)
 target_link_libraries(hatt-connectivity-tests PRIVATE HattEDA::Electrical Qt6::Test)
 hatt_add_qt_test(hatt-connectivity-tests)

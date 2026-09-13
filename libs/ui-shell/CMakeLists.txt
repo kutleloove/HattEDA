@@ -8,6 +8,8 @@ add_library(hatt-ui-shell STATIC
     src/DesignCanvas.cpp
     src/MainWindow.cpp
     src/ProjectFile.cpp
+    include/hatt/ui/ProjectSafety.hpp
+    src/ProjectSafety.cpp
     src/SketchModel.cpp
     src/SketchCircuit.cpp
     include/hatt/ui/CircuitWorkflow.hpp

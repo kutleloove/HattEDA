@@ -2,6 +2,7 @@
 #include "hatt/ui/CircuitWorkflow.hpp"
 
 #include "hatt/ui/DesignCanvas.hpp"
+#include "hatt/ui/ProjectSafety.hpp"
 #include "hatt/ui/Theme.hpp"
 
 #include <QAction>
@@ -359,6 +360,10 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
         [this](const QString& id, const QString& title, QWidget* content) { openToolWorkspace(id, title, content); },
         [this] { return shellPages_ && shellPages_->currentIndex() == 1; },
         [this] { showKayraWorkspace(); });
+    projectGuard_ = new ProjectGuard(
+        this, [this] { return currentProjectData(projectPath_); },
+        [this] { return hasUnsavedChanges(); });
+    connect(projectGuard_, &ProjectGuard::statusMessage, statusBar(), &QStatusBar::showMessage);
     applySnapSettings();
     applyLengthUnits();
     refreshIcons();
@@ -977,6 +982,12 @@ void MainWindow::createMenus() {
     fileMenu->addSeparator();
     fileMenu->addAction(actions_.value(QStringLiteral("hatteda.action.save")));
     fileMenu->addAction(actions_.value(QStringLiteral("hatteda.action.save-as")));
+    fileMenu->addSeparator();
+    // Quitting closes the window, so closeEvent asks about unsaved changes.
+    auto* quit = fileMenu->addAction(tr("Quit"));
+    quit->setObjectName(QStringLiteral("hatteda.action.quit"));
+    quit->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_Q));
+    connect(quit, &QAction::triggered, this, &QWidget::close);
 
     auto* editMenu = menuBar()->addMenu(tr("&Edit"));
     editMenu->addAction(actions_.value(QStringLiteral("hatteda.action.undo")));
@@ -1375,10 +1386,7 @@ QWidget* MainWindow::createWelcomePage() {
     recentProjects_->setObjectName(QStringLiteral("RecentProjects"));
     recentProjects_->setMinimumWidth(480);
     connect(recentProjects_, &QListWidget::itemDoubleClicked, this, [this](QListWidgetItem* item) {
-        const QString path = item->data(Qt::UserRole).toString();
-        if (!path.isEmpty() && maybeSaveChanges()) {
-            openProjectFile(path);
-        }
+        openRecentProject(item->data(Qt::UserRole).toString());
     });
     recentColumn->addWidget(recentProjects_, 1);
     columns->addLayout(recentColumn, 1);
@@ -1437,7 +1445,7 @@ void MainWindow::createNewProject() {
     ProjectData project;
     project.name = projectName;
     QString error = QDir().mkpath(directory.absolutePath())
-                        ? saveProjectFile(path, project)
+                        ? projectGuard_->save(path, project)
                         : tr("Cannot create the folder %1.").arg(QDir::toNativeSeparators(directory.absolutePath()));
     if (!error.isEmpty()) {
         QMessageBox::warning(this, tr("New project"), error);
@@ -1460,20 +1468,58 @@ void MainWindow::openProject() {
 }
 
 bool MainWindow::openProjectFile(const QString& path) {
-    const ProjectLoad load = loadProjectFile(path);
+    if (!projectGuard_->confirmLock(path)) {
+        return false;
+    }
+    ProjectLoad load = loadProjectFile(path);
     if (!load.ok()) {
         QMessageBox::warning(this, tr("Open project"),
                              tr("%1 could not be opened.\n\n%2")
                                  .arg(QDir::toNativeSeparators(path), load.error));
         return false;
     }
+    const auto recovery = projectGuard_->resolveRecovery(path, load.project);
+    if (recovery == ProjectGuard::Recovery::Cancelled) {
+        return false;
+    }
     addRecentProject(path);
     activateProject(path, load.project);
+    if (recovery == ProjectGuard::Recovery::Restored) {
+        // Recovered content is not on disk yet: keep the window modified until it is saved.
+        for (auto* canvas : canvases_) canvas->undoStack()->resetClean();
+        updateProjectState();
+    }
     return true;
+}
+
+void MainWindow::openRecentProject(const QString& path) {
+    if (path.isEmpty()) {
+        return;
+    }
+    if (!QFileInfo::exists(path)) {
+        const auto answer = QMessageBox::warning(
+            this, tr("Project not found"),
+            tr("%1 no longer exists. It may have been moved, renamed or deleted.\n\nRemove it from "
+               "the recent projects list?")
+                .arg(QDir::toNativeSeparators(path)),
+            QMessageBox::Yes | QMessageBox::No, QMessageBox::Yes);
+        if (answer == QMessageBox::Yes) {
+            QSettings settings;
+            QStringList recent = settings.value(QStringLiteral("recentProjects")).toStringList();
+            recent.removeAll(path);
+            settings.setValue(QStringLiteral("recentProjects"), recent);
+            refreshRecentProjects();
+        }
+        return;
+    }
+    if (maybeSaveChanges()) {
+        openProjectFile(path);
+    }
 }
 
 void MainWindow::activateProject(const QString& projectPath, const ProjectData& project) {
     projectPath_ = projectPath;
+    projectGuard_->projectActivated(projectPath);
     // The file name is the project name, so renaming or "Save as" is reflected everywhere.
     projectName_ = QFileInfo(projectPath).completeBaseName();
     const SketchDocument* documents[] = {&project.schematic, &project.board};
@@ -1515,22 +1561,29 @@ bool MainWindow::saveProjectAs() {
         return false;
     }
     projectPath_ = path;
+    projectGuard_->projectActivated(path);
     projectName_ = QFileInfo(path).completeBaseName();
     addRecentProject(path);
     updateProjectState();
     return true;
 }
 
-bool MainWindow::writeProject(const QString& path) {
+ProjectData MainWindow::currentProjectData(const QString& path) const {
     ProjectData project;
     project.name = QFileInfo(path).completeBaseName();
     project.schematic = canvases_.value(0)->document();
     project.board = canvases_.value(1)->document();
-    const QString error = saveProjectFile(path, project);
+    return project;
+}
+
+bool MainWindow::writeProject(const QString& path) {
+    const ProjectData project = currentProjectData(path);
+    const QString error = projectGuard_->save(path, project);
     if (!error.isEmpty()) {
         QMessageBox::warning(this, tr("Save project"), error);
         return false;
     }
+    projectGuard_->projectSaved(path);
     for (auto* canvas : canvases_) {
         canvas->undoStack()->setClean();
     }
@@ -1554,9 +1607,14 @@ bool MainWindow::maybeSaveChanges() {
         tr("%1 has unsaved changes. Save them before continuing?").arg(projectName_),
         QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel, QMessageBox::Save);
     if (answer == QMessageBox::Save) {
+        // A failed save reports its error and cancels whatever asked (close, open, new).
         return saveProject();
     }
-    return answer == QMessageBox::Discard;
+    if (answer == QMessageBox::Discard) {
+        projectGuard_->discardRecovery();
+        return true;
+    }
+    return false;
 }
 
 void MainWindow::updateProjectState() {
@@ -1587,6 +1645,7 @@ void MainWindow::addRecentProject(const QString& path) {
 
 void MainWindow::closeEvent(QCloseEvent* event) {
     if (maybeSaveChanges()) {
+        projectGuard_->projectClosed();
         event->accept();
     } else {
         event->ignore();

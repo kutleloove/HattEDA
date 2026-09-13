@@ -202,6 +202,12 @@ void MainWindowTests::projectSaveOpenAndUnsavedChanges() {
     QVERIFY(!window.isWindowModified());
 
     hatt::ui::MainWindow reopened;
+    // `window` still holds the project lock, so the second window warns first (ADR-0005).
+    QTimer::singleShot(0, [] {
+        auto* box = QApplication::activeModalWidget();
+        QVERIFY(box);
+        box->findChild<QAbstractButton*>(QStringLiteral("hatteda.lock.open-anyway"))->click();
+    });
     QVERIFY(reopened.openProjectFile(path));
     QCOMPARE(reopened.projectPath(), path);
     QVERIFY(!reopened.isWindowModified());

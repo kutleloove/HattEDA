@@ -35,7 +35,14 @@ Projects are stored in the interim `.hatt` JSON format described in ADR-0004 (`P
 - **New project:** `createNewProject` writes an empty file immediately and suggests a name that does not exist yet. It uses the folder in `projects/location` and asks before replacing a file.
 - **Open and Recent:** `openProject` and the Recent list call `openProjectFile`. On error it shows a warning and leaves the open project untouched.
 - **Save:** `hatteda.action.save` (Ctrl+S) and `hatteda.action.save-as` (Ctrl+Shift+S) go through `writeProject`, which marks both undo stacks clean.
-- **Unsaved changes:** `QUndoStack::cleanChanged` drives `updateProjectState`: the title shows `[*]` and Save is enabled while a project is open. `maybeSaveChanges` (Save / Discard / Cancel) guards New, Open, Recent and `closeEvent`.
+- **Unsaved changes:** `QUndoStack::cleanChanged` drives `updateProjectState`: the title shows `[*]` and Save is enabled while a project is open. `maybeSaveChanges` (Save / Discard / Cancel) guards New, Open, Recent and `closeEvent`. File › Quit (`hatteda.action.quit`, Ctrl+Q) closes the window and gets the same prompt. A failed Save in the prompt cancels the operation.
+- **Safety (ADR-0005):** `ProjectGuard` (`ProjectSafety.hpp`) handles the safety files next to the project:
+  - **Autosave:** writes `<name>.hatt.autosave` every `projects/autosaveMinutes` minutes (default 2, 0 disables it), only while dirty and changed.
+  - **Recovery:** `openProjectFile` offers a newer, differing and valid recovery file (Restore / Open saved version / Cancel). Restore keeps the path and leaves the window modified.
+  - **Backup:** `ProjectGuard::save` keeps `<name>.hatt.bak` (one generation) before overwriting.
+  - **Lock:** `<name>.hatt.lock` (`QLockFile`) is held while the project is open. A project locked by another live process asks Open anyway / Cancel.
+  - **Hooks:** `MainWindow` calls the guard from `openProjectFile` (`confirmLock`, `resolveRecovery`), `activateProject` and `saveProjectAs` (`projectActivated`), `writeProject` and `createNewProject` (`save`, `projectSaved`), `maybeSaveChanges` (`discardRecovery`) and `closeEvent` (`projectClosed`). The snapshot is `currentProjectData(path)`, the same data Save writes.
+  - **Recent:** a missing Recent file shows a message and offers to remove the entry (`openRecentProject`).
 
 ## Undo
 
@@ -76,6 +83,7 @@ Snapping is configured through `SnapSettings` (`grid`, `objects`, `edges`, `cent
 
 - `hatt-connectivity-tests`, `hatt-dc-solver-tests`, `hatt-sketch-circuit-tests`: electrical topology, DC reference circuits and UI-adapter/PCB/async workflow regressions.
 - `hatt-project-file-tests` (`tests/unit/ProjectFileTests.cpp`): `.hatt` round trip, version and validation rules, atomic save.
+- `hatt-project-safety-tests` (`tests/unit/ProjectSafetyTests.cpp`): autosave and recovery (Restore / Open saved version / damaged file), `.bak` backup, project lock between windows and stale locks, missing Recent entries, a failed Save in the unsaved-changes prompt.
 
 - `hatt-ui-shell-tests` (`tests/unit/MainWindowTests.cpp`): welcome page, exclusive tool modes, primary/tool workspaces, tool actions driving the canvas and object selector, Probe unavailable in Kayra, undo following the active workspace.
 - `hatt-design-canvas-tests` (`tests/unit/DesignCanvasTests.cpp`): placement and designators, undo keeping the tool, wire grid/pin snapping, polyline editing, rectangle/line input, orthogonal constraint, move as one undo step, wires following moved symbols, wire segment/corner dragging, delete/undo selection restore, rubber band, align/distribute, rotation, measure, Esc behaviour.

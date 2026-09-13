@@ -151,6 +151,33 @@
     <message><source>Click to add vertices. Double-click or Enter finishes; right-click cancels. Backspace removes the last vertex.</source><translation>Köşe eklemek için tıklayın. Çift tık veya Enter bitirir; sağ tık iptal eder. Backspace son köşeyi siler.</translation></message>
   </context>
   <context>
+    <name>hatt::ui::MainWindow</name>
+    <message><source>Quit</source><translation>Çıkış</translation></message>
+    <message><source>Project not found</source><translation>Proje bulunamadı</translation></message>
+    <message><source>%1 no longer exists. It may have been moved, renamed or deleted.
+
+Remove it from the recent projects list?</source><translation>%1 artık mevcut değil. Taşınmış, yeniden adlandırılmış veya silinmiş olabilir.
+
+Son projeler listesinden kaldırılsın mı?</translation></message>
+  </context>
+  <context>
+    <name>hatt::ui::ProjectGuard</name>
+    <message><source>It is open in another HattEDA window (process %1 on %2).</source><translation>Başka bir HattEDA penceresinde açık (%2 üzerinde %1 numaralı işlem).</translation></message>
+    <message><source>It is open in another HattEDA window.</source><translation>Başka bir HattEDA penceresinde açık.</translation></message>
+    <message><source>Project already open</source><translation>Proje zaten açık</translation></message>
+    <message><source>%1 is already open.</source><translation>%1 zaten açık.</translation></message>
+    <message><source>Editing it in two windows can overwrite changes.</source><translation>İki pencerede düzenlemek değişikliklerin üzerine yazılmasına yol açabilir.</translation></message>
+    <message><source>Open anyway</source><translation>Yine de aç</translation></message>
+    <message><source>Ignored the damaged recovery file %1.</source><translation>Hasarlı kurtarma dosyası %1 yok sayıldı.</translation></message>
+    <message><source>Recover unsaved changes</source><translation>Kaydedilmemiş değişiklikleri kurtar</translation></message>
+    <message><source>%1 has unsaved changes from %2 that were not saved, for example because HattEDA stopped unexpectedly.</source><translation>%1 projesinde %2 tarihinden kalan, örneğin HattEDA beklenmedik şekilde kapandığı için kaydedilmemiş değişiklikler var.</translation></message>
+    <message><source>Restore the recovered changes, or open the last saved version and discard them.</source><translation>Kurtarılan değişiklikleri geri yükleyin ya da son kaydedilen sürümü açıp bu değişiklikleri atın.</translation></message>
+    <message><source>Restore</source><translation>Geri yükle</translation></message>
+    <message><source>Open saved version</source><translation>Kaydedilmiş sürümü aç</translation></message>
+    <message><source>Could not keep a backup of %1.</source><translation>%1 için yedek oluşturulamadı.</translation></message>
+    <message><source>Autosave failed: %1</source><translation>Otomatik kaydetme başarısız: %1</translation></message>
+  </context>
+  <context>
     <name>hatt::ui::SymbolLibrary</name>
     <message><source>DC voltage source</source><translation>DC gerilim kaynağı</translation></message>
     <message><source>Pin header 1x2</source><translation>Pin başlığı 1x2</translation></message>

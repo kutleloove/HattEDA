@@ -20,6 +20,7 @@ class QUndoGroup;
 namespace hatt::ui {
 
 class DesignCanvas;
+class ProjectGuard;
 
 class MainWindow final : public QMainWindow {
     Q_OBJECT
@@ -33,6 +34,8 @@ public:
     [[nodiscard]] DesignCanvas* activeCanvas() const;
     // Path of the open `.hatt` file, empty while no project is open.
     [[nodiscard]] QString projectPath() const { return projectPath_; }
+    // Autosave, recovery, backup and lock handling of the open project (ProjectSafety.hpp).
+    [[nodiscard]] ProjectGuard* projectGuard() const { return projectGuard_; }
 
 public slots:
     void showMergenWorkspace();
@@ -60,12 +63,15 @@ private:
     void openToolWorkspace(const QString& stableId, const QString& title, QWidget* content);
     void activateProject(const QString& projectPath, const ProjectData& project);
     bool writeProject(const QString& path);
+    // The project as it is saved to `path`; also the autosave snapshot.
+    [[nodiscard]] ProjectData currentProjectData(const QString& path) const;
     // Asks to save unsaved changes; false when the user cancels or saving fails.
     bool maybeSaveChanges();
     [[nodiscard]] bool hasUnsavedChanges() const;
     void updateProjectState();
     void addRecentProject(const QString& path);
     void refreshRecentProjects();
+    void openRecentProject(const QString& path);
 
     void activateToolMode(ToolMode mode);
     void rebuildObjectSelector();
@@ -111,6 +117,7 @@ private:
     LengthUnit boardUnit_ = LengthUnit::Millimetre;
     QString projectPath_;
     QString projectName_;
+    ProjectGuard* projectGuard_ = nullptr;
     QLabel* coordinateLabel_ = nullptr;
     QLabel* zoomLabel_ = nullptr;
 };

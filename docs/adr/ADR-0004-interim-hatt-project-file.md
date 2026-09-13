@@ -29,7 +29,8 @@ Projects could not be saved: New project created no file, Open only changed the 
 - Designs survive restarts, and UUID links between schematic and PCB (`sourceId`) persist.
 - HATT-003 will introduce `formatVersion: 2` with fixed-point units and a v1 converter. Until then, files carry floating-point rounding exactly as the editor does.
 - The symbol library is compiled in. A file that references a symbol removed from a later build is rejected rather than silently dropping parts. Library versioning is future work.
-- Not covered yet: autosave and crash recovery, file locking between instances, embedded symbol or footprint definitions, and project-level settings (units, grid) inside the file.
+- Autosave, crash recovery, the `.bak` backup and the project lock file are in ADR-0005. They do not change the format.
+- Not covered yet: embedded symbol or footprint definitions, and project-level settings (units, grid) inside the file.
 
 ## Validation
 
