@@ -28,6 +28,8 @@ private slots:
         QCoreApplication::setApplicationName("hatt-sketch-circuit-tests");
         QSettings::setDefaultFormat(QSettings::IniFormat);
         QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, settings.path());
+        // New projects are real files; keep them out of the user's Documents folder.
+        QSettings().setValue("projects/location", settings.filePath("projects"));
     }
     void dividerSolvesFromActualSymbolPins() {
         const auto document = dcDividerExample();

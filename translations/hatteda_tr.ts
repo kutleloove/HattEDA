@@ -25,7 +25,6 @@
     <message><source>Unassigned</source><translation>Atanmamış</translation></message>
     <message><source>Footprint</source><translation>Kılıf</translation></message>
     <message><source>Pin to pad (1-based, comma-separated)</source><translation>Pin → pad (1’den başlayan, virgülle ayrılmış)</translation></message>
-    <message><source> mm</source><translation> mm</translation></message>
     <message><source>Anchor X</source><translation>Referans X</translation></message>
     <message><source>Anchor Y (positive down)</source><translation>Referans Y (aşağı doğru pozitif)</translation></message>
     <message><source>0 degrees</source><translation>0 derece</translation></message>
@@ -34,6 +33,64 @@
     <message><source>270 degrees</source><translation>270 derece</translation></message>
     <message><source>Rotation</source><translation>Dönüş</translation></message>
     <message><source>Enter one unique pad number per pin, from 1 to %1.</source><translation>Her pin için 1 ile %1 arasında benzersiz bir pad numarası girin.</translation></message>
+    <message><source>Guides</source><translation>Kılavuz</translation></message>
+    <message><source>Show alignment guides to other pins, vertices and symbol centres while placing, moving and drawing</source><translation>Yerleştirirken, taşırken ve çizerken diğer pinlere, köşelere ve sembol merkezlerine hizalama kılavuzları göster</translation></message>
+    <message><source>Snap grid %1</source><translation>Snap ızgarası %1</translation></message>
+    <message><source>X %1   Y %2 %3</source><translation>X %1   Y %2 %3</translation></message>
+    <message><source>PCB units</source><translation>PCB birimleri</translation></message>
+    <message><source>Millimetres (mm)</source><translation>Milimetre (mm)</translation></message>
+    <message><source>Inches (in)</source><translation>İnç (in)</translation></message>
+    <message><source>Create array...</source><translation>Dizi oluştur...</translation></message>
+    <message><source>Create array</source><translation>Dizi oluştur</translation></message>
+    <message><source>Rows</source><translation>Satır</translation></message>
+    <message><source>Columns</source><translation>Sütun</translation></message>
+    <message><source>Column pitch (X)</source><translation>Sütun adımı (X)</translation></message>
+    <message><source>Row pitch (Y, positive down)</source><translation>Satır adımı (Y, aşağı doğru pozitif)</translation></message>
+    <message><source>Snap grid step (Ctrl+F1, F2, F3, F4)</source><translation>Snap ızgara adımı (Ctrl+F1, F2, F3, F4)</translation></message>
+    <message><source>Snap grid</source><translation>Snap ızgarası</translation></message>
+    <message><source>Save as...</source><translation>Farklı kaydet...</translation></message>
+    <message><source>My Project</source><translation>Projem</translation></message>
+    <message><source>My Project %1</source><translation>Projem %1</translation></message>
+    <message><source>%1 already exists. Replace it with an empty project?</source><translation>%1 zaten var. Boş bir projeyle değiştirilsin mi?</translation></message>
+    <message><source>Cannot create the folder %1.</source><translation>%1 klasörü oluşturulamıyor.</translation></message>
+    <message><source>Open HattEDA project</source><translation>HattEDA projesi aç</translation></message>
+    <message><source>HattEDA projects (*.hatt);;All files (*.*)</source><translation>HattEDA projeleri (*.hatt);;Tüm dosyalar (*.*)</translation></message>
+    <message><source>%1 could not be opened.
+
+%2</source><translation>%1 açılamadı.
+
+%2</translation></message>
+    <message><source>Save HattEDA project as</source><translation>HattEDA projesini farklı kaydet</translation></message>
+    <message><source>HattEDA projects (*.hatt)</source><translation>HattEDA projeleri (*.hatt)</translation></message>
+    <message><source>Save project</source><translation>Projeyi kaydet</translation></message>
+    <message><source>Saved %1</source><translation>%1 kaydedildi</translation></message>
+    <message><source>Unsaved changes</source><translation>Kaydedilmemiş değişiklikler</translation></message>
+    <message><source>%1 has unsaved changes. Save them before continuing?</source><translation>%1 projesinde kaydedilmemiş değişiklikler var. Devam etmeden önce kaydedilsin mi?</translation></message>
+  </context>
+  <context>
+    <name>hatt::ui::ProjectFile</name>
+    <message><source>The %1 section is missing or invalid.</source><translation>%1 bölümü eksik veya geçersiz.</translation></message>
+    <message><source>%1 item %2</source><translation>%1 öğe %2</translation></message>
+    <message><source>%1 is not an object.</source><translation>%1 bir nesne değil.</translation></message>
+    <message><source>%1 has no valid id.</source><translation>%1 geçerli bir kimliğe sahip değil.</translation></message>
+    <message><source>%1 repeats the id %2.</source><translation>%1, %2 kimliğini tekrar kullanıyor.</translation></message>
+    <message><source>%1 has an unknown kind.</source><translation>%1 bilinmeyen bir türde.</translation></message>
+    <message><source>%1 has no point list.</source><translation>%1 nokta listesi içermiyor.</translation></message>
+    <message><source>%1 has an invalid point.</source><translation>%1 geçersiz bir nokta içeriyor.</translation></message>
+    <message><source>%1 has too few points.</source><translation>%1 çok az nokta içeriyor.</translation></message>
+    <message><source>%1 has a text field of the wrong type.</source><translation>%1 yanlış türde bir metin alanı içeriyor.</translation></message>
+    <message><source>%1 has an invalid rotation.</source><translation>%1 geçersiz bir dönüş içeriyor.</translation></message>
+    <message><source>%1 has an invalid closed flag.</source><translation>%1 geçersiz bir kapalı işareti içeriyor.</translation></message>
+    <message><source>%1 has an invalid pin to pad map.</source><translation>%1 geçersiz bir pin → pad eşlemesi içeriyor.</translation></message>
+    <message><source>%1 uses the unknown symbol '%2'.</source><translation>%1 bilinmeyen '%2' sembolünü kullanıyor.</translation></message>
+    <message><source>The file is not a HattEDA project (invalid JSON).</source><translation>Dosya bir HattEDA projesi değil (geçersiz JSON).</translation></message>
+    <message><source>The file is not a HattEDA project.</source><translation>Dosya bir HattEDA projesi değil.</translation></message>
+    <message><source>The project format version is missing or invalid.</source><translation>Proje biçim sürümü eksik veya geçersiz.</translation></message>
+    <message><source>The project was saved by a newer HattEDA (format %1; this version reads up to %2). Update HattEDA to open it.</source><translation>Proje daha yeni bir HattEDA ile kaydedilmiş (biçim %1; bu sürüm en fazla %2 okuyabilir). Açmak için HattEDA'yı güncelleyin.</translation></message>
+    <message><source>schematic</source><translation>şema</translation></message>
+    <message><source>board</source><translation>PCB</translation></message>
+    <message><source>Cannot write %1: %2</source><translation>%1 yazılamıyor: %2</translation></message>
+    <message><source>Cannot open %1: %2</source><translation>%1 açılamıyor: %2</translation></message>
   </context>
   <context>
     <name>hatt::ui::CircuitWorkflow</name>
@@ -81,8 +138,16 @@
   <context>
     <name>hatt::ui::DesignCanvas</name>
     <message><source>Edit properties</source><translation>Özellikleri düzenle</translation></message>
+    <message><source>Distance %1  ·  ΔX %2  ·  ΔY %3  ·  %4°</source><translation>Mesafe %1  ·  ΔX %2  ·  ΔY %3  ·  %4°</translation></message>
+    <message><source>%1  ·  Grid %2  ·  %3%</source><translation>%1  ·  Izgara %2  ·  %3%</translation></message>
+    <message><source>Create array</source><translation>Dizi oluştur</translation></message>
+    <message><source>Click to select and drag to move; connected wires follow and guides show alignment, Shift keeps the move horizontal or vertical. Drag a wire segment or corner to reshape it. Drag on empty space for box selection; Shift or Ctrl adds to the selection. Arrow keys nudge, Ctrl+R rotates, Delete removes.</source><translation>Seçmek için tıklayın, taşımak için sürükleyin; bağlı teller nesneyi izler ve kılavuzlar hizayı gösterir, Shift taşımayı yatay veya dikey tutar. Teli yeniden şekillendirmek için bir parçasını veya köşesini sürükleyin. Boş alanda sürükleyerek kutu seçimi yapın; Shift veya Ctrl seçime ekler. Ok tuşları kaydırır, Ctrl+R döndürür, Delete siler.</translation></message>
+    <message><source>Move</source><translation>Taşı</translation></message>
+    <message><source>Drag wire</source><translation>Teli sürükle</translation></message>
+    <message><source>Drag track</source><translation>Yolu sürükle</translation></message>
     <message><source>Click to start a track and click to add corners. The track ends on a pad automatically; double-click or Enter finishes, right-click cancels.</source><translation>Yolu başlatmak ve köşe eklemek için tıklayın. Yol pad üzerinde otomatik biter; çift tık veya Enter bitirir, sağ tık iptal eder.</translation></message>
-    <message><source>Click to start a wire and click to add corners. The wire ends on a pin automatically; double-click or Enter finishes, right-click cancels.</source><translation>Teli başlatmak ve köşe eklemek için tıklayın. Tel pin üzerinde otomatik biter; çift tık veya Enter bitirir, sağ tık iptal eder.</translation></message>
+    <message><source>Click a pin to start a wire and click the target; right-angle corners are added automatically (hold Ctrl for a free angle). The wire ends on a pin automatically; double-click or Enter finishes, right-click cancels.</source><translation>Teli başlatmak için bir pine, sonra hedefe tıklayın; dik açılı köşeler otomatik eklenir (serbest açı için Ctrl basılı tutun). Tel pin üzerinde otomatik biter; çift tık veya Enter bitirir, sağ tık iptal eder.</translation></message>
+    <message><source>Click to place %1. Guides show alignment with other pins and pins join when close. Ctrl+R rotates before placing. Esc returns to selection.</source><translation>%1 yerleştirmek için tıklayın. Kılavuzlar diğer pinlerle hizayı gösterir, yakın pinler birleşir. Ctrl+R yerleştirmeden önce döndürür. Esc seçime döner.</translation></message>
     <message><source>Click to add vertices. Double-click or Enter finishes; right-click cancels. Backspace removes the last vertex.</source><translation>Köşe eklemek için tıklayın. Çift tık veya Enter bitirir; sağ tık iptal eder. Backspace son köşeyi siler.</translation></message>
   </context>
   <context>

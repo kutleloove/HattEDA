@@ -6,6 +6,10 @@ add_executable(hatt-design-canvas-tests DesignCanvasTests.cpp)
 target_link_libraries(hatt-design-canvas-tests PRIVATE HattEDA::UiShell Qt6::Test)
 add_test(NAME hatt-design-canvas-tests COMMAND hatt-design-canvas-tests)
 
+add_executable(hatt-project-file-tests ProjectFileTests.cpp)
+target_link_libraries(hatt-project-file-tests PRIVATE HattEDA::UiShell Qt6::Test)
+add_test(NAME hatt-project-file-tests COMMAND hatt-project-file-tests)
+
 add_executable(hatt-connectivity-tests ConnectivityTests.cpp)
 target_link_libraries(hatt-connectivity-tests PRIVATE HattEDA::Electrical Qt6::Test)
 add_test(NAME hatt-connectivity-tests COMMAND hatt-connectivity-tests)

@@ -15,6 +15,8 @@ struct CircuitSnapshot {
 };
 
 CircuitSnapshot analyzeSchematic(const SketchDocument& document);
+// World positions of the automatic junction dots of a schematic (see electrical::junctionPoints).
+QVector<QPointF> schematicJunctions(const SketchDocument& document);
 SketchDocument dcDividerExample();
 
 struct BoardTransfer {

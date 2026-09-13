@@ -44,7 +44,7 @@ Commands and tool modes use one coherent, code-drawn line icon set: each action 
 | 2D graphics | D |
 | Measure | M |
 
-Editing shortcuts: Undo (platform standard), Redo (platform standard and Ctrl+Y), Delete, Duplicate Ctrl+D, Rotate 90° Ctrl+R (also rotates a symbol before placement), Select all, Zoom in (platform standard and Ctrl+=), Zoom out, Fit to design Home / Ctrl+0. On the canvas: Esc cancels step by step and finally returns to Selection, Enter or double-click finishes wires and polylines, Backspace removes the last vertex, arrow keys nudge the selection by one grid step (Shift: five).
+Editing shortcuts: Undo (platform standard), Redo (platform standard and Ctrl+Y), Delete, Duplicate Ctrl+D, Rotate 90° Ctrl+R (also rotates a symbol before placement), Select all, Zoom in (platform standard and Ctrl+=), Zoom out, Fit to design Home / Ctrl+0. On the canvas: Esc cancels step by step and finally returns to Selection, Enter or double-click finishes wires and polylines, Backspace removes the last vertex, arrow keys nudge the selection by one grid step (Shift: five), Shift while dragging locks the move to one axis, Ctrl while drawing a wire allows a free angle. Snap grid step: Ctrl+F1 (finest), F2, F3 (default), F4 (coarsest); alignment guides are drawn as dashed magenta lines (`guide` canvas colour) in both themes. While moving or placing, the gap to the nearest neighbouring object on each side is shown as a solid `guide`-coloured dimension line with end ticks and a filled label (canvas background colour text) placed beside the line; a gap equal to another gap uses a heavier line and longer ticks, and the matching gaps are shown with it. Edit › Create array... builds rows × columns copies. Lengths are shown in mil on the schematic and in the user's PCB unit (mm or in) on the board.
 
 `ContextPanel` next to the rail shows the active mode name, a preview of the chosen object, a context hint for the active tool, and the `ObjectSelector` list (hidden for modes without objects).
 
@@ -70,3 +70,7 @@ Placement and drawing share a collapsible bottom `AlignmentBar`. Its left side (
 Grid, Objects, Edges and Centres are independent. 45° and Orthogonal are mutually exclusive: turning one on turns the other off; both may be off.
 
 The right side (`ALIGN`) holds icon-only align left / horizontal centres / right, align top / vertical centres / bottom, and distribute horizontally / vertically. Align needs at least two selected objects, distribute at least three. A final "Hide" button collapses the strip to a single "Snapping and alignment" button. Alignment and distribution commands appear only in this strip (and the Design menu) so they do not permanently consume the primary command bar.
+
+## Circuit workflow additions
+
+Right-click cancels active placement/drawing and returns to Select. An idle single right-click opens the host context menu after the system double-click interval; double right-click deletes only the target and is undoable. Properties include label/text, position, supported rotation, value, footprint and explicit pin-to-pad mapping. CircuitMenu hosts netlist, PCB update and bounded DC simulation commands. Dashed airwires distinguish unrouted connections from solid copper. Reports follow both themes. See architecture/circuit-workflow.md and ADR-0003.

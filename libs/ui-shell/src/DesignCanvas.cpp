@@ -1,6 +1,8 @@
 #include "hatt/ui/DesignCanvas.hpp"
+#include "hatt/ui/SketchCircuit.hpp"
 
 #include <QFont>
+#include <QFontMetricsF>
 #include <QApplication>
 #include <QContextMenuEvent>
 #include <QTimer>
@@ -15,8 +17,11 @@
 #include <QWheelEvent>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
+#include <optional>
 #include <functional>
+#include <limits>
 #include <numeric>
 
 namespace hatt::ui {
@@ -61,6 +66,7 @@ struct CanvasColors {
     QColor selection;
     QColor preview;
     QColor label;
+    QColor guide;
 };
 
 CanvasColors canvasColors(Workspace workspace, const QPalette& palette) {
@@ -80,6 +86,7 @@ CanvasColors canvasColors(Workspace workspace, const QPalette& palette) {
         colors.selection = QColor("#18b6a4");
         colors.preview = QColor("#ffb45d");
         colors.label = QColor("#8fa0ae");
+        colors.guide = QColor("#ff5fc8");
     } else {
         colors.background = QColor(board ? "#f4f6f7" : "#fbfbf8");
         colors.gridMinor = QColor(board ? "#e5e9ec" : "#eaece5");
@@ -93,6 +100,7 @@ CanvasColors canvasColors(Workspace workspace, const QPalette& palette) {
         colors.selection = QColor("#087f73");
         colors.preview = QColor("#c05f00");
         colors.label = QColor("#5e6b76");
+        colors.guide = QColor("#c2187f");
     }
     return colors;
 }
@@ -100,6 +108,16 @@ CanvasColors canvasColors(Workspace workspace, const QPalette& palette) {
 QPen strokePen(const QColor& color, double width, bool dashed = false) {
     QPen pen(color, width, dashed ? Qt::DashLine : Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
     return pen;
+}
+
+// Same size as the explicit junction symbol (0.5 mm radius), never smaller than the wire.
+void drawJunctionDots(QPainter& painter, const QVector<QPointF>& points, const QColor& color,
+                      double scale, const WorldToScreen& map) {
+    const double radius = std::max(3.5, 0.5 * scale);
+    painter.setPen(Qt::NoPen);
+    painter.setBrush(color);
+    for (const QPointF& point : points) painter.drawEllipse(map(point), radius, radius);
+    painter.setBrush(Qt::NoBrush);
 }
 
 void drawSymbol(QPainter& painter, const SymbolDefinition& symbol, const WorldToScreen& map,
@@ -247,18 +265,148 @@ void drawItem(QPainter& painter, const SketchItem& item, const CanvasColors& col
     }
 }
 
-QString measurementText(const QLineF& line) {
+QString measurementText(const QLineF& line, LengthUnit unit) {
     const double dx = line.dx();
     const double dy = -line.dy();
     const double angle = std::atan2(dy, dx) * 180.0 / Pi;
-    return DesignCanvas::tr("Distance %1 mm  ·  ΔX %2 mm  ·  ΔY %3 mm  ·  %4°")
-        .arg(line.length(), 0, 'f', 3)
-        .arg(dx, 0, 'f', 3)
-        .arg(dy, 0, 'f', 3)
+    return DesignCanvas::tr("Distance %1  ·  ΔX %2  ·  ΔY %3  ·  %4°")
+        .arg(formatLength(line.length(), unit), formatLength(dx, unit), formatLength(dy, unit))
         .arg(angle, 0, 'f', 1);
 }
 
+// Spacing is measured between bounding boxes of non-wire items; wires connect objects rather
+// than being spaced from them.
+QVector<QRectF> spacingBoxes(const SketchDocument& document, const QList<int>& skipped) {
+    QVector<QRectF> boxes;
+    for (int i = 0; i < document.size(); ++i) {
+        const SketchItem& item = document[i];
+        if (skipped.contains(i) || item.kind == SketchItem::Kind::Wire || item.points.isEmpty()) {
+            continue;
+        }
+        boxes.append(itemBounds(item));
+    }
+    return boxes;
+}
+
+enum SpacingSide { Left, Right, Up, Down };
+using NearestGaps = std::array<std::optional<SpacingIndicator>, 4>;
+
+constexpr double GapTolerance = 1e-4;
+bool sameGap(double a, double b) { return std::abs(a - b) < GapTolerance; }
+bool horizontalGap(const SpacingIndicator& gap) { return std::abs(gap.line.dy()) < 1e-9; }
+
+// Nearest gap on each side of `moving` to a box overlapping it across that gap (as design tools
+// show spacing). Lines run from the left/upper box edge to the right/lower one.
+NearestGaps nearestGaps(const QVector<QRectF>& boxes, const QRectF& moving) {
+    NearestGaps best;
+    auto consider = [&](SpacingSide side, double gap, QLineF line) {
+        if (gap < 1e-6 || (best[side] && gap >= best[side]->distance)) return;
+        best[side] = SpacingIndicator{line, gap};
+    };
+    for (const QRectF& other : boxes) {
+        if (other.top() < moving.bottom() && other.bottom() > moving.top()) {
+            const double y = (std::max(other.top(), moving.top()) +
+                              std::min(other.bottom(), moving.bottom())) / 2.0;
+            if (other.right() <= moving.left()) {
+                consider(Left, moving.left() - other.right(),
+                         QLineF(other.right(), y, moving.left(), y));
+            } else if (other.left() >= moving.right()) {
+                consider(Right, other.left() - moving.right(),
+                         QLineF(moving.right(), y, other.left(), y));
+            }
+        }
+        if (other.left() < moving.right() && other.right() > moving.left()) {
+            const double x = (std::max(other.left(), moving.left()) +
+                              std::min(other.right(), moving.right())) / 2.0;
+            if (other.bottom() <= moving.top()) {
+                consider(Up, moving.top() - other.bottom(),
+                         QLineF(x, other.bottom(), x, moving.top()));
+            } else if (other.top() >= moving.bottom()) {
+                consider(Down, other.top() - moving.bottom(),
+                         QLineF(x, moving.bottom(), x, other.top()));
+            }
+        }
+    }
+    return best;
+}
+
+// Gaps between neighbouring boxes: each box to its nearest right and lower neighbour.
+QVector<SpacingIndicator> referenceGaps(const QVector<QRectF>& boxes) {
+    QVector<SpacingIndicator> gaps;
+    auto add = [&gaps](const std::optional<SpacingIndicator>& gap) {
+        if (!gap) return;
+        const bool known = std::any_of(gaps.begin(), gaps.end(), [&](const SpacingIndicator& g) {
+            return QLineF(g.line.p1(), gap->line.p1()).length() < 1e-6 &&
+                   QLineF(g.line.p2(), gap->line.p2()).length() < 1e-6;
+        });
+        if (!known) gaps.append(*gap);
+    };
+    for (const QRectF& box : boxes) {
+        const NearestGaps nearest = nearestGaps(boxes, box);
+        add(nearest[Right]);
+        add(nearest[Down]);
+    }
+    return gaps;
+}
+
+// Gaps around `moving`, flagged equal when they match the opposite gap or a gap between other
+// objects; the matching gaps between other objects are appended so both sides of the match show.
+QVector<SpacingIndicator> spacingIndicators(const SketchDocument& document, const QList<int>& skipped,
+                                            const QRectF& moving) {
+    const QVector<QRectF> boxes = spacingBoxes(document, skipped);
+    NearestGaps gaps = nearestGaps(boxes, moving);
+    const QVector<SpacingIndicator> references = referenceGaps(boxes);
+    QVector<SpacingIndicator> matched;
+    for (int side = Left; side <= Down; ++side) {
+        auto& gap = gaps[side];
+        if (!gap) continue;
+        const auto& opposite = gaps[side ^ 1];
+        gap->equal = opposite && sameGap(opposite->distance, gap->distance);
+        for (const SpacingIndicator& reference : references) {
+            if (horizontalGap(reference) != horizontalGap(*gap) ||
+                !sameGap(reference.distance, gap->distance)) {
+                continue;
+            }
+            gap->equal = true;
+            const bool known = std::any_of(matched.begin(), matched.end(), [&](const auto& m) {
+                return m.line == reference.line;
+            });
+            if (!known) matched.append({reference.line, reference.distance, true});
+        }
+    }
+    QVector<SpacingIndicator> result;
+    for (const auto& gap : gaps) {
+        if (gap) result.append(*gap);
+    }
+    return result + matched;
+}
+
+SketchItem copiedItem(const SketchDocument& document, const SketchItem& item, QPointF offset) {
+    SketchItem copy = item;
+    copy.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    copy.sourceId.clear();
+    translateItem(copy, offset);
+    if (copy.kind == SketchItem::Kind::Symbol) {
+        const auto* symbol = findSymbol(copy.variant);
+        if (symbol != nullptr && !symbol->prefix.isEmpty()) {
+            copy.label = nextDesignator(document, symbol->prefix);
+        }
+    }
+    return copy;
+}
+
 bool samePoint(QPointF a, QPointF b) { return QLineF(a, b).length() < 1e-6; }
+
+bool sameGeometry(const SketchDocument& a, const SketchDocument& b) {
+    if (a.size() != b.size()) return false;
+    for (qsizetype i = 0; i < a.size(); ++i) {
+        if (a[i].points.size() != b[i].points.size()) return false;
+        for (qsizetype p = 0; p < a[i].points.size(); ++p) {
+            if (!samePoint(a[i].points[p], b[i].points[p])) return false;
+        }
+    }
+    return true;
+}
 
 bool isTwoPointTool(CanvasTool tool) {
     return tool == CanvasTool::Line || tool == CanvasTool::Rectangle ||
@@ -271,7 +419,7 @@ bool isPathTool(CanvasTool tool) { return tool == CanvasTool::Wire || tool == Ca
 
 DesignCanvas::DesignCanvas(Workspace workspace, QWidget* parent)
     : QWidget(parent), workspace_(workspace), undoStack_(new QUndoStack(this)),
-      scale_(defaultScale()) {
+      unit_(displayUnit(workspace, LengthUnit::Millimetre)), scale_(defaultScale()) {
     setObjectName(QStringLiteral("DesignCanvas"));
     setMinimumSize(480, 320);
     setMouseTracking(true);
@@ -286,8 +434,48 @@ double DesignCanvas::defaultScale() const noexcept {
     return workspace_ == Workspace::Board ? 24.0 : 8.0;
 }
 
-double DesignCanvas::gridSize() const noexcept {
-    return workspace_ == Workspace::Board ? 0.635 : 2.54;
+double DesignCanvas::gridStep(Workspace workspace, int level) {
+    static constexpr double schematic[GridLevelCount] = {0.254, 1.27, 2.54, 12.7};
+    static constexpr double board[GridLevelCount] = {0.127, 0.254, 0.635, 1.27};
+    const int index = std::clamp(level, 0, GridLevelCount - 1);
+    return workspace == Workspace::Board ? board[index] : schematic[index];
+}
+
+double DesignCanvas::gridSize() const noexcept { return gridStep(workspace_, snap_.gridLevel); }
+
+QVector<QLineF> DesignCanvas::activeGuides() const {
+    if (drag_ == Drag::Move) return moveGuides_;
+    return hoverValid_ && drag_ == Drag::None && tool_ != CanvasTool::Select ? hover_.guides
+                                                                             : QVector<QLineF>();
+}
+
+QVector<SpacingIndicator> DesignCanvas::activeSpacings() const {
+    QRectF moving;
+    if (drag_ == Drag::Move && moveKind_ == MoveKind::Selection &&
+        moveDocument_.size() == items_.size()) {
+        for (int index : selection_) {
+            const SketchItem& item = moveDocument_[index];
+            if (item.kind == SketchItem::Kind::Wire || item.points.isEmpty()) continue;
+            moving = moving.isNull() ? itemBounds(item) : moving.united(itemBounds(item));
+        }
+        return moving.isNull() ? QVector<SpacingIndicator>{}
+                               : spacingIndicators(moveDocument_, selection_, moving);
+    }
+    if (hoverValid_ && drag_ == Drag::None && tool_ == CanvasTool::Symbol &&
+        findSymbol(variant_) != nullptr) {
+        SketchItem preview;
+        preview.kind = SketchItem::Kind::Symbol;
+        preview.variant = variant_;
+        preview.points = {hover_.point};
+        preview.quarterTurns = placementTurns_;
+        return spacingIndicators(items_, {}, itemBounds(preview));
+    }
+    return {};
+}
+
+void DesignCanvas::setLengthUnit(LengthUnit unit) {
+    unit_ = unit;
+    update();
 }
 
 int DesignCanvas::zoomPercent() const noexcept {
@@ -305,11 +493,14 @@ QPointF DesignCanvas::screenToWorld(QPointF screen) const { return (screen - off
 QString DesignCanvas::toolHint() const {
     switch (tool_) {
     case CanvasTool::Select:
-        return tr("Click to select and drag to move. Drag on empty space for box selection; Shift "
-                  "or Ctrl adds to the selection. Arrow keys nudge, Ctrl+R rotates, Delete removes.");
+        return tr("Click to select and drag to move; connected wires follow and guides show "
+                  "alignment, Shift keeps the move horizontal or vertical. Drag a wire segment or "
+                  "corner to reshape it. Drag on empty space for box selection; Shift or Ctrl adds "
+                  "to the selection. Arrow keys nudge, Ctrl+R rotates, Delete removes.");
     case CanvasTool::Symbol:
         if (const auto* symbol = findSymbol(variant_)) {
-            return tr("Click to place %1. Ctrl+R rotates before placing. Esc returns to selection.")
+            return tr("Click to place %1. Guides show alignment with other pins and pins join when "
+                      "close. Ctrl+R rotates before placing. Esc returns to selection.")
                 .arg(symbolDisplayName(*symbol));
         }
         return tr("Choose an object from the list.");
@@ -317,7 +508,8 @@ QString DesignCanvas::toolHint() const {
         return workspace_ == Workspace::Board
                    ? tr("Click to start a track and click to add corners. The track ends on a pad "
                         "automatically; double-click or Enter finishes, right-click cancels.")
-                   : tr("Click to start a wire and click to add corners. The wire ends on a pin "
+                   : tr("Click a pin to start a wire and click the target; right-angle corners are "
+                        "added automatically (hold Ctrl for a free angle). The wire ends on a pin "
                         "automatically; double-click or Enter finishes, right-click cancels.");
     case CanvasTool::Line:
     case CanvasTool::Rectangle:
@@ -365,6 +557,8 @@ void DesignCanvas::cancelOperation() {
         drag_ = Drag::None;
     }
     moveDelta_ = {};
+    moveDocument_.clear();
+    moveGuides_.clear();
     update();
 }
 
@@ -432,6 +626,8 @@ void DesignCanvas::restore(const SketchDocument& document, const QList<int>& sel
         drag_ = Drag::None;
     }
     moveDelta_ = {};
+    moveDocument_.clear();
+    moveGuides_.clear();
     items_ = document;
     selection_ = selection;
     selection_.removeIf([this](int index) { return index < 0 || index >= items_.size(); });
@@ -476,20 +672,38 @@ void DesignCanvas::duplicateSelection() {
     QList<int> copies;
     const QPointF offset(gridSize() * 2, gridSize() * 2);
     for (int index : selection_) {
-        SketchItem copy = items_[index];
-        copy.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
-        copy.sourceId.clear();
-        translateItem(copy, offset);
-        if (copy.kind == SketchItem::Kind::Symbol) {
-            const auto* symbol = findSymbol(copy.variant);
-            if (symbol != nullptr && !symbol->prefix.isEmpty()) {
-                copy.label = nextDesignator(document, symbol->prefix);
-            }
-        }
-        document.append(copy);
+        document.append(copiedItem(document, items_[index], offset));
         copies.append(static_cast<int>(document.size() - 1));
     }
     pushEdit(tr("Duplicate"), document, copies);
+}
+
+void DesignCanvas::createArray(int rows, int columns, QPointF pitch) {
+    if (selection_.isEmpty() || rows < 1 || columns < 1 || rows * columns < 2) {
+        return;
+    }
+    SketchDocument document = items_;
+    QList<int> selection = selection_;
+    for (int row = 0; row < rows; ++row) {
+        for (int column = 0; column < columns; ++column) {
+            if (row == 0 && column == 0) continue;
+            const QPointF offset(column * pitch.x(), row * pitch.y());
+            for (int index : selection_) {
+                document.append(copiedItem(document, items_[index], offset));
+                selection.append(static_cast<int>(document.size() - 1));
+            }
+        }
+    }
+    pushEdit(tr("Create array"), document, selection);
+}
+
+QRectF DesignCanvas::selectionBounds() const {
+    QRectF bounds;
+    for (int index : selection_) {
+        const QRectF item = itemBounds(items_[index]);
+        bounds = bounds.isNull() ? item : bounds.united(item);
+    }
+    return bounds;
 }
 
 void DesignCanvas::rotateSelection() {
@@ -516,11 +730,20 @@ void DesignCanvas::nudgeSelection(QPointF delta) {
     if (selection_.isEmpty() || delta.isNull()) {
         return;
     }
-    SketchDocument document = items_;
-    for (int index : selection_) {
-        translateItem(document[index], delta);
+    pushEdit(tr("Move"), moveItemsKeepingConnections(items_, selection_, delta, gridSize()),
+             selection_);
+}
+
+SketchDocument DesignCanvas::movedDocument(QPointF delta) const {
+    switch (moveKind_) {
+    case MoveKind::WireSegment:
+        return dragWireSegment(items_, moveWire_, movePart_, delta, gridSize());
+    case MoveKind::WireVertex:
+        return dragWireVertex(items_, moveWire_, movePart_, delta, gridSize());
+    case MoveKind::Selection:
+        break;
     }
-    pushEdit(tr("Move"), document, selection_);
+    return moveItemsKeepingConnections(items_, selection_, delta, gridSize());
 }
 
 void DesignCanvas::align(AlignOperation operation) {
@@ -663,7 +886,7 @@ QPointF DesignCanvas::constrainAngle(QPointF point, QPointF origin) const {
 
 const QPointF* DesignCanvas::constraintOrigin() const {
     if ((isPathTool(tool_) || tool_ == CanvasTool::Line || tool_ == CanvasTool::Measure) &&
-        !pending_.isEmpty()) {
+        !pending_.isEmpty() && !routesWire()) {
         return &pending_.last();
     }
     return nullptr;
@@ -673,7 +896,7 @@ DesignCanvas::Snap DesignCanvas::snap(QPointF screen, const QPointF* origin,
                                       bool ignoreSelection) const {
     const QPointF world = screenToWorld(screen);
     const double tolerance = 10.0 / scale_;
-    Snap result{world, SnapKind::None};
+    Snap result{world, SnapKind::None, world, {}};
     double best = tolerance;
     auto skipped = [&](int index) { return ignoreSelection && selection_.contains(index); };
 
@@ -684,7 +907,7 @@ DesignCanvas::Snap DesignCanvas::snap(QPointF screen, const QPointF* origin,
                 const double distance = QLineF(world, anchor).length();
                 if (distance < best) {
                     best = distance;
-                    result = {anchor, SnapKind::Object};
+                    result = {anchor, SnapKind::Object, anchor, {}};
                 }
             }
         }
@@ -692,7 +915,7 @@ DesignCanvas::Snap DesignCanvas::snap(QPointF screen, const QPointF* origin,
             const double distance = QLineF(world, pending_.first()).length();
             if (distance < best) {
                 best = distance;
-                result = {pending_.first(), SnapKind::Object};
+                result = {pending_.first(), SnapKind::Object, pending_.first(), {}};
             }
         }
     }
@@ -705,7 +928,7 @@ DesignCanvas::Snap DesignCanvas::snap(QPointF screen, const QPointF* origin,
             const double distance = QLineF(world, center).length();
             if (distance < best) {
                 best = distance;
-                result = {center, SnapKind::Center};
+                result = {center, SnapKind::Center, center, {}};
             }
         }
     }
@@ -717,20 +940,238 @@ DesignCanvas::Snap DesignCanvas::snap(QPointF screen, const QPointF* origin,
                 const double distance = distanceToSegment(world, segment, &nearest);
                 if (distance < best) {
                     best = distance;
-                    result = {nearest, SnapKind::Edge};
+                    result = {nearest, SnapKind::Edge, nearest, {}};
                 }
             }
         }
     }
     if (result.kind != SnapKind::None) {
+        result.marker = result.point;
         return result;
     }
     result.point = snap_.grid ? snapToGrid(world) : world;
     result.kind = snap_.grid ? SnapKind::Grid : SnapKind::None;
-    if (origin != nullptr) {
+    if (snap_.guides) {
+        QVector<QPointF> targets = guideTargets(ignoreSelection ? selection_ : QList<int>());
+        targets += pending_;
+        result.point += guideShift({result.point}, QPointF(), targets);
+        if (origin != nullptr) {
+            result.point = constrainAngle(result.point, *origin);
+        }
+        result.guides = guideLines({result.point}, QPointF(), targets);
+    } else if (origin != nullptr) {
         result.point = constrainAngle(result.point, *origin);
     }
+    result.marker = result.point;
     return result;
+}
+
+QVector<QPointF> DesignCanvas::guideTargets(const QList<int>& skipped) const {
+    QVector<QPointF> targets;
+    for (int i = 0; i < items_.size(); ++i) {
+        if (skipped.contains(i)) continue;
+        const SketchItem& item = items_[i];
+        targets += itemAnchors(item);
+        if (item.kind == SketchItem::Kind::Symbol && !item.points.isEmpty()) {
+            targets.append(item.points.first());
+        }
+    }
+    return targets;
+}
+
+QPointF DesignCanvas::guideShift(const QVector<QPointF>& points, QPointF offset,
+                                 const QVector<QPointF>& targets) const {
+    const double tolerance = 8.0 / scale_;
+    double bestX = tolerance;
+    double bestY = tolerance;
+    QPointF shift;
+    for (const QPointF& point : points) {
+        const QPointF moved = point + offset;
+        for (const QPointF& target : targets) {
+            const double dx = target.x() - moved.x();
+            const double dy = target.y() - moved.y();
+            if (std::abs(dx) < bestX) {
+                bestX = std::abs(dx);
+                shift.setX(dx);
+            }
+            if (std::abs(dy) < bestY) {
+                bestY = std::abs(dy);
+                shift.setY(dy);
+            }
+        }
+    }
+    return shift;
+}
+
+QVector<QLineF> DesignCanvas::guideLines(const QVector<QPointF>& points, QPointF offset,
+                                         const QVector<QPointF>& targets) {
+    // For every aligned coordinate keep the guide to the nearest target on that line.
+    QVector<QLineF> vertical;
+    QVector<QLineF> horizontal;
+    auto keepNearest = [](QVector<QLineF>& lines, const QLineF& line, bool alongX) {
+        for (QLineF& existing : lines) {
+            const bool sameLine = alongX ? std::abs(existing.p1().y() - line.p1().y()) < 1e-6
+                                         : std::abs(existing.p1().x() - line.p1().x()) < 1e-6;
+            if (sameLine) {
+                if (line.length() < existing.length()) existing = line;
+                return;
+            }
+        }
+        lines.append(line);
+    };
+    for (const QPointF& point : points) {
+        const QPointF moved = point + offset;
+        for (const QPointF& target : targets) {
+            if (samePoint(moved, target)) continue;
+            if (std::abs(target.x() - moved.x()) < 1e-6) {
+                keepNearest(vertical, QLineF(target, moved), false);
+            }
+            if (std::abs(target.y() - moved.y()) < 1e-6) {
+                keepNearest(horizontal, QLineF(target, moved), true);
+            }
+        }
+    }
+    return vertical + horizontal;
+}
+
+DesignCanvas::Placement DesignCanvas::snapPlacement(const QVector<QPointF>& points,
+                                                    qsizetype connectorsFrom, QPointF rawOffset,
+                                                    const QList<int>& skipped,
+                                                    bool movingExisting) const {
+    Placement result;
+    if (points.isEmpty()) return result;
+    const QPointF reference = points.first();
+    QVector<QPointF> targets = guideTargets(skipped);
+    // Wire ends sitting on a moving pin follow it, so they must not attract or guide the move.
+    if (movingExisting) {
+        targets.removeIf([&points](QPointF target) {
+            return std::any_of(points.begin(), points.end(),
+                               [target](QPointF point) { return samePoint(point, target); });
+        });
+    }
+
+    // Pin to pin/vertex: the closest connector within reach lands exactly on its target.
+    if (snap_.objects) {
+        double best = 10.0 / scale_;
+        for (qsizetype i = std::min(connectorsFrom, points.size() - 1); i < points.size(); ++i) {
+            const QPointF moved = points[i] + rawOffset;
+            for (const QPointF& target : targets) {
+                const double distance = QLineF(moved, target).length();
+                if (distance < best) {
+                    best = distance;
+                    result.offset = target - points[i];
+                    result.kind = SnapKind::Object;
+                    result.marker = target;
+                }
+            }
+        }
+    }
+    if (result.kind == SnapKind::None) {
+        result.offset = snap_.grid ? snapToGrid(reference + rawOffset) - reference : rawOffset;
+        result.kind = snap_.grid ? SnapKind::Grid : SnapKind::None;
+        if (snap_.guides) {
+            result.offset += guideShift(points, result.offset, targets);
+        }
+        result.marker = reference + result.offset;
+    }
+    if (snap_.guides) {
+        result.guides = guideLines(points, result.offset, targets);
+    }
+    return result;
+}
+
+DesignCanvas::Snap DesignCanvas::symbolPlacement(QPointF screen) const {
+    const QPointF world = screenToWorld(screen);
+    QVector<QPointF> points{world};
+    if (const auto* symbol = findSymbol(variant_)) {
+        SketchItem item;
+        item.kind = SketchItem::Kind::Symbol;
+        item.variant = variant_;
+        item.points = {world};
+        item.quarterTurns = placementTurns_;
+        for (const QPointF& pin : symbol->pins) {
+            points.append(symbolToWorld(item, pin));
+        }
+    }
+    Placement placement = snapPlacement(points, 1, QPointF(), {}, false);
+    if (placement.kind != SnapKind::Object && findSymbol(variant_) != nullptr) {
+        SketchItem preview;
+        preview.kind = SketchItem::Kind::Symbol;
+        preview.variant = variant_;
+        preview.points = {world + placement.offset};
+        preview.quarterTurns = placementTurns_;
+        const QPointF shift = spacingShift({}, itemBounds(preview), world + placement.offset);
+        if (!shift.isNull()) {
+            placement.offset += shift;
+            placement.marker += shift;
+            placement.guides = guideLines(points, placement.offset, guideTargets({}));
+        }
+    }
+    return {world + placement.offset, placement.kind, placement.marker, placement.guides};
+}
+
+QPointF DesignCanvas::spacingShift(const QList<int>& skipped, const QRectF& moving,
+                                   QPointF reference) const {
+    if (!snap_.guides || moving.isNull()) return {};
+    const QVector<QRectF> boxes = spacingBoxes(items_, skipped);
+    const NearestGaps gaps = nearestGaps(boxes, moving);
+    const QVector<SpacingIndicator> references = referenceGaps(boxes);
+    const double tolerance = 8.0 / scale_;
+    auto onGrid = [this](double coordinate) {
+        const double step = gridSize();
+        return std::abs(coordinate - std::round(coordinate / step) * step) < 1e-6;
+    };
+    auto axisShift = [&](bool horizontal) {
+        const auto& before = gaps[horizontal ? Left : Up];
+        const auto& after = gaps[horizontal ? Right : Down];
+        const double low = horizontal ? moving.left() : moving.top();
+        const double high = horizontal ? moving.right() : moving.bottom();
+        auto coordinate = [horizontal](QPointF p) { return horizontal ? p.x() : p.y(); };
+        QVector<double> candidates;
+        for (const SpacingIndicator& gap : references) {
+            if (horizontalGap(gap) != horizontal) continue;
+            if (before) candidates.append(coordinate(before->line.p1()) + gap.distance - low);
+            if (after) candidates.append(coordinate(after->line.p2()) - gap.distance - high);
+        }
+        if (before && after) {
+            candidates.append((coordinate(before->line.p1()) + coordinate(after->line.p2())) / 2.0 -
+                              (low + high) / 2.0);
+        }
+        double best = 0.0;
+        double bestDistance = tolerance;
+        for (double candidate : candidates) {
+            if (std::abs(candidate) >= bestDistance) continue;
+            if (snap_.grid && !onGrid(coordinate(reference) + candidate)) continue;
+            best = candidate;
+            bestDistance = std::abs(candidate);
+        }
+        return best;
+    };
+    return {axisShift(true), axisShift(false)};
+}
+
+bool DesignCanvas::routesWire() const {
+    return tool_ == CanvasTool::Wire && !freeAngle_ &&
+           (workspace_ == Workspace::Schematic || snap_.orthogonal);
+}
+
+QVector<QPointF> DesignCanvas::routeTo(QPointF point) const {
+    if (!routesWire() || pending_.isEmpty()) return {};
+    const QPointF from = pending_.last();
+    QPointF leaving;
+    if (pending_.size() >= 2) {
+        const QPointF run = from - pending_[pending_.size() - 2];
+        if (std::abs(run.y()) < 1e-6) leaving = QPointF(std::copysign(1.0, run.x()), 0);
+        else if (std::abs(run.x()) < 1e-6) leaving = QPointF(0, std::copysign(1.0, run.y()));
+    } else {
+        leaving = pinDirectionAt(items_, from);
+    }
+    return orthogonalRoute(from, point, leaving, pinDirectionAt(items_, point), gridSize());
+}
+
+void DesignCanvas::appendPathPoint(const Snap& point) {
+    pending_ += routeTo(point.point);
+    pending_.append(point.point);
 }
 
 int DesignCanvas::hitTest(QPointF screen) const {
@@ -755,6 +1196,56 @@ int DesignCanvas::hitTest(QPointF screen) const {
         }
     }
     return -1;
+}
+
+DesignCanvas::WirePart DesignCanvas::wirePartAt(int wire, QPointF screen) const {
+    if (wire < 0 || wire >= items_.size() || items_[wire].kind != SketchItem::Kind::Wire) {
+        return {};
+    }
+    const QPointF world = screenToWorld(screen);
+    const QVector<QPointF>& points = items_[wire].points;
+    WirePart part;
+    double best = 6.0 / scale_;
+    for (int i = 0; i < points.size(); ++i) {
+        const double distance = QLineF(world, points[i]).length();
+        if (distance <= best) {
+            best = distance;
+            part = {MoveKind::WireVertex, i};
+        }
+    }
+    if (part.kind == MoveKind::WireVertex) {
+        return part;
+    }
+    best = std::numeric_limits<double>::infinity();
+    for (int i = 1; i < points.size(); ++i) {
+        const double distance = distanceToSegment(world, QLineF(points[i - 1], points[i]));
+        if (distance < best) {
+            best = distance;
+            part = {MoveKind::WireSegment, i - 1};
+        }
+    }
+    return part;
+}
+
+void DesignCanvas::updateSelectCursor(QPointF screen) {
+    const int hit = hitTest(screen);
+    Qt::CursorShape shape = Qt::ArrowCursor;
+    if (hit >= 0 && items_[hit].kind == SketchItem::Kind::Wire &&
+        !(selection_.size() > 1 && selection_.contains(hit))) {
+        const WirePart part = wirePartAt(hit, screen);
+        if (part.kind == MoveKind::WireVertex) {
+            shape = Qt::SizeAllCursor;
+        } else if (part.kind == MoveKind::WireSegment) {
+            const QPointF a = items_[hit].points[part.index];
+            const QPointF b = items_[hit].points[part.index + 1];
+            shape = std::abs(a.y() - b.y()) < 1e-6   ? Qt::SizeVerCursor
+                    : std::abs(a.x() - b.x()) < 1e-6 ? Qt::SizeHorCursor
+                                                     : Qt::SizeAllCursor;
+        }
+    }
+    if (cursor().shape() != shape) {
+        setCursor(shape);
+    }
 }
 
 void DesignCanvas::placeSymbol(QPointF world) {
@@ -806,7 +1297,7 @@ void DesignCanvas::finishTwoPoint(QPointF world) {
     if (tool_ == CanvasTool::Measure) {
         hasMeasurement_ = true;
         measurement_ = QLineF(start, world);
-        emit statusMessage(measurementText(measurement_));
+        emit statusMessage(measurementText(measurement_, unit_));
         update();
         return;
     }
@@ -835,6 +1326,27 @@ void DesignCanvas::finishTwoPoint(QPointF world) {
 void DesignCanvas::finishPath() {
     QVector<QPointF> points = pending_;
     pending_.clear();
+    if (tool_ == CanvasTool::Wire && workspace_ == Workspace::Schematic) {
+        // A corner placed on another wire joins it (T junction) instead of silently crossing.
+        const auto pieces = splitPathAtWires(items_, points);
+        if (pieces.size() > 1) {
+            SketchDocument document = items_;
+            for (QVector<QPointF> piece : pieces) {
+                simplifyPath(piece);
+                if (piece.size() < 2) continue;
+                SketchItem item;
+                item.kind = SketchItem::Kind::Wire;
+                item.points = piece;
+                item.variant = variant_;
+                document.append(item);
+            }
+            pushEdit(tr("Draw wire"), document, {});
+            return;
+        }
+    }
+    if (tool_ == CanvasTool::Wire) {
+        simplifyPath(points);
+    }
     bool closed = false;
     if (tool_ == CanvasTool::Polyline) {
         if (points.size() >= 4 && samePoint(points.first(), points.last())) {
@@ -925,6 +1437,20 @@ void DesignCanvas::mousePressEvent(QMouseEvent* event) {
             dragStartWorld_ = screenToWorld(position);
             moveReference_ = items_[hit].points.value(0);
             moveDelta_ = {};
+            moveDocument_.clear();
+            moveKind_ = MoveKind::Selection;
+            moveWire_ = -1;
+            movePart_ = -1;
+            // A lone wire is reshaped (ISIS style) instead of being lifted off its pins.
+            if (items_[hit].kind == SketchItem::Kind::Wire && selection_.size() == 1) {
+                const WirePart part = wirePartAt(hit, position);
+                if (part.kind != MoveKind::Selection) {
+                    moveKind_ = part.kind;
+                    moveWire_ = hit;
+                    movePart_ = part.index;
+                    moveReference_ = items_[hit].points.value(part.index);
+                }
+            }
         } else {
             if (!additive) {
                 clearSelection();
@@ -936,7 +1462,7 @@ void DesignCanvas::mousePressEvent(QMouseEvent* event) {
         break;
     }
     case CanvasTool::Symbol:
-        placeSymbol(snap(position).point);
+        placeSymbol(symbolPlacement(position).point);
         break;
     case CanvasTool::Text:
         placeText(snap(position).point);
@@ -958,6 +1484,7 @@ void DesignCanvas::mousePressEvent(QMouseEvent* event) {
     }
     case CanvasTool::Wire:
     case CanvasTool::Polyline: {
+        freeAngle_ = event->modifiers() & Qt::ControlModifier;
         const Snap point = snap(position, constraintOrigin());
         if (pending_.isEmpty()) {
             pending_.append(point.point);
@@ -966,7 +1493,7 @@ void DesignCanvas::mousePressEvent(QMouseEvent* event) {
         } else {
             const bool closing = tool_ == CanvasTool::Polyline && pending_.size() >= 3 &&
                                  samePoint(point.point, pending_.first());
-            pending_.append(point.point);
+            appendPathPoint(point);
             if (closing ||
                 (tool_ == CanvasTool::Wire && point.kind == SnapKind::Object && pending_.size() >= 2)) {
                 finishPath();
@@ -1005,8 +1532,60 @@ void DesignCanvas::mouseMoveEvent(QMouseEvent* event) {
         if (moveDelta_.isNull() && QLineF(dragStartScreen_, position).length() < 3.0) {
             return;
         }
-        const QPointF target = moveReference_ + (screenToWorld(position) - dragStartWorld_);
-        moveDelta_ = snap(worldToScreen(target), nullptr, true).point - moveReference_;
+        QPointF raw = screenToWorld(position) - dragStartWorld_;
+        const bool axisLock = event->modifiers() & Qt::ShiftModifier;
+        const bool horizontalLock = std::abs(raw.x()) >= std::abs(raw.y());
+        if (axisLock) {
+            raw = horizontalLock ? QPointF(raw.x(), 0) : QPointF(0, raw.y());
+        }
+        if (moveKind_ == MoveKind::Selection) {
+            QVector<QPointF> points{moveReference_};
+            for (int index : selection_) {
+                const SketchItem& item = items_[index];
+                if (item.kind == SketchItem::Kind::Symbol || item.kind == SketchItem::Kind::Wire) {
+                    points += itemAnchors(item);
+                }
+            }
+            const Placement placement =
+                snapPlacement(points, points.size() > 1 ? 1 : 0, raw, selection_, true);
+            moveDelta_ = placement.offset;
+            moveGuides_ = placement.guides;
+            moveMarker_ = placement.marker;
+            moveJoined_ = placement.kind == SnapKind::Object;
+            // Pin joins win; otherwise match an existing gap (equal spacing) when close to one.
+            QRectF moving;
+            for (int index : selection_) {
+                const SketchItem& item = items_[index];
+                if (item.kind == SketchItem::Kind::Wire || item.points.isEmpty()) continue;
+                const QRectF bounds = itemBounds(item).translated(moveDelta_);
+                moving = moving.isNull() ? bounds : moving.united(bounds);
+            }
+            const QPointF shift =
+                moveJoined_ ? QPointF() : spacingShift(selection_, moving, moveReference_ + moveDelta_);
+            if (!shift.isNull()) {
+                moveDelta_ += shift;
+                moveMarker_ += shift;
+                QVector<QPointF> targets = guideTargets(selection_);
+                targets.removeIf([&points](QPointF target) {
+                    return std::any_of(points.begin(), points.end(),
+                                       [target](QPointF point) { return samePoint(point, target); });
+                });
+                moveGuides_ = snap_.guides ? guideLines(points, moveDelta_, targets) : QVector<QLineF>();
+            }
+        } else {
+            const Snap target = snap(worldToScreen(moveReference_ + raw), nullptr, true);
+            moveDelta_ = target.point - moveReference_;
+            moveGuides_ = target.guides;
+            moveMarker_ = target.marker;
+            moveJoined_ = target.kind == SnapKind::Object;
+        }
+        if (axisLock) {
+            moveDelta_ = horizontalLock ? QPointF(moveDelta_.x(), 0) : QPointF(0, moveDelta_.y());
+            moveJoined_ = false;
+            moveGuides_ = guideLines({moveReference_}, moveDelta_,
+                                     guideTargets(selection_));
+        }
+        moveDocument_ = movedDocument(moveDelta_);
         emit cursorMoved(moveReference_ + moveDelta_);
         update();
         return;
@@ -1018,11 +1597,16 @@ void DesignCanvas::mouseMoveEvent(QMouseEvent* event) {
     case Drag::None:
         break;
     }
-    hover_ = snap(position, constraintOrigin());
+    if (tool_ == CanvasTool::Select) {
+        updateSelectCursor(position);
+    }
+    freeAngle_ = event->modifiers() & Qt::ControlModifier;
+    hover_ = tool_ == CanvasTool::Symbol ? symbolPlacement(position)
+                                         : snap(position, constraintOrigin());
     hoverValid_ = true;
     emit cursorMoved(hover_.point);
     if (tool_ == CanvasTool::Measure && pending_.size() == 1) {
-        emit statusMessage(measurementText(QLineF(pending_.first(), hover_.point)));
+        emit statusMessage(measurementText(QLineF(pending_.first(), hover_.point), unit_));
     }
     update();
 }
@@ -1039,9 +1623,18 @@ void DesignCanvas::mouseReleaseEvent(QMouseEvent* event) {
     }
     if (drag_ == Drag::Move) {
         drag_ = Drag::None;
-        const QPointF delta = moveDelta_;
+        const SketchDocument document =
+            moveDelta_.isNull() ? SketchDocument() : std::move(moveDocument_);
+        const bool reshaped = moveKind_ != MoveKind::Selection;
         moveDelta_ = {};
-        nudgeSelection(delta);
+        moveDocument_.clear();
+        moveGuides_.clear();
+        if (!document.isEmpty() && !sameGeometry(document, items_)) {
+            const QString text = !reshaped                        ? tr("Move")
+                                 : workspace_ == Workspace::Board ? tr("Drag track")
+                                                                  : tr("Drag wire");
+            pushEdit(text, document, selection_);
+        }
         update();
         return;
     }
@@ -1087,7 +1680,7 @@ void DesignCanvas::mouseDoubleClickEvent(QMouseEvent* event) {
         if (!pending_.isEmpty()) {
             const Snap point = snap(event->position(), constraintOrigin());
             if (!samePoint(point.point, pending_.last())) {
-                pending_.append(point.point);
+                appendPathPoint(point);
             }
             finishPath();
         }
@@ -1122,8 +1715,22 @@ void DesignCanvas::wheelEvent(QWheelEvent* event) {
     event->accept();
 }
 
+void DesignCanvas::keyReleaseEvent(QKeyEvent* event) {
+    if (event->key() == Qt::Key_Control && freeAngle_) {
+        freeAngle_ = false;
+        update();
+    }
+    QWidget::keyReleaseEvent(event);
+}
+
 void DesignCanvas::keyPressEvent(QKeyEvent* event) {
     switch (event->key()) {
+    case Qt::Key_Control:
+        if (tool_ == CanvasTool::Wire && !freeAngle_) {
+            freeAngle_ = true;
+            update();
+        }
+        break;
     case Qt::Key_Escape:
         if (hasPendingOperation()) {
             cancelOperation();
@@ -1209,16 +1816,14 @@ void DesignCanvas::paintEvent(QPaintEvent*) {
     painter.setRenderHint(QPainter::Antialiasing);
     painter.setPen(strokePen(colors.preview, 1.2, true));
     for (const auto& line : airwires_) painter.drawLine(QLineF(map(line.p1()), map(line.p2())));
-    for (int i = 0; i < items_.size(); ++i) {
-        const bool selected = selection_.contains(i);
-        if (selected && drag_ == Drag::Move && !moveDelta_.isNull()) {
-            SketchItem moved = items_[i];
-            translateItem(moved, moveDelta_);
-            drawItem(painter, moved, colors, board, true, false, scale_, map);
-        } else {
-            drawItem(painter, items_[i], colors, board, selected, false, scale_, map);
-        }
+    const bool dragging = drag_ == Drag::Move && moveDocument_.size() == items_.size();
+    const SketchDocument& shown = dragging ? moveDocument_ : items_;
+    for (int i = 0; i < shown.size(); ++i) {
+        drawItem(painter, shown[i], colors, board, selection_.contains(i), false, scale_, map);
     }
+    // Board tracks share one copper layer, so only schematic joins need a visible dot.
+    const QVector<QPointF> junctions = board ? QVector<QPointF>{} : schematicJunctions(shown);
+    drawJunctionDots(painter, junctions, colors.wire, scale_, map);
 
     auto drawMeasurement = [&](const QLineF& line) {
         const QPointF a = map(line.p1());
@@ -1230,7 +1835,7 @@ void DesignCanvas::paintEvent(QPaintEvent*) {
         const QPointF tick = normal.p2() - normal.p1();
         painter.drawLine(a - tick, a + tick);
         painter.drawLine(b - tick, b + tick);
-        const QString text = tr("%1 mm").arg(line.length(), 0, 'f', 3);
+        const QString text = formatLength(line.length(), unit_);
         QFont font = painter.font();
         font.setPixelSize(12);
         painter.setFont(font);
@@ -1272,7 +1877,7 @@ void DesignCanvas::paintEvent(QPaintEvent*) {
             if (!pending_.isEmpty()) {
                 preview.kind = tool_ == CanvasTool::Wire ? SketchItem::Kind::Wire
                                                          : SketchItem::Kind::Polyline;
-                preview.points = pending_;
+                preview.points = pending_ + routeTo(hover_.point);
                 preview.points.append(hover_.point);
                 preview.variant = variant_;
                 hasPreview = true;
@@ -1301,9 +1906,76 @@ void DesignCanvas::paintEvent(QPaintEvent*) {
         if (hasPreview) {
             drawItem(painter, preview, colors, board, false, true, scale_, map);
         }
+        if (hasPreview && tool_ == CanvasTool::Wire && !board) {
+            // Show where the wire being drawn will join, before it is committed.
+            SketchDocument joined = items_;
+            for (const auto& piece : splitPathAtWires(items_, preview.points)) {
+                SketchItem wire = preview;
+                wire.points = piece;
+                joined.append(wire);
+            }
+            QVector<QPointF> added;
+            for (const QPointF& point : schematicJunctions(joined)) {
+                const bool existing = std::any_of(junctions.begin(), junctions.end(), [&](QPointF p) {
+                    return QLineF(p, point).length() < 1e-6;
+                });
+                if (!existing) added.append(point);
+            }
+            drawJunctionDots(painter, added, colors.preview, scale_, map);
+        }
     }
     if (hasMeasurement_) {
         drawMeasurement(measurement_);
+    }
+
+    const QVector<QLineF> guides = activeGuides();
+    if (!guides.isEmpty()) {
+        painter.setPen(strokePen(colors.guide, 1.0, true));
+        for (const QLineF& guide : guides) {
+            QLineF line(map(guide.p1()), map(guide.p2()));
+            const double length = line.length();
+            if (length < 1e-6) continue;
+            const QPointF extension = (line.p2() - line.p1()) * (14.0 / length);
+            painter.drawLine(QLineF(line.p1() - extension, line.p2() + extension));
+            painter.drawLine(line.p1() - QPointF(3, 3), line.p1() + QPointF(3, 3));
+            painter.drawLine(line.p1() - QPointF(3, -3), line.p1() + QPointF(3, -3));
+        }
+    }
+    const QVector<SpacingIndicator> spacings = activeSpacings();
+    if (!spacings.isEmpty()) {
+        QFont font = painter.font();
+        font.setPixelSize(11);
+        painter.setFont(font);
+        const QFontMetricsF metrics(font);
+        for (const SpacingIndicator& spacing : spacings) {
+            const QPointF a = map(spacing.line.p1());
+            const QPointF b = map(spacing.line.p2());
+            const bool horizontal = std::abs(a.y() - b.y()) < std::abs(a.x() - b.x());
+            // Equal gaps are emphasised with a heavier line and longer ticks.
+            const double tickLength = spacing.equal ? 6.0 : 4.0;
+            const QPointF tick = horizontal ? QPointF(0, tickLength) : QPointF(tickLength, 0);
+            painter.setPen(strokePen(colors.guide, spacing.equal ? 2.2 : 1.0));
+            painter.drawLine(a, b);
+            painter.drawLine(a - tick, a + tick);
+            painter.drawLine(b - tick, b + tick);
+            const QString text = formatLength(spacing.distance, unit_);
+            const QSizeF size(metrics.horizontalAdvance(text) + 10, metrics.height() + 4);
+            // Beside the line so the label never covers the gap it measures.
+            const QPointF centre = QLineF(a, b).center() +
+                                   (horizontal ? QPointF(0, -size.height() / 2 - 5)
+                                               : QPointF(size.width() / 2 + 5, 0));
+            const QRectF label(centre - QPointF(size.width() / 2, size.height() / 2), size);
+            painter.setPen(Qt::NoPen);
+            painter.setBrush(colors.guide);
+            painter.drawRoundedRect(label, 3, 3);
+            painter.setBrush(Qt::NoBrush);
+            painter.setPen(colors.background);
+            painter.drawText(label, Qt::AlignCenter, text);
+        }
+    }
+    if (drag_ == Drag::Move && moveJoined_ && !moveDelta_.isNull()) {
+        painter.setPen(strokePen(colors.preview, 1.5));
+        painter.drawRect(QRectF(map(moveMarker_) - QPointF(6, 6), QSizeF(12, 12)));
     }
 
     if (drag_ == Drag::RubberBand) {
@@ -1316,7 +1988,7 @@ void DesignCanvas::paintEvent(QPaintEvent*) {
     }
 
     if (hoverValid_ && drag_ == Drag::None && tool_ != CanvasTool::Select) {
-        const QPointF point = map(hover_.point);
+        const QPointF point = map(hover_.marker);
         painter.setPen(strokePen(colors.preview, 1.5));
         switch (hover_.kind) {
         case SnapKind::Object:
@@ -1344,9 +2016,9 @@ void DesignCanvas::paintEvent(QPaintEvent*) {
     painter.setFont(captionFont);
     painter.setPen(colors.label);
     painter.drawText(QRectF(12, height() - 26, width() - 24, 18), Qt::AlignLeft | Qt::AlignVCenter,
-                     tr("%1  ·  Grid %2 mm  ·  %3%")
+                     tr("%1  ·  Grid %2  ·  %3%")
                          .arg(board ? tr("PCB layout") : tr("Schematic sheet"))
-                         .arg(gridSize(), 0, 'f', board ? 3 : 2)
+                         .arg(formatLength(gridSize(), unit_))
                          .arg(zoomPercent()));
 }
 

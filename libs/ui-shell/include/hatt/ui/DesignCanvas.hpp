@@ -1,6 +1,7 @@
 #pragma once
 
 #include "hatt/ui/SketchModel.hpp"
+#include "hatt/ui/Units.hpp"
 
 #include <QLineF>
 #include <QList>
@@ -34,6 +35,19 @@ struct SnapSettings {
     bool centers = false;
     bool diagonal = true;
     bool orthogonal = false;
+    // Smart alignment guides against other objects' pins, vertices and origins.
+    bool guides = true;
+    // Grid step level 0..3 (Proteus style Ctrl+F1, F2, F3, F4); see DesignCanvas::gridStep.
+    int gridLevel = 2;
+};
+
+// Gap between the object being moved or placed and its nearest neighbour in one direction,
+// shown as a labelled dimension line (world coordinates, millimetres). `equal` marks gaps that
+// match another gap; those matching gaps between other objects are reported too.
+struct SpacingIndicator {
+    QLineF line;
+    double distance = 0.0;
+    bool equal = false;
 };
 
 class DesignCanvas final : public QWidget {
@@ -55,15 +69,31 @@ public:
     [[nodiscard]] bool hasPendingOperation() const noexcept;
     [[nodiscard]] QPointF worldToScreen(QPointF world) const;
     [[nodiscard]] QPointF screenToWorld(QPointF screen) const;
+    [[nodiscard]] QVector<QLineF> activeGuides() const;
+    // Left/right/up/down gaps while a selection is dragged or a symbol is being placed.
+    [[nodiscard]] QVector<SpacingIndicator> activeSpacings() const;
+    [[nodiscard]] LengthUnit lengthUnit() const noexcept { return unit_; }
+    // Union of the selected items' bounds, or a null rectangle without a selection.
+    [[nodiscard]] QRectF selectionBounds() const;
+
+    static constexpr int GridLevelCount = 4;
+    // Grid step in millimetres for a level: schematic 0.254 / 1.27 / 2.54 / 12.7,
+    // board 0.127 / 0.254 / 0.635 / 1.27.
+    [[nodiscard]] static double gridStep(Workspace workspace, int level);
 
     void setTool(CanvasTool tool, const QString& variant = {});
     void setSnapSettings(const SnapSettings& settings);
+    void setLengthUnit(LengthUnit unit);
     void cancelOperation();
 
     void selectAll();
     void clearSelection();
     void deleteSelection();
     void duplicateSelection();
+    // Copies the selection into a rows × columns array (one undo step). The selection is the
+    // top-left cell; `pitch` is the centre-to-centre step (Y positive down). Copies get fresh
+    // identities and designators in row order, and everything ends up selected.
+    void createArray(int rows, int columns, QPointF pitch);
     void rotateSelection();
     void selectItem(int index);
     void editItemProperties(int index, const QString& label, QPointF position, int quarterTurns);
@@ -101,24 +131,62 @@ protected:
     void contextMenuEvent(QContextMenuEvent* event) override;
     void wheelEvent(QWheelEvent* event) override;
     void keyPressEvent(QKeyEvent* event) override;
+    void keyReleaseEvent(QKeyEvent* event) override;
     void leaveEvent(QEvent* event) override;
 
 private:
     enum class SnapKind { None, Grid, Object, Center, Edge };
     enum class Drag { None, Move, RubberBand, Pan };
+    // What a Drag::Move edits: the whole selection, or one segment/vertex of a single wire.
+    enum class MoveKind { Selection, WireSegment, WireVertex };
 
     struct Snap {
         QPointF point;
         SnapKind kind = SnapKind::None;
+        QPointF marker;           // where the snap indicator is drawn
+        QVector<QLineF> guides;   // alignment guides, world coordinates
+    };
+
+    // Result of snapping a group of points that move together (placement preview or drag).
+    struct Placement {
+        QPointF offset;
+        SnapKind kind = SnapKind::None;
+        QPointF marker;
+        QVector<QLineF> guides;
+    };
+
+    struct WirePart {
+        MoveKind kind = MoveKind::Selection;
+        int index = -1;
     };
 
     [[nodiscard]] Snap snap(QPointF screen, const QPointF* constraintOrigin = nullptr,
                             bool ignoreSelection = false) const;
+    [[nodiscard]] Placement snapPlacement(const QVector<QPointF>& points, qsizetype connectorsFrom,
+                                          QPointF rawOffset, const QList<int>& skipped,
+                                          bool movingExisting) const;
+    [[nodiscard]] Snap symbolPlacement(QPointF screen) const;
+    // Shift (within 8 px) that makes a gap of `moving` equal an existing gap between other
+    // objects, or centres it between two neighbours. With grid snap on only shifts that keep
+    // `reference` on the grid are used. Null when nothing matches or guides are off.
+    [[nodiscard]] QPointF spacingShift(const QList<int>& skipped, const QRectF& moving,
+                                       QPointF reference) const;
+    [[nodiscard]] QVector<QPointF> guideTargets(const QList<int>& skipped) const;
+    [[nodiscard]] QPointF guideShift(const QVector<QPointF>& points, QPointF offset,
+                                     const QVector<QPointF>& targets) const;
+    [[nodiscard]] static QVector<QLineF> guideLines(const QVector<QPointF>& points, QPointF offset,
+                                                    const QVector<QPointF>& targets);
+    [[nodiscard]] bool routesWire() const;
+    [[nodiscard]] QVector<QPointF> routeTo(QPointF point) const;
+    void appendPathPoint(const Snap& point);
     [[nodiscard]] QPointF snapToGrid(QPointF world) const;
     [[nodiscard]] QPointF constrainAngle(QPointF point, QPointF origin) const;
     [[nodiscard]] const QPointF* constraintOrigin() const;
     [[nodiscard]] int hitTest(QPointF screen) const;
+    [[nodiscard]] WirePart wirePartAt(int wire, QPointF screen) const;
+    [[nodiscard]] SketchDocument movedDocument(QPointF delta) const;
     [[nodiscard]] double defaultScale() const noexcept;
+    void updateSelectCursor(QPointF screen);
 
     void pushEdit(const QString& text, const SketchDocument& document, const QList<int>& selection);
     void setSelection(QList<int> selection);
@@ -137,6 +205,7 @@ private:
     CanvasTool tool_ = CanvasTool::Select;
     QString variant_;
     SnapSettings snap_;
+    LengthUnit unit_;
     int placementTurns_ = 0;
 
     double scale_;
@@ -152,6 +221,14 @@ private:
     QPointF dragStartWorld_;
     QPointF moveReference_;
     QPointF moveDelta_;
+    MoveKind moveKind_ = MoveKind::Selection;
+    int moveWire_ = -1;
+    int movePart_ = -1;
+    SketchDocument moveDocument_;
+    QVector<QLineF> moveGuides_;
+    QPointF moveMarker_;
+    bool moveJoined_ = false;
+    bool freeAngle_ = false;
     QPointF panStartOffset_;
 
     bool hoverValid_ = false;
