@@ -8,13 +8,19 @@ namespace hatt::electrical {
 
 // Transient millimetre snapshots, never the persistent document format.
 struct Point { double x = 0; double y = 0; };
-struct Pin { std::string component; std::string number; Point position; };
-struct Wire { std::vector<Point> points; };
+// Conductor layer bit masks: two conductors only join when their masks share a bit. The default
+// (every bit) is a single-layer drawing such as a schematic; boards use one bit per copper layer.
+inline constexpr unsigned AllLayers = ~0u;
+struct Pin { std::string component; std::string number; Point position; unsigned layers = AllLayers; };
+struct Wire { std::vector<Point> points; unsigned layers = AllLayers; };
 struct NamedNode { Point position; std::string name; };
 struct ConnectivityInput {
     std::vector<Pin> pins;
     std::vector<Wire> wires;
     std::vector<Point> junctions;
+    // Layers of each junction, parallel to `junctions`; missing entries mean AllLayers. A via is a
+    // junction on several copper layers.
+    std::vector<unsigned> junctionLayers;
     std::vector<NamedNode> names; // "0" is ground; equal names join globally.
 };
 struct Net { std::string name; std::vector<int> pins; };

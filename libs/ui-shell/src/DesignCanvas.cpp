@@ -67,12 +67,40 @@ struct CanvasColors {
     QColor preview;
     QColor label;
     QColor guide;
+    std::array<QColor, BoardLayerCount> layers;
 };
+
+// Top copper and bottom copper follow the design system's copper and secondary layer tokens.
+QColor boardLayerColor(BoardLayer layer, bool dark) {
+    switch (layer) {
+    case BoardLayer::TopCopper: return QColor(dark ? "#f4a261" : "#d9822b");
+    case BoardLayer::BottomCopper: return QColor(dark ? "#62b6ff" : "#1f78c1");
+    case BoardLayer::TopSilk: return QColor(dark ? "#e6dfa6" : "#7a6a00");
+    case BoardLayer::BottomSilk: return QColor(dark ? "#c9a3e6" : "#7a48a3");
+    case BoardLayer::TopResist: return QColor(dark ? "#4cc38a" : "#1d8a5c");
+    case BoardLayer::BottomResist: return QColor(dark ? "#5cc8c8" : "#1f8080");
+    case BoardLayer::TopPaste: return QColor(dark ? "#a9b4be" : "#66727d");
+    case BoardLayer::BottomPaste: return QColor(dark ? "#8f99cc" : "#4d5891");
+    case BoardLayer::BoardEdge: return QColor(dark ? "#e9c46a" : "#b8860b");
+    }
+    return {};
+}
+
+// Items are drawn bottom side first, then the active side, so the active layer stays on top.
+struct LayerView {
+    int visible = AllLayersMask;
+    BoardLayer active = BoardLayer::TopCopper;
+};
+
+bool bottomActive(const LayerView& view) { return isBottomLayer(view.active); }
 
 CanvasColors canvasColors(Workspace workspace, const QPalette& palette) {
     const bool dark = palette.color(QPalette::Window).lightness() < 128;
     const bool board = workspace == Workspace::Board;
     CanvasColors colors;
+    for (int layer = 0; layer < BoardLayerCount; ++layer) {
+        colors.layers[layer] = boardLayerColor(static_cast<BoardLayer>(layer), dark);
+    }
     if (dark) {
         colors.background = QColor(board ? "#080b0f" : "#0b1016");
         colors.gridMinor = QColor(board ? "#10171e" : "#131b23");
@@ -152,13 +180,77 @@ void drawSymbol(QPainter& painter, const SymbolDefinition& symbol, const WorldTo
     painter.setBrush(Qt::NoBrush);
 }
 
+constexpr int BottomSideMask = layerBit(BoardLayer::BottomCopper) | layerBit(BoardLayer::BottomSilk) |
+                               layerBit(BoardLayer::BottomResist) | layerBit(BoardLayer::BottomPaste);
+constexpr int TopSideMask = layerBit(BoardLayer::TopCopper) | layerBit(BoardLayer::TopSilk) |
+                            layerBit(BoardLayer::TopResist) | layerBit(BoardLayer::TopPaste);
+
+// 0 for items only on the inactive side, 1 otherwise (active side, both sides or board edge).
+int drawRank(const SketchItem& item, const LayerView& view) {
+    const int mask = itemLayerMask(item);
+    const int inactive = bottomActive(view) ? TopSideMask : BottomSideMask;
+    return (mask & inactive) != 0 && (mask & ~inactive) == 0 ? 0 : 1;
+}
+
+// Items entirely on the inactive board side are drawn translucent.
+QColor sideColor(QColor color, int mask, const LayerView& view) {
+    const int inactive = bottomActive(view) ? TopSideMask : BottomSideMask;
+    if ((mask & inactive) != 0 && (mask & ~inactive) == 0) color.setAlpha(150);
+    return color;
+}
+
+void drawPads(QPainter& painter, const QVector<PlacedPad>& pads, const CanvasColors& colors,
+              const LayerView& view, bool selected, bool preview, double scale,
+              const WorldToScreen& map) {
+    const BoardLayer activeCopper = bottomActive(view) ? BoardLayer::BottomCopper : BoardLayer::TopCopper;
+    for (const auto& pad : pads) {
+        const int shown = pad.layers & view.visible & CopperLayerMask;
+        if (shown == 0) continue;
+        const bool onActive = (shown & layerBit(activeCopper)) != 0;
+        const BoardLayer layer = onActive ? activeCopper : oppositeSideLayer(activeCopper);
+        QColor fill = preview ? colors.preview : colors.layers[static_cast<int>(layer)];
+        if (preview) fill.setAlpha(150);
+        else if (!onActive) fill.setAlpha(150);
+        QPolygonF outline;
+        for (const QPointF& point : padOutline(pad)) outline << map(point);
+        painter.setPen(selected && !preview ? strokePen(colors.selection, 2.0) : QPen(Qt::NoPen));
+        painter.setBrush(fill);
+        painter.drawPolygon(outline);
+        if (pad.drill > 0.0) {
+            const double radius = std::max(1.0, pad.drill / 2.0 * scale);
+            painter.setPen(Qt::NoPen);
+            painter.setBrush(colors.background);
+            painter.drawEllipse(map(pad.center), radius, radius);
+        }
+        const double size = std::min(pad.width, pad.height) * scale;
+        if (!preview && pad.number > 0 && size >= 14.0) {
+            QFont font = painter.font();
+            font.setPixelSize(std::clamp(static_cast<int>(size * 0.42), 8, 18));
+            font.setBold(true);
+            painter.setFont(font);
+            painter.setPen(pad.drill > 0.0 ? colors.label : colors.background);
+            const QPointF center = map(pad.center);
+            painter.drawText(QRectF(center - QPointF(size, size / 2), QSizeF(2 * size, size)),
+                             Qt::AlignCenter, QString::number(pad.number));
+        }
+    }
+    painter.setBrush(Qt::NoBrush);
+}
+
 void drawItem(QPainter& painter, const SketchItem& item, const CanvasColors& colors, bool board,
-              bool selected, bool preview, double scale, const WorldToScreen& map) {
+              bool selected, bool preview, double scale, const WorldToScreen& map,
+              const LayerView& view = {}) {
     if (item.points.isEmpty()) {
         return;
     }
     auto pick = [&](const QColor& normal) {
         return preview ? colors.preview : selected ? colors.selection : normal;
+    };
+    // Board graphics take the colour of their layer; the board outline is always the edge layer.
+    auto graphicsColor = [&] {
+        if (!board) return colors.graphics;
+        const BoardLayer layer = item.variant == BoardOutlineVariant ? BoardLayer::BoardEdge : item.layer;
+        return sideColor(colors.layers[static_cast<int>(layer)], layerBit(layer), view);
     };
     const double width = selected ? 2.4 : 1.5;
     QPolygonF polygon;
@@ -172,10 +264,20 @@ void drawItem(QPainter& painter, const SketchItem& item, const CanvasColors& col
         if (symbol == nullptr) {
             break;
         }
-        drawSymbol(painter, *symbol,
-                   [&](QPointF local) { return map(symbolToWorld(item, local)); }, colors,
-                   pick(colors.stroke), width, selected, preview);
-        if (!item.label.isEmpty() && !preview) {
+        const BoardLayer silk = item.onBottom ? BoardLayer::BottomSilk : BoardLayer::TopSilk;
+        const bool silkVisible = !board || (view.visible & layerBit(silk)) != 0;
+        if (silkVisible) {
+            const QColor stroke =
+                board ? sideColor(colors.layers[static_cast<int>(silk)], layerBit(silk), view)
+                      : colors.stroke;
+            drawSymbol(painter, *symbol,
+                       [&](QPointF local) { return map(symbolToWorld(item, local)); }, colors,
+                       pick(stroke), width, selected, preview);
+        }
+        if (board) {
+            drawPads(painter, itemPads(item), colors, view, selected, preview, scale, map);
+        }
+        if (!item.label.isEmpty() && !preview && silkVisible) {
             const QRectF bounds = itemBounds(item);
             const QPointF topCenter = map(QPointF(bounds.center().x(), bounds.top()));
             QFont font = painter.font();
@@ -187,7 +289,7 @@ void drawItem(QPainter& painter, const SketchItem& item, const CanvasColors& col
                              Qt::AlignHCenter | Qt::AlignBottom,
                              item.value.isEmpty() ? item.label : item.label + QStringLiteral("  ") + item.value);
         }
-        if (selected && !preview) {
+        if (selected && !preview && !board) {
             QFont font = painter.font();
             font.setPixelSize(10);
             painter.setFont(font);
@@ -199,19 +301,25 @@ void drawItem(QPainter& painter, const SketchItem& item, const CanvasColors& col
         break;
     }
     case SketchItem::Kind::Wire:
-        painter.setPen(strokePen(pick(colors.wire),
-                                 board ? std::max(2.0, 0.3 * scale) : (selected ? 3.0 : 2.0),
-                                 preview));
+        if (board) {
+            // Tracks are drawn at their copper width in the colour of their layer.
+            const QColor color = sideColor(colors.layers[static_cast<int>(item.layer)],
+                                           layerBit(item.layer), view);
+            painter.setPen(strokePen(pick(color), std::max(2.0, trackWidth(item) * scale), preview));
+        } else {
+            painter.setPen(strokePen(pick(colors.wire), selected ? 3.0 : 2.0, preview));
+        }
         painter.drawPolyline(polygon);
         break;
     case SketchItem::Kind::Line:
     case SketchItem::Kind::Polyline: {
         const bool outline = item.variant == BoardOutlineVariant;
         const bool zone = item.variant == CopperZoneVariant;
-        const QColor color = pick(outline ? colors.outline : zone ? colors.copper : colors.graphics);
+        const QColor base = board ? graphicsColor() : outline ? colors.outline : colors.graphics;
+        const QColor color = pick(base);
         painter.setPen(strokePen(color, outline ? std::max(width, 2.0) : width, preview));
         if (zone) {
-            QColor fill = colors.copper;
+            QColor fill = board ? base : colors.copper;
             fill.setAlpha(preview ? 40 : 70);
             painter.setBrush(fill);
         }
@@ -224,12 +332,12 @@ void drawItem(QPainter& painter, const SketchItem& item, const CanvasColors& col
         break;
     }
     case SketchItem::Kind::Rectangle:
-        painter.setPen(strokePen(pick(colors.graphics), width, preview));
+        painter.setPen(strokePen(pick(graphicsColor()), width, preview));
         painter.drawRect(QRectF(map(item.points.value(0)), map(item.points.value(1))).normalized());
         break;
     case SketchItem::Kind::Circle: {
         const double radius = QLineF(item.points.value(0), item.points.value(1)).length() * scale;
-        painter.setPen(strokePen(pick(colors.graphics), width, preview));
+        painter.setPen(strokePen(pick(graphicsColor()), width, preview));
         painter.drawEllipse(map(item.points.value(0)), radius, radius);
         break;
     }
@@ -239,7 +347,7 @@ void drawItem(QPainter& painter, const SketchItem& item, const CanvasColors& col
              arcSamples(item.points.value(0), item.points.value(1), item.points.value(2))) {
             samples << map(point);
         }
-        painter.setPen(strokePen(pick(colors.graphics), width, preview));
+        painter.setPen(strokePen(pick(graphicsColor()), width, preview));
         painter.drawPolyline(samples);
         break;
     }
@@ -247,15 +355,14 @@ void drawItem(QPainter& painter, const SketchItem& item, const CanvasColors& col
         QFont font = painter.font();
         font.setPixelSize(std::max(6, static_cast<int>(TextHeightMm * scale * 0.8)));
         painter.setFont(font);
-        painter.setPen(pick(colors.graphics));
+        painter.setPen(pick(graphicsColor()));
         painter.drawText(QRectF(map(item.points.first()), QSizeF(4000, TextHeightMm * scale)),
                          Qt::AlignLeft | Qt::AlignVCenter, item.label);
         break;
     }
     case SketchItem::Kind::Pad:
     case SketchItem::Kind::Via:
-        // v2 item kinds — visual rendering deferred to Issue #28 (Pad tools).
-        // itemSegments already returns a bounding box for hit-testing and selection.
+        drawPads(painter, itemPads(item), colors, view, selected, preview, scale, map);
         break;
     }
 
@@ -530,8 +637,134 @@ QString DesignCanvas::toolHint() const {
         return tr("Click to place a text label.");
     case CanvasTool::Measure:
         return tr("Drag, or click two points, to measure. Measurements are not added to the design.");
+    case CanvasTool::Pad:
+        if (const auto* style = findPadStyle(variant_)) {
+            return tr("Click to place a %1. SMD pads go to the active copper layer; pads are numbered "
+                      "in placement order. Ctrl+R rotates before placing.")
+                .arg(padStyleDisplayName(*style).toLower());
+        }
+        return tr("Choose a pad from the list.");
+    case CanvasTool::Via:
+        return tr("Click to place a via that joins the top and bottom copper layers. While routing, "
+                  "Space, Page Up or Page Down changes the layer and adds a via automatically.");
     }
     return {};
+}
+
+void DesignCanvas::setActiveLayer(BoardLayer layer) {
+    if (layer == activeLayer_) return;
+    const BoardLayer previousCopper = routeLayer();
+    const bool routing = workspace_ == Workspace::Board && tool_ == CanvasTool::Wire && !pending_.isEmpty();
+    activeLayer_ = layer;
+    if (routing && routeLayer() != previousCopper) {
+        const QPointF at = pending_.last();
+        const bool returning = pending_.size() == 1 && !routePieces_.isEmpty() &&
+                               routePieces_.last().kind == SketchItem::Kind::Via &&
+                               samePoint(routePieces_.last().points.first(), at);
+        if (returning) {
+            // Switching straight back removes the via that the previous switch added.
+            activeLayer_ = previousCopper;
+            revertRouteLayerChange();
+            activeLayer_ = layer;
+        } else {
+            if (pending_.size() >= 2) {
+                SketchItem track = pendingTrack(pending_);
+                track.layer = previousCopper;
+                routePieces_.append(track);
+            }
+            // A via is only needed where nothing already joins both copper layers.
+            bool joined = false;
+            for (const SketchDocument* document : {&items_, &routePieces_}) {
+                for (const auto& item : *document) {
+                    for (const auto& pad : itemPads(item)) {
+                        joined = joined || ((pad.layers & CopperLayerMask) == CopperLayerMask &&
+                                            samePoint(pad.center, at));
+                    }
+                }
+            }
+            if (!joined) routePieces_.append(pendingVia(at));
+            pending_ = {at};
+        }
+    }
+    emit activeLayerChanged(activeLayer_);
+    update();
+}
+
+bool DesignCanvas::revertRouteLayerChange() {
+    if (routePieces_.isEmpty() || pending_.size() != 1) return false;
+    const QPointF at = pending_.first();
+    if (routePieces_.last().kind == SketchItem::Kind::Via &&
+        samePoint(routePieces_.last().points.first(), at)) {
+        routePieces_.removeLast();
+    }
+    if (!routePieces_.isEmpty() && routePieces_.last().kind == SketchItem::Kind::Wire &&
+        samePoint(routePieces_.last().points.last(), at)) {
+        const SketchItem track = routePieces_.takeLast();
+        pending_ = track.points;
+        activeLayer_ = track.layer;
+    } else {
+        activeLayer_ = oppositeSideLayer(routeLayer());
+    }
+    return true;
+}
+
+void DesignCanvas::setVisibleLayers(int mask) {
+    visibleLayers_ = mask & AllLayersMask;
+    QList<int> selection = selection_;
+    selection.removeIf([this](int index) { return !itemVisible(items_[index]); });
+    setSelection(selection);
+    update();
+}
+
+void DesignCanvas::setTrackWidth(double millimetres) {
+    if (millimetres > 0.0) trackWidth_ = millimetres;
+    update();
+}
+
+void DesignCanvas::setViaSize(double diameter, double drill) {
+    if (diameter > 0.0 && drill > 0.0 && drill < diameter) {
+        viaDiameter_ = diameter;
+        viaDrill_ = drill;
+    }
+    update();
+}
+
+QColor DesignCanvas::layerColor(BoardLayer layer, const QPalette& palette) {
+    return boardLayerColor(layer, palette.color(QPalette::Window).lightness() < 128);
+}
+
+bool DesignCanvas::itemVisible(const SketchItem& item) const {
+    return workspace_ != Workspace::Board || (itemLayerMask(item) & visibleLayers_) != 0;
+}
+
+BoardLayer DesignCanvas::routeLayer() const noexcept {
+    if (isCopperLayer(activeLayer_)) return activeLayer_;
+    return isBottomLayer(activeLayer_) ? BoardLayer::BottomCopper : BoardLayer::TopCopper;
+}
+
+BoardLayer DesignCanvas::graphicsLayer() const noexcept {
+    if (!isCopperLayer(activeLayer_)) return activeLayer_;
+    return activeLayer_ == BoardLayer::BottomCopper ? BoardLayer::BottomSilk : BoardLayer::TopSilk;
+}
+
+SketchItem DesignCanvas::pendingTrack(const QVector<QPointF>& points) const {
+    SketchItem track;
+    track.kind = SketchItem::Kind::Wire;
+    track.points = points;
+    simplifyPath(track.points);
+    track.variant = variant_;
+    track.layer = routeLayer();
+    track.width = trackWidth_;
+    return track;
+}
+
+SketchItem DesignCanvas::pendingVia(QPointF at) const {
+    SketchItem via;
+    via.kind = SketchItem::Kind::Via;
+    via.points = {at};
+    via.width = viaDiameter_;
+    via.drillDiameter = viaDrill_;
+    return via;
 }
 
 void DesignCanvas::setTool(CanvasTool tool, const QString& variant) {
@@ -562,6 +795,7 @@ void DesignCanvas::setSnapSettings(const SnapSettings& settings) {
 void DesignCanvas::cancelOperation() {
     if (contextMenuTimer_) contextMenuTimer_->stop();
     pending_.clear();
+    routePieces_.clear();
     pressGesture_ = false;
     if (drag_ == Drag::Move || drag_ == Drag::RubberBand) {
         drag_ = Drag::None;
@@ -587,7 +821,7 @@ void DesignCanvas::setSelection(QList<int> selection) {
 void DesignCanvas::selectAll() {
     QList<int> all;
     for (int i = 0; i < items_.size(); ++i) {
-        all.append(i);
+        if (itemVisible(items_[i])) all.append(i);
     }
     setSelection(all);
 }
@@ -616,7 +850,10 @@ void DesignCanvas::editItemProperties(int index, const SketchItem& properties) {
     const QPointF anchor = item.points.first();
     if (item.label == properties.label && anchor == position && item.quarterTurns == turns &&
         item.value == properties.value && item.footprint == properties.footprint &&
-        item.pinPadMap == properties.pinPadMap) return;
+        item.pinPadMap == properties.pinPadMap && item.excludeFromBoard == properties.excludeFromBoard &&
+        item.layer == properties.layer && item.onBottom == properties.onBottom &&
+        item.pad == properties.pad && item.width == properties.width &&
+        item.drillDiameter == properties.drillDiameter) return;
     const int delta = (turns - item.quarterTurns + 4) % 4;
     for (int i = 0; i < delta; ++i) rotateItemQuarterTurn(item, anchor);
     item.quarterTurns = turns;
@@ -625,12 +862,19 @@ void DesignCanvas::editItemProperties(int index, const SketchItem& properties) {
     item.value = properties.value;
     item.footprint = properties.footprint;
     item.pinPadMap = properties.pinPadMap;
+    item.excludeFromBoard = properties.excludeFromBoard;
+    item.layer = properties.layer;
+    item.onBottom = properties.onBottom;
+    item.pad = properties.pad;
+    item.width = properties.width;
+    item.drillDiameter = properties.drillDiameter;
     pushEdit(tr("Edit properties"), document, {index});
 }
 
 void DesignCanvas::restore(const SketchDocument& document, const QList<int>& selection) {
     if (contextMenuTimer_) contextMenuTimer_->stop();
     pending_.clear();
+    routePieces_.clear();
     pressGesture_ = false;
     if (drag_ != Drag::Pan) {
         drag_ = Drag::None;
@@ -723,7 +967,7 @@ QRectF DesignCanvas::selectionBounds() const {
 
 void DesignCanvas::rotateSelection() {
     if (selection_.isEmpty()) {
-        if (tool_ == CanvasTool::Symbol) {
+        if (tool_ == CanvasTool::Symbol || tool_ == CanvasTool::Pad) {
             placementTurns_ = (placementTurns_ + 1) % 4;
             update();
         }
@@ -913,7 +1157,13 @@ DesignCanvas::Snap DesignCanvas::snap(QPointF screen, const QPointF* origin,
     const double tolerance = 10.0 / scale_;
     Snap result{world, SnapKind::None, world, {}};
     double best = tolerance;
-    auto skipped = [&](int index) { return ignoreSelection && selection_.contains(index); };
+    // A track being routed only connects to copper on its own layer.
+    const bool routingTrack = workspace_ == Workspace::Board && tool_ == CanvasTool::Wire;
+    auto skipped = [&](int index) {
+        const SketchItem& item = items_[index];
+        return (ignoreSelection && selection_.contains(index)) || !itemVisible(item) ||
+               (routingTrack && (itemCopperLayers(item) & layerBit(routeLayer())) == 0);
+    };
 
     if (snap_.objects) {
         for (int i = 0; i < items_.size(); ++i) {
@@ -984,7 +1234,7 @@ DesignCanvas::Snap DesignCanvas::snap(QPointF screen, const QPointF* origin,
 QVector<QPointF> DesignCanvas::guideTargets(const QList<int>& skipped) const {
     QVector<QPointF> targets;
     for (int i = 0; i < items_.size(); ++i) {
-        if (skipped.contains(i)) continue;
+        if (skipped.contains(i) || !itemVisible(items_[i])) continue;
         const SketchItem& item = items_[i];
         targets += itemAnchors(item);
         if (item.kind == SketchItem::Kind::Symbol && !item.points.isEmpty()) {
@@ -1104,6 +1354,7 @@ DesignCanvas::Snap DesignCanvas::symbolPlacement(QPointF screen) const {
         item.variant = variant_;
         item.points = {world};
         item.quarterTurns = placementTurns_;
+        item.onBottom = workspace_ == Workspace::Board && isBottomLayer(activeLayer_);
         for (const QPointF& pin : symbol->pins) {
             points.append(symbolToWorld(item, pin));
         }
@@ -1115,6 +1366,7 @@ DesignCanvas::Snap DesignCanvas::symbolPlacement(QPointF screen) const {
         preview.variant = variant_;
         preview.points = {world + placement.offset};
         preview.quarterTurns = placementTurns_;
+        preview.onBottom = workspace_ == Workspace::Board && isBottomLayer(activeLayer_);
         const QPointF shift = spacingShift({}, itemBounds(preview), world + placement.offset);
         if (!shift.isNull()) {
             placement.offset += shift;
@@ -1192,22 +1444,36 @@ void DesignCanvas::appendPathPoint(const Snap& point) {
 int DesignCanvas::hitTest(QPointF screen) const {
     const QPointF world = screenToWorld(screen);
     const double tolerance = 6.0 / scale_;
-    for (int i = static_cast<int>(items_.size()) - 1; i >= 0; --i) {
-        const SketchItem& item = items_[i];
+    const bool board = workspace_ == Workspace::Board;
+    const LayerView view{visibleLayers_, activeLayer_};
+    auto hits = [&](const SketchItem& item) {
         if (item.kind == SketchItem::Kind::Symbol || item.kind == SketchItem::Kind::Text) {
-            if (itemBounds(item).adjusted(-tolerance, -tolerance, tolerance, tolerance).contains(world)) {
-                return i;
-            }
-            continue;
+            return itemBounds(item).adjusted(-tolerance, -tolerance, tolerance, tolerance).contains(world);
         }
         if (item.variant == CopperZoneVariant &&
             QPolygonF(item.points).containsPoint(world, Qt::OddEvenFill)) {
-            return i;
+            return true;
         }
-        for (const QLineF& segment : itemSegments(item)) {
-            if (distanceToSegment(world, segment) <= tolerance) {
-                return i;
+        if (item.kind == SketchItem::Kind::Pad || item.kind == SketchItem::Kind::Via) {
+            for (const auto& pad : itemPads(item)) {
+                if (QPolygonF(padOutline(pad)).containsPoint(world, Qt::OddEvenFill)) return true;
             }
+        }
+        const double reach =
+            tolerance + (board && item.kind == SketchItem::Kind::Wire ? trackWidth(item) / 2.0 : 0.0);
+        for (const QLineF& segment : itemSegments(item)) {
+            if (distanceToSegment(world, segment) <= reach) {
+                return true;
+            }
+        }
+        return false;
+    };
+    // On the board the active side is on top, so it is hit first.
+    for (int rank = 1; rank >= (board ? 0 : 1); --rank) {
+        for (int i = static_cast<int>(items_.size()) - 1; i >= 0; --i) {
+            const SketchItem& item = items_[i];
+            if (!itemVisible(item) || (board && drawRank(item, view) != rank)) continue;
+            if (hits(item)) return i;
         }
     }
     return -1;
@@ -1292,10 +1558,39 @@ void DesignCanvas::placeSymbol(QPointF world) {
     item.points = {world};
     item.variant = variant_;
     item.quarterTurns = placementTurns_;
+    item.onBottom = workspace_ == Workspace::Board && isBottomLayer(activeLayer_);
     SketchDocument document = items_;
     document.append(item);
     pushEdit(tr("Place %1").arg(item.label.isEmpty() ? symbolDisplayName(*symbol) : item.label),
              document, {});
+}
+
+void DesignCanvas::placePad(QPointF world) {
+    const auto* style = findPadStyle(variant_);
+    if (style == nullptr) {
+        emit statusMessage(tr("Choose a pad from the list first."));
+        return;
+    }
+    SketchItem item;
+    item.kind = SketchItem::Kind::Pad;
+    item.points = {world};
+    item.pad = style->pad;
+    item.quarterTurns = placementTurns_;
+    item.layer = item.pad.drillDiameter > 0.0 ? BoardLayer::TopCopper : routeLayer();
+    int number = 0;
+    for (const auto& other : items_) {
+        if (other.kind == SketchItem::Kind::Pad) number = std::max(number, other.pad.number);
+    }
+    item.pad.number = number + 1;
+    SketchDocument document = items_;
+    document.append(item);
+    pushEdit(tr("Place pad %1").arg(item.pad.number), document, {});
+}
+
+void DesignCanvas::placeVia(QPointF world) {
+    SketchDocument document = items_;
+    document.append(pendingVia(world));
+    pushEdit(tr("Place via"), document, {});
 }
 
 void DesignCanvas::placeText(QPointF world) {
@@ -1310,6 +1605,7 @@ void DesignCanvas::placeText(QPointF world) {
     item.kind = SketchItem::Kind::Text;
     item.points = {world};
     item.label = text;
+    if (workspace_ == Workspace::Board) item.layer = graphicsLayer();
     SketchDocument document = items_;
     document.append(item);
     pushEdit(tr("Place text"), document, {});
@@ -1347,6 +1643,7 @@ void DesignCanvas::finishTwoPoint(QPointF world) {
         text = tr("Draw line");
         break;
     }
+    if (workspace_ == Workspace::Board) item.layer = graphicsLayer();
     SketchDocument document = items_;
     document.append(item);
     pushEdit(text, document, {});
@@ -1373,6 +1670,19 @@ void DesignCanvas::finishPath() {
             return;
         }
     }
+    if (tool_ == CanvasTool::Wire && workspace_ == Workspace::Board) {
+        // Pieces already routed on other layers, their vias and the last piece form one edit.
+        SketchDocument pieces = routePieces_;
+        routePieces_.clear();
+        SketchItem track = pendingTrack(points);
+        if (track.points.size() >= 2) pieces.append(track);
+        if (pieces.isEmpty() || (pieces.size() == 1 && pieces.first().kind == SketchItem::Kind::Via)) {
+            update();
+            return;
+        }
+        pushEdit(tr("Route track"), items_ + pieces, {});
+        return;
+    }
     if (tool_ == CanvasTool::Wire) {
         simplifyPath(points);
     }
@@ -1393,6 +1703,11 @@ void DesignCanvas::finishPath() {
     item.points = points;
     item.variant = variant_;
     item.closed = closed;
+    if (workspace_ == Workspace::Board) {
+        item.layer = variant_ == BoardOutlineVariant ? BoardLayer::BoardEdge
+                     : variant_ == CopperZoneVariant ? routeLayer()
+                                                     : graphicsLayer();
+    }
     QString text;
     if (tool_ == CanvasTool::Wire) {
         text = workspace_ == Workspace::Board ? tr("Route track") : tr("Draw wire");
@@ -1493,6 +1808,12 @@ void DesignCanvas::mousePressEvent(QMouseEvent* event) {
     case CanvasTool::Symbol:
         placeSymbol(symbolPlacement(position).point);
         break;
+    case CanvasTool::Pad:
+        placePad(snap(position).point);
+        break;
+    case CanvasTool::Via:
+        placeVia(snap(position).point);
+        break;
     case CanvasTool::Text:
         placeText(snap(position).point);
         break;
@@ -1539,6 +1860,7 @@ void DesignCanvas::mousePressEvent(QMouseEvent* event) {
             SketchItem item;
             item.kind = SketchItem::Kind::Arc;
             item.points = {pending_[0], pending_[2], pending_[1]};
+            if (workspace_ == Workspace::Board) item.layer = graphicsLayer();
             pending_.clear();
             SketchDocument document = items_;
             document.append(item);
@@ -1675,7 +1997,7 @@ void DesignCanvas::mouseReleaseEvent(QMouseEvent* event) {
             QList<int> selection = selection_;
             for (int i = 0; i < items_.size(); ++i) {
                 const QRectF bounds = itemBounds(items_[i]).adjusted(-1e-6, -1e-6, 1e-6, 1e-6);
-                if (worldBand.intersects(bounds)) {
+                if (worldBand.intersects(bounds) && itemVisible(items_[i])) {
                     selection.append(i);
                 }
             }
@@ -1780,9 +2102,25 @@ void DesignCanvas::keyPressEvent(QKeyEvent* event) {
         }
         break;
     case Qt::Key_Backspace:
+        if (isPathTool(tool_) && pending_.size() == 1 && revertRouteLayerChange()) {
+            emit activeLayerChanged(activeLayer_);
+            update();
+            return;
+        }
         if (isPathTool(tool_) && !pending_.isEmpty()) {
             pending_.removeLast();
             update();
+            return;
+        }
+        break;
+    case Qt::Key_Space:
+    case Qt::Key_PageUp:
+    case Qt::Key_PageDown:
+        if (workspace_ == Workspace::Board && !event->isAutoRepeat()) {
+            // Proteus ARES style: Space flips between the copper layers, Page Up/Down pick one.
+            setActiveLayer(event->key() == Qt::Key_PageUp     ? BoardLayer::TopCopper
+                           : event->key() == Qt::Key_PageDown ? BoardLayer::BottomCopper
+                                                              : oppositeSideLayer(routeLayer()));
             return;
         }
         break;
@@ -1847,10 +2185,18 @@ void DesignCanvas::paintEvent(QPaintEvent*) {
     for (const auto& line : airwires_) painter.drawLine(QLineF(map(line.p1()), map(line.p2())));
     const bool dragging = drag_ == Drag::Move && moveDocument_.size() == items_.size();
     const SketchDocument& shown = dragging ? moveDocument_ : items_;
-    for (int i = 0; i < shown.size(); ++i) {
-        drawItem(painter, shown[i], colors, board, selection_.contains(i), false, scale_, map);
+    const LayerView view{visibleLayers_, activeLayer_};
+    // Board: the inactive side first, then the active side; hidden layers are skipped.
+    for (int rank = board ? 0 : 1; rank <= 1; ++rank) {
+        for (int i = 0; i < shown.size(); ++i) {
+            if (board && (drawRank(shown[i], view) != rank || !itemVisible(shown[i]))) continue;
+            drawItem(painter, shown[i], colors, board, selection_.contains(i), false, scale_, map, view);
+        }
     }
-    // Board tracks share one copper layer, so only schematic joins need a visible dot.
+    for (const auto& piece : routePieces_) {
+        drawItem(painter, piece, colors, board, false, false, scale_, map, view);
+    }
+    // Board copper joins are shown by pads and vias, so only schematic joins need a visible dot.
     const QVector<QPointF> junctions = board ? QVector<QPointF>{} : schematicJunctions(shown);
     drawJunctionDots(painter, junctions, colors.wire, scale_, map);
 
@@ -1908,8 +2254,24 @@ void DesignCanvas::paintEvent(QPaintEvent*) {
                 preview.points = {hover_.point};
                 preview.variant = variant_;
                 preview.quarterTurns = placementTurns_;
+                preview.onBottom = board && isBottomLayer(activeLayer_);
                 hasPreview = true;
             }
+            break;
+        case CanvasTool::Pad:
+            if (const auto* style = findPadStyle(variant_)) {
+                preview.kind = SketchItem::Kind::Pad;
+                preview.points = {hover_.point};
+                preview.pad = style->pad;
+                preview.pad.number = 0;
+                preview.quarterTurns = placementTurns_;
+                preview.layer = routeLayer();
+                hasPreview = true;
+            }
+            break;
+        case CanvasTool::Via:
+            preview = pendingVia(hover_.point);
+            hasPreview = true;
             break;
         case CanvasTool::Line:
         case CanvasTool::Rectangle:
@@ -1930,7 +2292,14 @@ void DesignCanvas::paintEvent(QPaintEvent*) {
                 preview.points = pending_ + routeTo(hover_.point);
                 preview.points.append(hover_.point);
                 preview.variant = variant_;
-                hasPreview = true;
+                if (board && tool_ == CanvasTool::Wire) {
+                    // Drawn in the colour of its layer so the active copper layer is obvious.
+                    preview.layer = routeLayer();
+                    preview.width = trackWidth_;
+                    drawItem(painter, preview, colors, board, false, false, scale_, map, view);
+                } else {
+                    hasPreview = true;
+                }
             }
             break;
         case CanvasTool::Arc:
@@ -1954,7 +2323,7 @@ void DesignCanvas::paintEvent(QPaintEvent*) {
             break;
         }
         if (hasPreview) {
-            drawItem(painter, preview, colors, board, false, true, scale_, map);
+            drawItem(painter, preview, colors, board, false, true, scale_, map, view);
         }
         if (hasPreview && tool_ == CanvasTool::Wire && !board) {
             // Show where the wire being drawn will join, before it is committed.
@@ -2067,10 +2436,46 @@ void DesignCanvas::paintEvent(QPaintEvent*) {
     painter.setPen(colors.label);
     painter.drawText(QRectF(12, height() - 26, width() - 24, 18), Qt::AlignLeft | Qt::AlignVCenter,
                      tr("%1  ·  Grid %2  ·  %3%")
-                         .arg(board ? tr("PCB layout") : tr("Schematic sheet"))
+                         .arg(board ? tr("PCB layout  ·  %1").arg(boardLayerName(activeLayer_))
+                                    : tr("Schematic sheet"))
                          .arg(formatLength(gridSize(), unit_))
                          .arg(zoomPercent()));
 }
+
+namespace {
+
+// Draws `item` scaled to fit `target` (symbol and pad previews in the object selector).
+void paintItemPreview(QPainter& painter, const QRectF& target, const SketchItem& item,
+                      Workspace workspace, const QPalette& palette) {
+    QRectF bounds = itemBounds(item);
+    bounds.adjust(-0.6, -0.6, 0.6, 0.6);
+    const double scale = std::min(target.width() / bounds.width(), target.height() / bounds.height());
+    const QPointF offset = target.center() - bounds.center() * scale;
+    const CanvasColors colors = canvasColors(workspace, palette);
+    const WorldToScreen map = [scale, offset](QPointF point) { return point * scale + offset; };
+    painter.save();
+    painter.setRenderHint(QPainter::Antialiasing);
+    if (item.kind == SketchItem::Kind::Symbol) {
+        if (const auto* symbol = findSymbol(item.variant)) {
+            const QColor stroke = workspace == Workspace::Board
+                                      ? colors.layers[static_cast<int>(BoardLayer::TopSilk)]
+                                      : colors.stroke;
+            drawSymbol(painter, *symbol, map, colors, stroke, 1.4, false, false);
+        }
+        if (workspace == Workspace::Board) {
+            QVector<PlacedPad> pads = itemPads(item);
+            for (auto& pad : pads) pad.number = 0;
+            drawPads(painter, pads, colors, {}, false, false, scale, map);
+        }
+    } else {
+        QVector<PlacedPad> pads = itemPads(item);
+        for (auto& pad : pads) pad.number = 0;
+        drawPads(painter, pads, colors, {}, false, false, scale, map);
+    }
+    painter.restore();
+}
+
+} // namespace
 
 void DesignCanvas::paintSymbolPreview(QPainter& painter, const QRectF& target,
                                       const QString& symbolId, const QPalette& palette) {
@@ -2078,22 +2483,25 @@ void DesignCanvas::paintSymbolPreview(QPainter& painter, const QRectF& target,
     if (symbol == nullptr || target.isEmpty()) {
         return;
     }
-    QPolygonF points;
-    for (const auto& shape : symbol->shapes) {
-        for (const QPointF& point : shape.points) {
-            points << point;
-        }
+    SketchItem item;
+    item.kind = SketchItem::Kind::Symbol;
+    item.variant = symbolId;
+    item.points = {QPointF()};
+    paintItemPreview(painter, target, item, symbol->workspace, palette);
+}
+
+void DesignCanvas::paintPadPreview(QPainter& painter, const QRectF& target,
+                                   const QString& padStyleId, const QPalette& palette) {
+    if (target.isEmpty()) return;
+    SketchItem item;
+    item.points = {QPointF()};
+    if (const auto* style = findPadStyle(padStyleId)) {
+        item.kind = SketchItem::Kind::Pad;
+        item.pad = style->pad;
+    } else {
+        item.kind = SketchItem::Kind::Via;
     }
-    QRectF bounds = points.boundingRect();
-    bounds.adjust(-0.6, -0.6, 0.6, 0.6);
-    const double scale = std::min(target.width() / bounds.width(), target.height() / bounds.height());
-    const QPointF offset = target.center() - bounds.center() * scale;
-    const CanvasColors colors = canvasColors(symbol->workspace, palette);
-    painter.save();
-    painter.setRenderHint(QPainter::Antialiasing);
-    drawSymbol(painter, *symbol, [scale, offset](QPointF point) { return point * scale + offset; },
-               colors, colors.stroke, 1.4, false, false);
-    painter.restore();
+    paintItemPreview(painter, target, item, Workspace::Board, palette);
 }
 
 } // namespace hatt::ui

@@ -317,13 +317,23 @@ BoardGuidance boardGuidance(const SketchDocument& schematic, const SketchDocumen
     QVector<int> expected;
     QVector<QPointF> locations;
     QSet<QString> links;
-    QVector<QLineF> segments;
+    // Track segments with their copper layer bit; only crossings on one layer conduct.
+    QVector<QPair<QLineF, unsigned>> segments;
     for (const auto& item : board) {
         if (item.kind == SketchItem::Kind::Wire) {
             electrical::Wire wire;
             for (auto p : item.points) wire.points.push_back(point(p));
+            wire.layers = static_cast<unsigned>(itemCopperLayers(item));
             copper.wires.push_back(wire);
-            for (int i = 1; i < item.points.size(); ++i) segments.append(QLineF(item.points[i - 1], item.points[i]));
+            for (int i = 1; i < item.points.size(); ++i)
+                segments.append({QLineF(item.points[i - 1], item.points[i]), wire.layers});
+        }
+        // Vias and free pads join the tracks on their copper layers at their centre.
+        if (item.kind == SketchItem::Kind::Via || item.kind == SketchItem::Kind::Pad) {
+            for (const auto& pad : itemPads(item)) {
+                copper.junctions.push_back(point(pad.center));
+                copper.junctionLayers.push_back(static_cast<unsigned>(pad.layers & CopperLayerMask));
+            }
         }
         if (item.kind != SketchItem::Kind::Symbol) continue;
         const auto* footprint = findSymbol(item.variant);
@@ -337,9 +347,14 @@ BoardGuidance boardGuidance(const SketchDocument& schematic, const SketchDocumen
             if (item.variant != source->footprint || item.pinPadMap != source->pinPadMap)
                 result.errors << tr("%1: PCB mapping is out of date; update the PCB.").arg(item.label);
         }
+        const QVector<PlacedPad> placedPads = itemPads(item);
         for (int pad = 0; pad < footprint->pins.size(); ++pad) {
             const QPointF location = symbolToWorld(item, footprint->pins[pad]);
-            copper.pins.push_back({item.id.toStdString(), std::to_string(pad + 1), point(location)});
+            // SMD pads conduct on one side only (mirrored for bottom side parts).
+            const unsigned layers = pad < placedPads.size()
+                                        ? static_cast<unsigned>(placedPads[pad].layers & CopperLayerMask)
+                                        : static_cast<unsigned>(CopperLayerMask);
+            copper.pins.push_back({item.id.toStdString(), std::to_string(pad + 1), point(location), layers});
             locations.append(location);
             int net = -1;
             if (source) {
@@ -351,10 +366,15 @@ BoardGuidance boardGuidance(const SketchDocument& schematic, const SketchDocumen
     }
     for (auto it = sources.cbegin(); it != sources.cend(); ++it)
         if (!links.contains(it.key())) result.errors << tr("%1: not yet transferred to PCB.").arg(it.value()->label);
-    // Current board editor is a single copper layer; crossing tracks physically connect.
+    // Tracks crossing on the same copper layer physically connect; other layers pass over.
+    copper.junctionLayers.resize(copper.junctions.size(), electrical::AllLayers);
     for (int i = 0; i < segments.size(); ++i) for (int j = i + 1; j < segments.size(); ++j) {
+        const unsigned shared = segments[i].second & segments[j].second;
         QPointF p;
-        if (segments[i].intersects(segments[j], &p) == QLineF::BoundedIntersection) copper.junctions.push_back(point(p));
+        if (shared != 0 && segments[i].first.intersects(segments[j].first, &p) == QLineF::BoundedIntersection) {
+            copper.junctions.push_back(point(p));
+            copper.junctionLayers.push_back(shared);
+        }
     }
     const auto routed = electrical::buildConnectivity(copper);
     for (const auto& e : routed.errors) result.errors << QString::fromStdString(e);

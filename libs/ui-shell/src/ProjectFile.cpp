@@ -146,6 +146,7 @@ QJsonObject itemToJson(const SketchItem& item) {
         object[QStringLiteral("pad")] = padToJson(item.pad);
     if (item.kind == SketchItem::Kind::Via && item.drillDiameter != 0.0)
         object[QStringLiteral("drillDiameter")] = item.drillDiameter;
+    if (item.width > 0.0) object[QStringLiteral("width")] = item.width;
     return object;
 }
 
@@ -241,6 +242,14 @@ QString documentFromJson(const QJsonValue& value, Workspace workspace, const QSt
             item.pad = padFromJson(padVal.toObject());
         const QJsonValue drillVal = object.value(QStringLiteral("drillDiameter"));
         if (!drillVal.isUndefined()) item.drillDiameter = drillVal.toDouble();
+        // Track width / via diameter (#28); absent in older files, which read as the default.
+        const QJsonValue widthVal = object.value(QStringLiteral("width"));
+        if (!widthVal.isUndefined()) {
+            if (!widthVal.isDouble() || !std::isfinite(widthVal.toDouble()) || widthVal.toDouble() < 0.0) {
+                return tr("%1 has an invalid width.").arg(at);
+            }
+            item.width = widthVal.toDouble();
+        }
         if (item.kind == SketchItem::Kind::Symbol) {
             const auto* symbol = findSymbol(item.variant);
             if (symbol == nullptr || symbol->workspace != workspace) {

@@ -33,6 +33,28 @@ enum class BoardLayer {
     BoardEdge,
 };
 
+inline constexpr int BoardLayerCount = 9;
+
+[[nodiscard]] constexpr int layerBit(BoardLayer layer) noexcept {
+    return 1 << static_cast<int>(layer);
+}
+inline constexpr int CopperLayerMask =
+    layerBit(BoardLayer::TopCopper) | layerBit(BoardLayer::BottomCopper);
+inline constexpr int AllLayersMask = (1 << BoardLayerCount) - 1;
+
+[[nodiscard]] constexpr bool isCopperLayer(BoardLayer layer) noexcept {
+    return layer == BoardLayer::TopCopper || layer == BoardLayer::BottomCopper;
+}
+[[nodiscard]] constexpr bool isBottomLayer(BoardLayer layer) noexcept {
+    return layer == BoardLayer::BottomCopper || layer == BoardLayer::BottomSilk ||
+           layer == BoardLayer::BottomResist || layer == BoardLayer::BottomPaste;
+}
+// The same layer on the other board side (top <-> bottom); the board edge stays.
+[[nodiscard]] BoardLayer oppositeSideLayer(BoardLayer layer) noexcept;
+// Layer mask with every top layer swapped for its bottom counterpart and vice versa.
+[[nodiscard]] int mirroredLayerMask(int mask) noexcept;
+[[nodiscard]] QString boardLayerName(BoardLayer layer);
+
 // Pad shape for footprint pads and via annular rings.
 enum class PadShape { Round, Rect, Oval };
 
@@ -45,6 +67,8 @@ struct PadDefinition {
     double height = 1.0;         // mm (== width for Round)
     double drillDiameter = 0.0;  // mm, 0 = SMD (no hole)
     int layers = (1 << static_cast<int>(BoardLayer::TopCopper)); // bitmask
+
+    friend bool operator==(const PadDefinition&, const PadDefinition&) = default;
 };
 
 struct SymbolShape {
@@ -64,8 +88,8 @@ struct SymbolDefinition {
     QString defaultLabel;
     QVector<SymbolShape> shapes;
     QVector<QPointF> pins;
-    // v2: footprint pad list. Coexists with shapes for backward compatibility;
-    // full visual migration is Issue #28 (Pad tools).
+    // Board footprints: pads[i] sits at pins[i]. Pads are drawn from this list; `shapes` only
+    // carries the silkscreen outline.
     QVector<PadDefinition> pads;
     // Schematic components: value and footprint given to a newly placed part. The footprint has
     // the same pin count, so pins map to pads one to one.
@@ -98,9 +122,62 @@ struct SketchItem {
     bool excludeFromBoard = false;             // Schematic component excluded from PCB transfer
     PadDefinition pad;                         // For Kind::Pad items
     double drillDiameter = 0.0;               // For Kind::Via items (mm)
+    // Board tracks: copper width; vias: outer diameter (mm). 0 = the default for the kind.
+    double width = 0.0;
 };
 
 using SketchDocument = QVector<SketchItem>;
+
+inline constexpr double DefaultTrackWidth = 0.3048; // T12
+inline constexpr double DefaultViaDiameter = 0.8;
+inline constexpr double DefaultViaDrill = 0.4;
+
+// Proteus ARES style track widths; the name is the width in thou.
+struct TrackStyle {
+    const char* name;
+    double width; // mm
+};
+[[nodiscard]] const QVector<TrackStyle>& trackStyles();
+
+struct ViaStyle {
+    const char* name;
+    double diameter; // mm
+    double drill;    // mm
+};
+[[nodiscard]] const QVector<ViaStyle>& viaStyles();
+
+// Pads offered by the board pad tools. `pad` is the pad placed by the tool (number 1).
+struct PadStyle {
+    const char* id; // e.g. "pad.round", stable tool variant
+    const char* name;
+    PadDefinition pad;
+};
+[[nodiscard]] const QVector<PadStyle>& padStyles();
+[[nodiscard]] const PadStyle* findPadStyle(const QString& id);
+[[nodiscard]] QString padStyleDisplayName(const PadStyle& style);
+
+// A pad in world coordinates: footprint pads (rotated, mirrored for the bottom side), placed pads
+// and vias. `layers` is a BoardLayer mask.
+struct PlacedPad {
+    QPointF center;
+    PadShape shape = PadShape::Round;
+    double width = 0.0;  // along X after rotation
+    double height = 0.0; // along Y after rotation
+    double drill = 0.0;
+    int layers = 0;
+    int number = 0;
+};
+[[nodiscard]] QVector<PlacedPad> itemPads(const SketchItem& item);
+// Outline of a pad (closed polygon, world millimetres).
+[[nodiscard]] QVector<QPointF> padOutline(const PlacedPad& pad);
+// Copper layers an item conducts on (0 for non-copper items); schematic items are not considered.
+[[nodiscard]] int itemCopperLayers(const SketchItem& item);
+// Layers an item is drawn on, used for board layer visibility. Footprints return their silk layer
+// plus their pads' layers.
+[[nodiscard]] int itemLayerMask(const SketchItem& item);
+[[nodiscard]] double trackWidth(const SketchItem& item);
+[[nodiscard]] double viaDiameter(const SketchItem& item);
+[[nodiscard]] double viaDrill(const SketchItem& item);
 
 inline const QString BoardOutlineVariant = QStringLiteral("board-outline");
 inline const QString CopperZoneVariant = QStringLiteral("copper-zone");

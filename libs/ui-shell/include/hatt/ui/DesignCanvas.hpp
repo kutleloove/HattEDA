@@ -17,7 +17,21 @@ class QTimer;
 
 namespace hatt::ui {
 
-enum class CanvasTool { Select, Symbol, Wire, Line, Polyline, Rectangle, Circle, Arc, Text, Measure };
+// Pad places a board pad of the PadStyle named by the tool variant; Via places a via.
+enum class CanvasTool {
+    Select,
+    Symbol,
+    Wire,
+    Line,
+    Polyline,
+    Rectangle,
+    Circle,
+    Arc,
+    Text,
+    Measure,
+    Pad,
+    Via
+};
 
 enum class AlignOperation {
     Left,
@@ -125,8 +139,28 @@ public:
 
     static void paintSymbolPreview(QPainter& painter, const QRectF& target, const QString& symbolId,
                                    const QPalette& palette);
+    // Draws a pad style (or a via when `padStyleId` is empty) centred in `target`.
+    static void paintPadPreview(QPainter& painter, const QRectF& target, const QString& padStyleId,
+                                const QPalette& palette);
+
+    // Board layers (Kayra). New tracks, zones and SMD pads go to the active copper layer (a copper
+    // layer on the active layer's side when a non-copper layer is active); graphics go to the
+    // active layer, or the silk layer of its side while a copper layer is active; footprints are
+    // placed on the bottom side while a bottom layer is active. Changing the copper layer while a
+    // track is being routed inserts a via at the last corner. Hidden layers are neither drawn nor
+    // hit-tested. Ignored by schematic canvases.
+    [[nodiscard]] BoardLayer activeLayer() const noexcept { return activeLayer_; }
+    void setActiveLayer(BoardLayer layer);
+    [[nodiscard]] int visibleLayers() const noexcept { return visibleLayers_; }
+    void setVisibleLayers(int mask);
+    [[nodiscard]] double trackWidthSetting() const noexcept { return trackWidth_; }
+    void setTrackWidth(double millimetres);
+    void setViaSize(double diameter, double drill);
+    // Layer colour for the palette's theme (dark or light).
+    [[nodiscard]] static QColor layerColor(BoardLayer layer, const QPalette& palette);
 
 signals:
+    void activeLayerChanged(hatt::ui::BoardLayer layer);
     void documentChanged();
     void selectionChanged(int count);
     void cursorMoved(QPointF world);
@@ -204,6 +238,16 @@ private:
     void pushEdit(const QString& text, const SketchDocument& document, const QList<int>& selection);
     void setSelection(QList<int> selection);
     void placeSymbol(QPointF world);
+    void placePad(QPointF world);
+    void placeVia(QPointF world);
+    [[nodiscard]] bool itemVisible(const SketchItem& item) const;
+    // Copper layer used for tracks, zones and SMD pads.
+    [[nodiscard]] BoardLayer routeLayer() const noexcept;
+    [[nodiscard]] BoardLayer graphicsLayer() const noexcept;
+    [[nodiscard]] SketchItem pendingTrack(const QVector<QPointF>& points) const;
+    [[nodiscard]] SketchItem pendingVia(QPointF at) const;
+    // Undoes the last layer change of the route being drawn; false when there was none.
+    bool revertRouteLayerChange();
     void placeText(QPointF world);
     void finishTwoPoint(QPointF world);
     void finishPath();
@@ -227,6 +271,13 @@ private:
     QPointF offset_{48.0, 48.0};
 
     QVector<QPointF> pending_;
+    // Tracks and vias of the route being drawn that are already on another layer.
+    SketchDocument routePieces_;
+    BoardLayer activeLayer_ = BoardLayer::TopCopper;
+    int visibleLayers_ = AllLayersMask;
+    double trackWidth_ = DefaultTrackWidth;
+    double viaDiameter_ = DefaultViaDiameter;
+    double viaDrill_ = DefaultViaDrill;
     bool pressGesture_ = false;
     QPointF pressScreen_;
 

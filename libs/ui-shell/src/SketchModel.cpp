@@ -55,24 +55,6 @@ SymbolShape circle(QPointF center, double radius, bool filled = false) {
     return shape;
 }
 
-SymbolShape pad(QPointF center, double w, double h) {
-    SymbolShape shape = rectangle(center.x() - w / 2, center.y() - h / 2, w, h);
-    shape.copper = true;
-    return shape;
-}
-
-SymbolShape roundPad(QPointF center, double diameter) {
-    SymbolShape shape = circle(center, diameter / 2);
-    shape.copper = true;
-    return shape;
-}
-
-SymbolShape hole(QPointF center, double diameter) {
-    SymbolShape shape = circle(center, diameter / 2);
-    shape.hole = true;
-    return shape;
-}
-
 // v2 pad helpers — build PadDefinition for footprint pad lists.
 PadDefinition makePad(int number, double w, double h) {
     PadDefinition p;
@@ -290,35 +272,32 @@ QVector<SymbolDefinition> buildLibrary() {
     library.append(currentProbe);
 
     // --- Board footprints ---
-    // Each footprint defines both `shapes` (visual, for DesignCanvas) and `pads`
-    // (structural, for PCB algorithms). Full visual migration is Issue #28.
+    // `shapes` is the silkscreen outline; copper is drawn from `pads`, one pad per pin.
 
     auto header2 = define("board.header-1x2", QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Pin header 1x2"),
                            W::Board, C::Component, "J");
-    header2.shapes = {rectangle(-1.27, -1.27, 5.08, 2.54), pad({0, 0}, 1.6, 1.6),
-                      roundPad({2.54, 0}, 1.6), hole({0, 0}, 0.8), hole({2.54, 0}, 0.8)};
+    header2.shapes = {rectangle(-1.27, -1.27, 5.08, 2.54)};
     header2.pins = {{0, 0}, {2.54, 0}};
     header2.pads = {makeSquareThroughPad(1, 1.6, 0.8), makeThroughPad(2, 1.6, 0.8)};
     library.append(header2);
 
     auto r0603 = define("board.r0603", QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Resistor 0603"),
                         W::Board, C::Component, "R");
-    r0603.shapes = {rectangle(-1.45, -0.8, 2.9, 1.6), pad({-0.8, 0}, 0.8, 0.95), pad({0.8, 0}, 0.8, 0.95)};
+    r0603.shapes = {rectangle(-1.45, -0.8, 2.9, 1.6)};
     r0603.pins = {{-0.8, 0}, {0.8, 0}};
     r0603.pads = {makePad(1, 0.8, 0.95), makePad(2, 0.8, 0.95)};
     library.append(r0603);
 
     auto c0805 = define("board.c0805", QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Capacitor 0805"),
                         W::Board, C::Component, "C");
-    c0805.shapes = {rectangle(-1.8, -1.0, 3.6, 2.0), pad({-0.95, 0}, 1.0, 1.3), pad({0.95, 0}, 1.0, 1.3)};
+    c0805.shapes = {rectangle(-1.8, -1.0, 3.6, 2.0)};
     c0805.pins = {{-0.95, 0}, {0.95, 0}};
     c0805.pads = {makePad(1, 1.0, 1.3), makePad(2, 1.0, 1.3)};
     library.append(c0805);
 
     auto sot23 = define("board.sot23", QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "SOT-23"),
                         W::Board, C::Component, "Q");
-    sot23.shapes = {rectangle(-1.6, -0.7, 3.2, 1.4), pad({-0.95, 1.1}, 0.8, 0.9),
-                    pad({0.95, 1.1}, 0.8, 0.9), pad({0, -1.1}, 0.8, 0.9)};
+    sot23.shapes = {rectangle(-1.6, -0.7, 3.2, 1.4)};
     sot23.pins = {{-0.95, 1.1}, {0.95, 1.1}, {0, -1.1}};
     sot23.pads = {makePad(1, 0.8, 0.9), makePad(2, 0.8, 0.9), makePad(3, 0.8, 0.9)};
     library.append(sot23);
@@ -328,12 +307,10 @@ QVector<SymbolDefinition> buildLibrary() {
     soic8.shapes = {rectangle(-1.95, -2.5, 3.9, 5.0), circle({-1.4, -1.95}, 0.2, true)};
     int soic8PadNum = 1;
     for (double y : {-1.905, -0.635, 0.635, 1.905}) {
-        soic8.shapes.append(pad({-2.7, y}, 1.55, 0.6));
         soic8.pins.append({-2.7, y});
         soic8.pads.append(makePad(soic8PadNum++, 1.55, 0.6));
     }
     for (double y : {1.905, 0.635, -0.635, -1.905}) {
-        soic8.shapes.append(pad({2.7, y}, 1.55, 0.6));
         soic8.pins.append({2.7, y});
         soic8.pads.append(makePad(soic8PadNum++, 1.55, 0.6));
     }
@@ -344,15 +321,11 @@ QVector<SymbolDefinition> buildLibrary() {
     dip8.shapes = {rectangle(-2.6, -5.1, 5.2, 10.2)};
     int dip8PadNum = 1;
     for (double y : {-3.81, -1.27, 1.27, 3.81}) {
-        dip8.shapes.append(roundPad({-3.81, y}, 1.6));
-        dip8.shapes.append(hole({-3.81, y}, 0.8));
         dip8.pins.append({-3.81, y});
         dip8.pads.append(dip8PadNum == 1 ? makeSquareThroughPad(dip8PadNum++, 1.6, 0.8)
                                          : makeThroughPad(dip8PadNum++, 1.6, 0.8));
     }
     for (double y : {3.81, 1.27, -1.27, -3.81}) {
-        dip8.shapes.append(roundPad({3.81, y}, 1.6));
-        dip8.shapes.append(hole({3.81, y}, 0.8));
         dip8.pins.append({3.81, y});
         dip8.pads.append(makeThroughPad(dip8PadNum++, 1.6, 0.8));
     }
@@ -363,24 +336,21 @@ QVector<SymbolDefinition> buildLibrary() {
     header.shapes = {rectangle(-1.27, -5.08, 2.54, 10.16)};
     int headerPadNum = 1;
     for (double y : {-3.81, -1.27, 1.27, 3.81}) {
-        header.shapes.append(roundPad({0, y}, 1.7));
-        header.shapes.append(hole({0, y}, 1.0));
         header.pins.append({0, y});
         header.pads.append(headerPadNum == 1 ? makeSquareThroughPad(headerPadNum++, 1.7, 1.0)
                                              : makeThroughPad(headerPadNum++, 1.7, 1.0));
     }
     library.append(header);
 
+    // Kept so older files that placed the via symbol still open; new vias are Kind::Via items.
     auto via = define("board.via", QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Via"),
                       W::Board, C::Terminal, "");
-    via.shapes = {roundPad({0, 0}, 0.8), hole({0, 0}, 0.4)};
     via.pins = {{0, 0}};
     via.pads = {makeThroughPad(1, 0.8, 0.4)};
     library.append(via);
 
     auto testPoint = define("board.test-point", QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Test point"),
                             W::Board, C::Terminal, "TP");
-    testPoint.shapes = {roundPad({0, 0}, 1.5)};
     testPoint.pins = {{0, 0}};
     testPoint.pads = {makeRoundPad(1, 1.5)};
     library.append(testPoint);
@@ -388,7 +358,7 @@ QVector<SymbolDefinition> buildLibrary() {
     auto mountingHole = define("board.mounting-hole",
                                QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Mounting hole"),
                                W::Board, C::Terminal, "H");
-    mountingHole.shapes = {roundPad({0, 0}, 6.0), hole({0, 0}, 3.2)};
+    mountingHole.shapes = {circle({0, 0}, 3.4)};
     mountingHole.pins = {{0, 0}};
     mountingHole.pads = {makeThroughPad(1, 6.0, 3.2)};
     library.append(mountingHole);
@@ -490,7 +460,222 @@ QStringList projectDeviceList(const ProjectLibrary& library, const SketchDocumen
     return result;
 }
 
+BoardLayer oppositeSideLayer(BoardLayer layer) noexcept {
+    switch (layer) {
+    case BoardLayer::TopCopper: return BoardLayer::BottomCopper;
+    case BoardLayer::BottomCopper: return BoardLayer::TopCopper;
+    case BoardLayer::TopSilk: return BoardLayer::BottomSilk;
+    case BoardLayer::BottomSilk: return BoardLayer::TopSilk;
+    case BoardLayer::TopResist: return BoardLayer::BottomResist;
+    case BoardLayer::BottomResist: return BoardLayer::TopResist;
+    case BoardLayer::TopPaste: return BoardLayer::BottomPaste;
+    case BoardLayer::BottomPaste: return BoardLayer::TopPaste;
+    case BoardLayer::BoardEdge: break;
+    }
+    return BoardLayer::BoardEdge;
+}
+
+int mirroredLayerMask(int mask) noexcept {
+    int result = 0;
+    for (int index = 0; index < BoardLayerCount; ++index) {
+        const auto layer = static_cast<BoardLayer>(index);
+        if (mask & layerBit(layer)) result |= layerBit(oppositeSideLayer(layer));
+    }
+    return result;
+}
+
+QString boardLayerName(BoardLayer layer) {
+    const char* name = "";
+    switch (layer) {
+    case BoardLayer::TopCopper: name = QT_TRANSLATE_NOOP("hatt::ui::BoardLayer", "Top copper"); break;
+    case BoardLayer::BottomCopper: name = QT_TRANSLATE_NOOP("hatt::ui::BoardLayer", "Bottom copper"); break;
+    case BoardLayer::TopSilk: name = QT_TRANSLATE_NOOP("hatt::ui::BoardLayer", "Top silk"); break;
+    case BoardLayer::BottomSilk: name = QT_TRANSLATE_NOOP("hatt::ui::BoardLayer", "Bottom silk"); break;
+    case BoardLayer::TopResist: name = QT_TRANSLATE_NOOP("hatt::ui::BoardLayer", "Top resist"); break;
+    case BoardLayer::BottomResist: name = QT_TRANSLATE_NOOP("hatt::ui::BoardLayer", "Bottom resist"); break;
+    case BoardLayer::TopPaste: name = QT_TRANSLATE_NOOP("hatt::ui::BoardLayer", "Top paste"); break;
+    case BoardLayer::BottomPaste: name = QT_TRANSLATE_NOOP("hatt::ui::BoardLayer", "Bottom paste"); break;
+    case BoardLayer::BoardEdge: name = QT_TRANSLATE_NOOP("hatt::ui::BoardLayer", "Board edge"); break;
+    }
+    return QCoreApplication::translate("hatt::ui::BoardLayer", name);
+}
+
+const QVector<TrackStyle>& trackStyles() {
+    static const QVector<TrackStyle> styles = {
+        {"T8", 0.2032},  {"T10", 0.254}, {"T12", 0.3048}, {"T15", 0.381},
+        {"T20", 0.508},  {"T25", 0.635}, {"T30", 0.762},  {"T40", 1.016},
+        {"T50", 1.27},   {"T70", 1.778}, {"T100", 2.54},
+    };
+    return styles;
+}
+
+const QVector<ViaStyle>& viaStyles() {
+    static const QVector<ViaStyle> styles = {
+        {"V24", 0.6, 0.3}, {"V32", 0.8, 0.4}, {"V40", 1.0, 0.5}, {"V50", 1.27, 0.7}, {"V70", 1.8, 1.0},
+    };
+    return styles;
+}
+
+const QVector<PadStyle>& padStyles() {
+    static const QVector<PadStyle> styles = [] {
+        QVector<PadStyle> result;
+        result.append({"pad.round", QT_TRANSLATE_NOOP("hatt::ui::PadStyle", "Round through-hole pad"),
+                       makeThroughPad(1, 1.6, 0.8)});
+        result.append({"pad.square", QT_TRANSLATE_NOOP("hatt::ui::PadStyle", "Square through-hole pad"),
+                       makeSquareThroughPad(1, 1.6, 0.8)});
+        PadDefinition oval = makeThroughPad(1, 1.6, 0.8);
+        oval.shape = PadShape::Oval;
+        oval.height = 2.4;
+        result.append({"pad.oval", QT_TRANSLATE_NOOP("hatt::ui::PadStyle", "Oval (DIL) pad"), oval});
+        result.append({"pad.smd", QT_TRANSLATE_NOOP("hatt::ui::PadStyle", "SMD rectangular pad"),
+                       makePad(1, 1.0, 1.5)});
+        result.append({"pad.smd-round", QT_TRANSLATE_NOOP("hatt::ui::PadStyle", "SMD round pad"),
+                       makeRoundPad(1, 1.2)});
+        return result;
+    }();
+    return styles;
+}
+
+const PadStyle* findPadStyle(const QString& id) {
+    for (const auto& style : padStyles()) {
+        if (id == QLatin1String(style.id)) return &style;
+    }
+    return nullptr;
+}
+
+QString padStyleDisplayName(const PadStyle& style) {
+    return QCoreApplication::translate("hatt::ui::PadStyle", style.name);
+}
+
+double trackWidth(const SketchItem& item) {
+    return item.width > 0.0 ? item.width : DefaultTrackWidth;
+}
+
+double viaDiameter(const SketchItem& item) {
+    return item.width > 0.0 ? item.width : DefaultViaDiameter;
+}
+
+double viaDrill(const SketchItem& item) {
+    return item.drillDiameter > 0.0 ? item.drillDiameter : DefaultViaDrill;
+}
+
+QVector<PlacedPad> itemPads(const SketchItem& item) {
+    QVector<PlacedPad> result;
+    if (item.points.isEmpty()) return result;
+    auto place = [&](const PadDefinition& definition, QPointF center, int turns, bool bottom) {
+        PlacedPad pad;
+        pad.center = center;
+        pad.shape = definition.shape;
+        const bool swapped = (turns % 4 + 4) % 2 == 1;
+        pad.width = swapped ? definition.height : definition.width;
+        pad.height = swapped ? definition.width : definition.height;
+        pad.drill = definition.drillDiameter;
+        pad.layers = bottom ? mirroredLayerMask(definition.layers) : definition.layers;
+        pad.number = definition.number;
+        result.append(pad);
+    };
+    switch (item.kind) {
+    case SketchItem::Kind::Symbol:
+        if (const auto* symbol = findSymbol(item.variant); symbol != nullptr &&
+                                                            symbol->workspace == Workspace::Board) {
+            const auto count = std::min(symbol->pads.size(), symbol->pins.size());
+            for (qsizetype i = 0; i < count; ++i) {
+                place(symbol->pads[i], symbolToWorld(item, symbol->pins[i]), item.quarterTurns,
+                      item.onBottom);
+            }
+        }
+        break;
+    case SketchItem::Kind::Pad: {
+        PadDefinition definition = item.pad;
+        if (definition.drillDiameter <= 0.0) {
+            // An SMD pad lives on the copper layer of the item.
+            definition.layers = layerBit(isCopperLayer(item.layer) ? item.layer : BoardLayer::TopCopper);
+        }
+        place(definition, item.points.first(), item.quarterTurns, false);
+        break;
+    }
+    case SketchItem::Kind::Via: {
+        PadDefinition definition;
+        definition.shape = PadShape::Round;
+        definition.width = definition.height = viaDiameter(item);
+        definition.drillDiameter = viaDrill(item);
+        definition.layers = CopperLayerMask;
+        place(definition, item.points.first(), 0, false);
+        break;
+    }
+    default:
+        break;
+    }
+    return result;
+}
+
+QVector<QPointF> padOutline(const PlacedPad& pad) {
+    const double hw = pad.width / 2.0;
+    const double hh = pad.height / 2.0;
+    QVector<QPointF> points;
+    switch (pad.shape) {
+    case PadShape::Rect:
+        points = {pad.center + QPointF(-hw, -hh), pad.center + QPointF(hw, -hh),
+                  pad.center + QPointF(hw, hh), pad.center + QPointF(-hw, hh)};
+        break;
+    case PadShape::Round:
+    case PadShape::Oval: {
+        // A stadium: two half circles joined along the longer axis (a circle when square).
+        const double radius = std::min(hw, hh);
+        const QPointF axis = hw >= hh ? QPointF(hw - radius, 0) : QPointF(0, hh - radius);
+        const double start = hw >= hh ? -Pi / 2 : 0.0;
+        constexpr int steps = 12;
+        for (int i = 0; i <= steps; ++i) {
+            const double angle = start + Pi * i / steps;
+            points.append(pad.center + axis + QPointF(radius * std::cos(angle), radius * std::sin(angle)));
+        }
+        for (int i = 0; i <= steps; ++i) {
+            const double angle = start + Pi + Pi * i / steps;
+            points.append(pad.center - axis + QPointF(radius * std::cos(angle), radius * std::sin(angle)));
+        }
+        break;
+    }
+    }
+    return points;
+}
+
+int itemCopperLayers(const SketchItem& item) {
+    switch (item.kind) {
+    case SketchItem::Kind::Wire:
+        return isCopperLayer(item.layer) ? layerBit(item.layer) : 0;
+    case SketchItem::Kind::Symbol:
+    case SketchItem::Kind::Pad:
+    case SketchItem::Kind::Via: {
+        int layers = 0;
+        for (const auto& pad : itemPads(item)) layers |= pad.layers & CopperLayerMask;
+        return layers;
+    }
+    case SketchItem::Kind::Polyline:
+        return item.variant == CopperZoneVariant && isCopperLayer(item.layer) ? layerBit(item.layer) : 0;
+    default:
+        return 0;
+    }
+}
+
+int itemLayerMask(const SketchItem& item) {
+    switch (item.kind) {
+    case SketchItem::Kind::Symbol: {
+        int layers = layerBit(item.onBottom ? BoardLayer::BottomSilk : BoardLayer::TopSilk);
+        for (const auto& pad : itemPads(item)) layers |= pad.layers;
+        return layers;
+    }
+    case SketchItem::Kind::Pad:
+    case SketchItem::Kind::Via:
+        return itemCopperLayers(item);
+    default:
+        if (item.variant == BoardOutlineVariant) return layerBit(BoardLayer::BoardEdge);
+        return layerBit(item.layer);
+    }
+}
+
 QPointF symbolToWorld(const SketchItem& item, QPointF local) {
+    // Bottom side footprints are seen from the top, so they are mirrored left to right.
+    if (item.onBottom) local.setX(-local.x());
     for (int turn = 0; turn < item.quarterTurns % 4; ++turn) {
         local = rotateQuarter(local);
     }
@@ -514,6 +699,7 @@ QVector<QLineF> itemSegments(const SketchItem& item) {
                 appendPolyline(segments, points, shape.closed);
             }
         }
+        for (const auto& pad : itemPads(item)) appendPolyline(segments, padOutline(pad), true);
         break;
     case SketchItem::Kind::Wire:
     case SketchItem::Kind::Line:
@@ -548,31 +734,10 @@ QVector<QLineF> itemSegments(const SketchItem& item) {
                        true);
         break;
     }
-    case SketchItem::Kind::Pad: {
-        if (!item.points.isEmpty()) {
-            const QPointF center = item.points.value(0);
-            const double hw = item.pad.width / 2.0;
-            const double hh = item.pad.height / 2.0;
-            appendPolyline(segments,
-                           {center + QPointF(-hw, -hh), center + QPointF(hw, -hh),
-                            center + QPointF(hw, hh),  center + QPointF(-hw, hh)},
-                           true);
-        }
+    case SketchItem::Kind::Pad:
+    case SketchItem::Kind::Via:
+        for (const auto& pad : itemPads(item)) appendPolyline(segments, padOutline(pad), true);
         break;
-    }
-    case SketchItem::Kind::Via: {
-        if (!item.points.isEmpty()) {
-            const QPointF center = item.points.value(0);
-            const double radius = item.drillDiameter > 0 ? item.drillDiameter / 2.0 + 0.2 : 0.4;
-            for (int i = 0; i < 24; ++i) {
-                const double angle = 2 * Pi * i / 24;
-                segments.append(QLineF(
-                    center + QPointF(radius * std::cos(angle), radius * std::sin(angle)),
-                    center + QPointF(radius * std::cos(angle + 2*Pi/24), radius * std::sin(angle + 2*Pi/24))));
-            }
-        }
-        break;
-    }
     }
     return segments;
 }
@@ -696,7 +861,7 @@ void rotateItemQuarterTurn(SketchItem& item, QPointF pivot) {
     for (QPointF& point : item.points) {
         point = pivot + rotateQuarter(point - pivot);
     }
-    if (item.kind == SketchItem::Kind::Symbol) {
+    if (item.kind == SketchItem::Kind::Symbol || item.kind == SketchItem::Kind::Pad) {
         item.quarterTurns = (item.quarterTurns + 1) % 4;
     }
 }
@@ -721,9 +886,15 @@ bool isWire(const SketchItem& item) {
     return item.kind == SketchItem::Kind::Wire && item.points.size() >= 2;
 }
 
+// Items whose anchors are connection points: symbol pins, footprint pads, pads and vias.
+bool isConnector(const SketchItem& item) {
+    return item.kind == SketchItem::Kind::Symbol || item.kind == SketchItem::Kind::Pad ||
+           item.kind == SketchItem::Kind::Via;
+}
+
 bool onPin(const SketchDocument& document, QPointF point) {
     for (const auto& item : document) {
-        if (item.kind != SketchItem::Kind::Symbol) continue;
+        if (!isConnector(item)) continue;
         for (const QPointF& anchor : itemAnchors(item)) {
             if (coincident(anchor, point)) return true;
         }
@@ -936,7 +1107,7 @@ SketchDocument moveItemsKeepingConnections(const SketchDocument& document, const
         moving.insert(index);
         translateItem(result[index], delta);
         const SketchItem& item = document[index];
-        if (item.kind == SketchItem::Kind::Symbol || item.kind == SketchItem::Kind::Wire) {
+        if (isConnector(item) || item.kind == SketchItem::Kind::Wire) {
             for (const QPointF& anchor : itemAnchors(item)) moves.append({anchor, anchor + delta});
         }
     }

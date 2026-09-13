@@ -87,22 +87,34 @@ ConnectivityResult buildConnectivity(const ConnectivityInput& input) {
     // Every polyline is one conductor. Only its two terminal points create T joins;
     // an incidental crossing at an internal bend still needs an explicit anchor.
     std::vector<Point> anchors;
-    for (const auto& pin : input.pins) anchors.push_back(pin.position);
-    anchors.insert(anchors.end(), input.junctions.begin(), input.junctions.end());
+    std::vector<unsigned> anchorLayers;
+    for (const auto& pin : input.pins) {
+        anchors.push_back(pin.position);
+        anchorLayers.push_back(pin.layers);
+    }
+    for (std::size_t i = 0; i < input.junctions.size(); ++i) {
+        anchors.push_back(input.junctions[i]);
+        anchorLayers.push_back(i < input.junctionLayers.size() ? input.junctionLayers[i] : AllLayers);
+    }
     const int nameOffset = static_cast<int>(anchors.size());
-    for (const auto& name : input.names) anchors.push_back(name.position);
+    for (const auto& name : input.names) {
+        anchors.push_back(name.position);
+        anchorLayers.push_back(AllLayers);
+    }
     const int wireOffset = static_cast<int>(anchors.size());
     Sets sets(anchors.size() + input.wires.size());
     for (int i = 0; i < wireOffset; ++i) {
         for (int j = 0; j < i; ++j)
-            if (near(anchors[i], anchors[j])) sets.join(i, j);
+            if ((anchorLayers[i] & anchorLayers[j]) != 0 && near(anchors[i], anchors[j])) sets.join(i, j);
         for (std::size_t w = 0; w < input.wires.size(); ++w)
-            if (onWire(anchors[i], input.wires[w])) sets.join(i, wireOffset + static_cast<int>(w));
+            if ((anchorLayers[i] & input.wires[w].layers) != 0 && onWire(anchors[i], input.wires[w]))
+                sets.join(i, wireOffset + static_cast<int>(w));
     }
     for (std::size_t i = 0; i < input.wires.size(); ++i) {
         const auto& a = input.wires[i];
         for (std::size_t j = 0; j < i; ++j) {
             const auto& b = input.wires[j];
+            if ((a.layers & b.layers) == 0) continue;
             bool connected = onWire(a.points.front(), b) || onWire(a.points.back(), b) ||
                              onWire(b.points.front(), a) || onWire(b.points.back(), a);
             for (std::size_t ai = 1; !connected && ai < a.points.size(); ++ai)
