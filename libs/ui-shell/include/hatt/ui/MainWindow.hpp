@@ -57,6 +57,8 @@ private:
     void applySnapSettings();
     void updateEditActions();
     void refreshIcons();
+    void showCanvasContextMenu(DesignCanvas* canvas, QPoint position, int index);
+    void editItemProperties(DesignCanvas* canvas, int index);
     QAction* makeAction(const QString& objectName, const QString& text, const QString& iconKind);
 
     QStackedWidget* shellPages_ = nullptr;

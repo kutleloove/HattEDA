@@ -1,4 +1,5 @@
 #include "hatt/ui/MainWindow.hpp"
+#include "hatt/ui/CircuitWorkflow.hpp"
 
 #include "hatt/ui/DesignCanvas.hpp"
 #include "hatt/ui/Theme.hpp"
@@ -9,6 +10,8 @@
 #include <QButtonGroup>
 #include <QDialog>
 #include <QDialogButtonBox>
+#include <QDoubleSpinBox>
+#include <QComboBox>
 #include <QDir>
 #include <QEvent>
 #include <QFileDialog>
@@ -27,6 +30,7 @@
 #include <QPainterPath>
 #include <QPushButton>
 #include <QSettings>
+#include <QSet>
 #include <QSignalBlocker>
 #include <QStackedWidget>
 #include <QStatusBar>
@@ -337,12 +341,147 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
         });
         connect(canvas, &DesignCanvas::selectToolRequested, this,
                 [this] { activateToolMode(ToolMode::Select); });
+        connect(canvas, &DesignCanvas::contextMenuRequested, this,
+                [this, canvas](QPoint position, int index) {
+                    if (canvas == editingCanvas()) showCanvasContextMenu(canvas, position, index);
+                });
     }
 
+    auto* circuitMenu = menuBar()->addMenu(tr("Circuit"));
+    circuitMenu->setObjectName(QStringLiteral("CircuitMenu"));
+    new CircuitWorkflow(this, circuitMenu, canvases_[0], canvases_[1],
+        [this](const QString& id, const QString& title, QWidget* content) { openToolWorkspace(id, title, content); },
+        [this] { return shellPages_ && shellPages_->currentIndex() == 1; },
+        [this] { showKayraWorkspace(); });
     applySnapSettings();
     refreshIcons();
     workspaceChanged();
     statusBar()->showMessage(tr("Start by creating or opening a project"));
+}
+
+void MainWindow::showCanvasContextMenu(DesignCanvas* canvas, QPoint position, int index) {
+    auto* menu = new QMenu(this);
+    menu->setObjectName(QStringLiteral("CanvasContextMenu"));
+    menu->setAttribute(Qt::WA_DeleteOnClose);
+    const bool hasItem = index >= 0 && index < canvas->document().size();
+    if (hasItem) {
+        canvas->selectItem(index);
+        auto* properties = menu->addAction(tr("Edit properties"));
+        properties->setObjectName(QStringLiteral("hatteda.context.properties"));
+        connect(properties, &QAction::triggered, this,
+                [this, canvas, index] { editItemProperties(canvas, index); });
+        menu->addAction(actions_.value(QStringLiteral("hatteda.action.rotate")));
+        menu->addAction(actions_.value(QStringLiteral("hatteda.action.duplicate")));
+        menu->addAction(actions_.value(QStringLiteral("hatteda.action.delete")));
+    } else {
+        menu->addAction(actions_.value(QStringLiteral("hatteda.action.undo")));
+        menu->addAction(actions_.value(QStringLiteral("hatteda.action.redo")));
+        menu->addSeparator();
+        menu->addAction(actions_.value(QStringLiteral("hatteda.action.select-all")));
+        menu->addAction(actions_.value(QStringLiteral("hatteda.action.fit")));
+    }
+    menu->popup(position);
+}
+
+void MainWindow::editItemProperties(DesignCanvas* canvas, int index) {
+    if (index < 0 || index >= canvas->document().size()) return;
+    const auto item = canvas->document().at(index);
+    QDialog dialog(this);
+    dialog.setObjectName(QStringLiteral("ItemPropertiesDialog"));
+    dialog.setWindowTitle(tr("Edit properties"));
+    auto* form = new QFormLayout(&dialog);
+    auto* label = new QLineEdit(item.label, &dialog);
+    label->setObjectName(QStringLiteral("ItemLabel"));
+    const bool hasLabel = item.kind == SketchItem::Kind::Symbol || item.kind == SketchItem::Kind::Text;
+    if (hasLabel) form->addRow(tr("Label / text"), label);
+    else label->hide();
+    QLineEdit* value = nullptr;
+    QComboBox* footprint = nullptr;
+    QLineEdit* mapping = nullptr;
+    const auto* symbol = findSymbol(item.variant);
+    if (item.kind == SketchItem::Kind::Symbol && symbol &&
+        canvas->workspace() == Workspace::Schematic && symbol->category == SymbolCategory::Component) {
+        value = new QLineEdit(item.value, &dialog);
+        value->setObjectName(QStringLiteral("ItemValue"));
+        form->addRow(tr("Value (SI / SPICE)"), value);
+        footprint = new QComboBox(&dialog);
+        footprint->setObjectName(QStringLiteral("ItemFootprint"));
+        footprint->addItem(tr("Unassigned"), QString());
+        for (const auto& candidate : symbolLibrary()) {
+            if (candidate.workspace == Workspace::Board &&
+                candidate.pins.size() == symbol->pins.size()) {
+                footprint->addItem(symbolDisplayName(candidate), candidate.id);
+            }
+        }
+        footprint->setCurrentIndex(qMax(0, footprint->findData(item.footprint)));
+        form->addRow(tr("Footprint"), footprint);
+        QStringList pads;
+        for (int pad : item.pinPadMap) pads.append(QString::number(pad));
+        mapping = new QLineEdit(pads.join(QStringLiteral(",")), &dialog);
+        mapping->setObjectName(QStringLiteral("ItemPinPadMap"));
+        form->addRow(tr("Pin to pad (1-based, comma-separated)"), mapping);
+    }
+    auto coordinate = [&](const QString& name, double value) {
+        auto* field = new QDoubleSpinBox(&dialog);
+        field->setObjectName(name);
+        field->setRange(-1e9, 1e9);
+        field->setDecimals(6);
+        field->setSuffix(tr(" mm"));
+        field->setValue(value);
+        return field;
+    };
+    auto* x = coordinate(QStringLiteral("ItemPositionX"), item.points.value(0).x());
+    auto* y = coordinate(QStringLiteral("ItemPositionY"), item.points.value(0).y());
+    form->addRow(tr("Anchor X"), x);
+    form->addRow(tr("Anchor Y (positive down)"), y);
+    auto* rotation = new QComboBox(&dialog);
+    rotation->setObjectName(QStringLiteral("ItemRotation"));
+    rotation->addItems({tr("0 degrees"), tr("90 degrees"), tr("180 degrees"), tr("270 degrees")});
+    rotation->setCurrentIndex((item.quarterTurns % 4 + 4) % 4);
+    if (item.kind != SketchItem::Kind::Text) form->addRow(tr("Rotation"), rotation);
+    else rotation->hide();
+    auto* validation = new QLabel(&dialog);
+    validation->setObjectName(QStringLiteral("ItemPropertiesValidation"));
+    validation->setWordWrap(true);
+    form->addRow(validation);
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+    form->addRow(buttons);
+    QVector<int> pinPadMap = item.pinPadMap;
+    connect(buttons, &QDialogButtonBox::accepted, &dialog, [&] {
+        if (footprint) {
+            pinPadMap.clear();
+            if (!footprint->currentData().toString().isEmpty()) {
+                const auto fields = mapping->text().split(QLatin1Char(','));
+                QSet<int> unique;
+                bool valid = fields.size() == symbol->pins.size();
+                for (const auto& field : fields) {
+                    bool ok = false;
+                    const int pad = field.trimmed().toInt(&ok);
+                    valid = valid && ok && pad > 0 && pad <= symbol->pins.size() &&
+                            !unique.contains(pad);
+                    unique.insert(pad);
+                    pinPadMap.append(pad);
+                }
+                if (!valid) {
+                    validation->setText(tr("Enter one unique pad number per pin, from 1 to %1.")
+                                            .arg(symbol->pins.size()));
+                    return;
+                }
+            }
+        }
+        dialog.accept();
+    });
+    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    if (dialog.exec() == QDialog::Accepted) {
+        auto properties = item;
+        properties.label = label->text();
+        properties.points[0] = {x->value(), y->value()};
+        properties.quarterTurns = rotation->currentIndex();
+        if (value) properties.value = value->text();
+        if (footprint) properties.footprint = footprint->currentData().toString();
+        properties.pinPadMap = pinPadMap;
+        canvas->editItemProperties(index, properties);
+    }
 }
 
 MainWindow::~MainWindow() {
@@ -1151,7 +1290,7 @@ void MainWindow::openToolWorkspace(const QString& stableId, const QString& title
             editorSurfaces_->setCurrentWidget(toolWorkspaces_);
             undoGroup_->setActiveStack(nullptr);
             updateEditActions();
-            delete content;
+            if (content != toolWorkspaces_->widget(index)) delete content;
             return;
         }
     }

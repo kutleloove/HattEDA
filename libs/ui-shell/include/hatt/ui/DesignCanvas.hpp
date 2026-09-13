@@ -10,6 +10,7 @@
 
 class QPainter;
 class QUndoStack;
+class QTimer;
 
 namespace hatt::ui {
 
@@ -64,6 +65,9 @@ public:
     void deleteSelection();
     void duplicateSelection();
     void rotateSelection();
+    void selectItem(int index);
+    void editItemProperties(int index, const QString& label, QPointF position, int quarterTurns);
+    void editItemProperties(int index, const SketchItem& properties);
     void align(AlignOperation operation);
 
     void zoomIn();
@@ -72,16 +76,21 @@ public:
 
     // Replaces document and selection without creating an undo entry. Used by undo commands.
     void restore(const SketchDocument& document, const QList<int>& selection);
+    void applyDocumentEdit(const QString& title, const SketchDocument& document);
+    void setAirwires(const QVector<QLineF>& lines);
+    [[nodiscard]] QVector<QLineF> airwires() const { return airwires_; }
 
     static void paintSymbolPreview(QPainter& painter, const QRectF& target, const QString& symbolId,
                                    const QPalette& palette);
 
 signals:
+    void documentChanged();
     void selectionChanged(int count);
     void cursorMoved(QPointF world);
     void statusMessage(const QString& message);
     void zoomChanged(int percent);
     void selectToolRequested();
+    void contextMenuRequested(QPoint globalPosition, int itemIndex);
 
 protected:
     void paintEvent(QPaintEvent* event) override;
@@ -89,6 +98,7 @@ protected:
     void mouseMoveEvent(QMouseEvent* event) override;
     void mouseReleaseEvent(QMouseEvent* event) override;
     void mouseDoubleClickEvent(QMouseEvent* event) override;
+    void contextMenuEvent(QContextMenuEvent* event) override;
     void wheelEvent(QWheelEvent* event) override;
     void keyPressEvent(QKeyEvent* event) override;
     void leaveEvent(QEvent* event) override;
@@ -122,6 +132,7 @@ private:
     Workspace workspace_;
     QUndoStack* undoStack_;
     SketchDocument items_;
+    QVector<QLineF> airwires_;
     QList<int> selection_;
     CanvasTool tool_ = CanvasTool::Select;
     QString variant_;
@@ -147,6 +158,9 @@ private:
     Snap hover_;
     bool hasMeasurement_ = false;
     QLineF measurement_;
+    QTimer* contextMenuTimer_ = nullptr;
+    QPoint contextMenuPosition_;
+    int contextMenuItem_ = -1;
 };
 
 } // namespace hatt::ui

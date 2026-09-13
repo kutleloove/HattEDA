@@ -91,6 +91,14 @@ QVector<SymbolDefinition> buildLibrary() {
     resistor.pins = {{-5.08, 0}, {5.08, 0}};
     library.append(resistor);
 
+    auto voltage = define("schematic.vdc", QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "DC voltage source"),
+                          W::Schematic, C::Component, "V");
+    voltage.shapes = {circle({0, 0}, 2.54), polyline({{0, -5.08}, {0, -2.54}}),
+                      polyline({{0, 2.54}, {0, 5.08}}), polyline({{-0.8, -1}, {0.8, -1}}),
+                      polyline({{0, -1.8}, {0, -0.2}}), polyline({{-0.8, 1}, {0.8, 1}})};
+    voltage.pins = {{0, -5.08}, {0, 5.08}};
+    library.append(voltage);
+
     auto capacitor = define("schematic.capacitor", QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Capacitor"),
                             W::Schematic, C::Component, "C");
     capacitor.shapes = {polyline({{-5.08, 0}, {-0.635, 0}}), polyline({{-0.635, -2.032}, {-0.635, 2.032}}),
@@ -213,6 +221,13 @@ QVector<SymbolDefinition> buildLibrary() {
                            polyline({{0.35, -0.55}, {1.0, 0}, {0.35, 0.55}})};
     currentProbe.pins = {{0, 0}};
     library.append(currentProbe);
+
+    auto header2 = define("board.header-1x2", QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Pin header 1x2"),
+                           W::Board, C::Component, "J");
+    header2.shapes = {rectangle(-1.27, -1.27, 5.08, 2.54), pad({0, 0}, 1.6, 1.6),
+                      roundPad({2.54, 0}, 1.6), hole({0, 0}, 0.8), hole({2.54, 0}, 0.8)};
+    header2.pins = {{0, 0}, {2.54, 0}};
+    library.append(header2);
 
     auto r0603 = define("board.r0603", QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Resistor 0603"),
                         W::Board, C::Component, "R");

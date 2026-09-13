@@ -6,13 +6,16 @@ add_library(hatt-ui-shell STATIC
     src/DesignCanvas.cpp
     src/MainWindow.cpp
     src/SketchModel.cpp
+    src/SketchCircuit.cpp
+    include/hatt/ui/CircuitWorkflow.hpp
+    src/CircuitWorkflow.cpp
     src/Theme.cpp
 )
 
 add_library(HattEDA::UiShell ALIAS hatt-ui-shell)
 
 target_include_directories(hatt-ui-shell PUBLIC include)
-target_link_libraries(hatt-ui-shell PUBLIC Qt6::Widgets)
+target_link_libraries(hatt-ui-shell PUBLIC Qt6::Widgets HattEDA::Electrical)
 
 if(MSVC)
     target_compile_options(hatt-ui-shell PRIVATE /W4 /permissive-)
