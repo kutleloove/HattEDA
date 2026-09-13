@@ -156,6 +156,15 @@ QIcon makeIcon(const QString& kind, const QColor& color) {
         line(13.5, 10, 13.5, 17);
     } else if (kind == QLatin1String("check")) {
         poly({{5, 12.5}, {10, 17.5}, {19, 7}});
+    } else if (kind == QLatin1String("play")) {
+        painter.setBrush(accent);
+        painter.setPen(QPen(accent, 1.7, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+        poly({{8, 5}, {19, 12}, {8, 19}}, true);
+    } else if (kind == QLatin1String("stop")) {
+        QColor fill = color;
+        fill.setAlpha(110);
+        painter.setBrush(fill);
+        rect(6.5, 6.5, 11, 11);
     } else if (kind == QLatin1String("line")) {
         line(5, 19, 19, 5);
         rect(3, 17, 4, 4);
@@ -362,10 +371,22 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
 
     auto* circuitMenu = menuBar()->addMenu(tr("Circuit"));
     circuitMenu->setObjectName(QStringLiteral("CircuitMenu"));
-    new CircuitWorkflow(this, circuitMenu, canvases_[0], canvases_[1],
+    auto* circuit = new CircuitWorkflow(this, circuitMenu, canvases_[0], canvases_[1],
         [this](const QString& id, const QString& title, QWidget* content) { openToolWorkspace(id, title, content); },
         [this] { return shellPages_ && shellPages_->currentIndex() == 1; },
         [this] { showKayraWorkspace(); });
+    connect(circuit, &CircuitWorkflow::statusMessage, statusBar(), [this](const QString& message) {
+        statusBar()->showMessage(message, 5000);
+    });
+    // Simulation play/stop sit before the design checks, as in Proteus' simulation controls.
+    if (auto* commandBar = findChild<QFrame*>(QStringLiteral("CommandBar"))) {
+        auto* layout = static_cast<QHBoxLayout*>(commandBar->layout());
+        int index = layout->count() - 1;
+        for (const char* id : {"hatteda.action.simulation-start", "hatteda.action.simulation-stop"}) {
+            layout->insertWidget(index++, commandButton(findChild<QAction*>(QString::fromLatin1(id)), commandBar));
+        }
+        layout->insertWidget(index, divider(commandBar));
+    }
     projectGuard_ = new ProjectGuard(
         this, [this] { return currentProjectData(projectPath_); },
         [this] { return hasUnsavedChanges(); });
@@ -1749,6 +1770,7 @@ void MainWindow::openRecentProject(const QString& path) {
 }
 
 void MainWindow::activateProject(const QString& projectPath, const ProjectData& project) {
+    if (auto* circuit = findChild<CircuitWorkflow*>()) circuit->stopSimulation();
     projectPath_ = projectPath;
     projectGuard_->projectActivated(projectPath);
     // The file name is the project name, so renaming or "Save as" is reflected everywhere.
@@ -1768,6 +1790,7 @@ void MainWindow::activateProject(const QString& projectPath, const ProjectData& 
     for (auto* canvas : canvases_) {
         if (!canvas->document().isEmpty()) canvas->zoomToFit();
     }
+    if (auto* circuit = findChild<CircuitWorkflow*>()) circuit->updateSimulationActions();
     updateProjectState();
 }
 

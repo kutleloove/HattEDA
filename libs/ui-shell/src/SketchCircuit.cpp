@@ -107,10 +107,16 @@ CircuitSnapshot analyzeSchematic(const SketchDocument& document) {
         if (result.connectivity.nets[n].name == "0") result.dc.ground = n;
     const auto nets = pinNets(result);
     for (const auto& item : document) {
+        if (item.kind == SketchItem::Kind::Symbol && item.variant == QLatin1String("schematic.voltage-probe")) {
+            const auto* probe = findSymbol(item.variant);
+            result.probes.append({item.id, symbolToWorld(item, probe->pins.value(0)), nets.value(pinKey(item.id, 1), -1)});
+        }
         if (!component(item)) continue;
         electrical::DcElement e;
         if (item.variant == QLatin1String("schematic.resistor")) e.kind = electrical::DcKind::Resistor;
         else if (item.variant == QLatin1String("schematic.vdc")) e.kind = electrical::DcKind::VoltageSource;
+        else if (item.variant == QLatin1String("schematic.capacitor")) e.kind = electrical::DcKind::Capacitor;
+        else if (item.variant == QLatin1String("schematic.inductor")) e.kind = electrical::DcKind::Inductor;
         else {
             result.simulationErrors << tr("%1: DC simulation does not support this component.").arg(item.label);
             continue;
@@ -122,6 +128,22 @@ CircuitSnapshot analyzeSchematic(const SketchDocument& document) {
             result.simulationErrors << tr("%1: invalid value '%2'.").arg(item.label, item.value);
         result.dc.elements.push_back(e);
     }
+    // Nets no element touches (a lone probe, an unused port) are left out of the solve.
+    QVector<int> dcIndex(result.dc.netCount, -1);
+    auto use = [&](int net) {
+        if (net >= 0 && dcIndex[net] < 0) {
+            dcIndex[net] = static_cast<int>(result.dcNets.size());
+            result.dcNets.append(net);
+        }
+    };
+    use(result.dc.ground);
+    for (const auto& e : result.dc.elements) { use(e.positive); use(e.negative); }
+    for (auto& e : result.dc.elements) {
+        e.positive = e.positive >= 0 ? dcIndex[e.positive] : -1;
+        e.negative = e.negative >= 0 ? dcIndex[e.negative] : -1;
+    }
+    result.dc.ground = result.dc.ground >= 0 ? dcIndex[result.dc.ground] : -1;
+    result.dc.netCount = static_cast<int>(result.dcNets.size());
     return result;
 }
 

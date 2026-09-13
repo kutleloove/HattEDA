@@ -52,6 +52,11 @@ struct SpacingIndicator {
     bool equal = false;
 };
 
+struct CanvasAnnotation {
+    QPointF position; // world, millimetres
+    QString text;
+};
+
 class DesignCanvas final : public QWidget {
     Q_OBJECT
 
@@ -114,6 +119,9 @@ public:
     void applyDocumentEdit(const QString& title, const SketchDocument& document);
     void setAirwires(const QVector<QLineF>& lines);
     [[nodiscard]] QVector<QLineF> airwires() const { return airwires_; }
+    // Read-only overlay labels such as simulated probe voltages; not part of the document.
+    void setAnnotations(const QVector<CanvasAnnotation>& annotations);
+    [[nodiscard]] QVector<CanvasAnnotation> annotations() const { return annotations_; }
 
     static void paintSymbolPreview(QPainter& painter, const QRectF& target, const QString& symbolId,
                                    const QPalette& palette);
@@ -206,6 +214,7 @@ private:
     QUndoStack* undoStack_;
     SketchDocument items_;
     QVector<QLineF> airwires_;
+    QVector<CanvasAnnotation> annotations_;
     QList<int> selection_;
     CanvasTool tool_ = CanvasTool::Select;
     QString variant_;

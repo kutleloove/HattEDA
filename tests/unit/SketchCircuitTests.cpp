@@ -14,6 +14,7 @@
 #include <QTimer>
 #include <QMenu>
 #include <QTextEdit>
+#include <QToolButton>
 #include <QUndoStack>
 #include <QtTest>
 
@@ -110,7 +111,7 @@ private slots:
         track.points = {symbolToWorld(source, footprint->pins[0]), symbolToWorld(source, footprint->pins[1])};
         board.append(track);
         QVERIFY(boardGuidance(schematic, board).errors.join(" ").contains("short"));
-        schematic[1].variant = QStringLiteral("schematic.capacitor");
+        schematic[1].variant = QStringLiteral("schematic.diode");
         QVERIFY(analyzeSchematic(schematic).simulationErrors.join(" ").contains("does not support"));
     }
     void actualWorkflowReportsAndUndoUpdatesGuidance() {
@@ -261,6 +262,56 @@ private slots:
         QCOMPARE(board->airwires().size(), 3);
         QCOMPARE(flow->autoPlace(1.27, 2.54), 0);
         QCOMPARE(board->undoStack()->count(), 2);
+    }
+    void liveSimulationShowsProbeVoltagesAndFollowsEdits() {
+        MainWindow window;
+        window.resize(1440, 900);
+        window.show();
+        auto* start = window.findChild<QAction*>("hatteda.action.simulation-start");
+        auto* stop = window.findChild<QAction*>("hatteda.action.simulation-stop");
+        QVERIFY(start && stop);
+        QVERIFY(!start->isEnabled());
+        QTimer::singleShot(0, [] {
+            if (auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget())) dialog->accept();
+        });
+        window.createNewProject();
+        QVERIFY(start->isEnabled());
+        QVERIFY(!stop->isEnabled());
+        bool onCommandBar = false;
+        for (auto* button : window.findChildren<QToolButton*>())
+            onCommandBar = onCommandBar || button->defaultAction() == start;
+        QVERIFY(onCommandBar);
+
+        auto* flow = window.findChild<CircuitWorkflow*>();
+        flow->loadExample();
+        auto* schematic = window.activeCanvas();
+        SketchItem probe;
+        probe.kind = SketchItem::Kind::Symbol;
+        probe.variant = "schematic.voltage-probe";
+        probe.label = "VP1";
+        probe.points = {{50.8, 20.32}}; // R1 pin 2, the divider midpoint
+        auto document = schematic->document();
+        document.append(probe);
+        schematic->applyDocumentEdit("probe", document);
+
+        start->trigger();
+        QVERIFY(flow->simulationRunning());
+        QVERIFY(!start->isEnabled() && stop->isEnabled());
+        // Live runs stay on the schematic instead of opening the results workspace.
+        QCOMPARE(window.toolWorkspaceCount(), 0);
+        QTRY_COMPARE_WITH_TIMEOUT(schematic->annotations().size(), 1, 5000);
+        QCOMPARE(schematic->annotations().first().text, QString("2.5 V"));
+
+        auto r2 = schematic->document()[2];
+        QCOMPARE(r2.label, QString("R2"));
+        r2.value = "3k";
+        schematic->editItemProperties(2, r2);
+        QTRY_COMPARE_WITH_TIMEOUT(schematic->annotations().value(0).text, QString("3.75 V"), 5000);
+
+        stop->trigger();
+        QVERIFY(!flow->simulationRunning());
+        QVERIFY(schematic->annotations().isEmpty());
+        QVERIFY(start->isEnabled() && !stop->isEnabled());
     }
     void duplicateCreatesNewIdentity() {
         DesignCanvas canvas(Workspace::Schematic);

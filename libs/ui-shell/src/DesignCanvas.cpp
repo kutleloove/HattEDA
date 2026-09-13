@@ -656,6 +656,11 @@ void DesignCanvas::setAirwires(const QVector<QLineF>& lines) {
     update();
 }
 
+void DesignCanvas::setAnnotations(const QVector<CanvasAnnotation>& annotations) {
+    annotations_ = annotations;
+    update();
+}
+
 void DesignCanvas::pushEdit(const QString& text, const SketchDocument& document,
                             const QList<int>& selection) {
     undoStack_->push(new DocumentEditCommand(this, text, items_, selection_, document, selection));
@@ -1844,6 +1849,27 @@ void DesignCanvas::paintEvent(QPaintEvent*) {
     // Board tracks share one copper layer, so only schematic joins need a visible dot.
     const QVector<QPointF> junctions = board ? QVector<QPointF>{} : schematicJunctions(shown);
     drawJunctionDots(painter, junctions, colors.wire, scale_, map);
+
+    // Simulation readouts (e.g. probe voltages): a filled tag next to the point.
+    if (!annotations_.isEmpty()) {
+        QFont font = painter.font();
+        font.setPixelSize(12);
+        font.setBold(true);
+        painter.setFont(font);
+        const QFontMetricsF metrics(font);
+        for (const auto& annotation : annotations_) {
+            const QPointF anchor = map(annotation.position);
+            const QRectF tag(anchor + QPointF(10, -26),
+                             QSizeF(metrics.horizontalAdvance(annotation.text) + 12, metrics.height() + 6));
+            painter.setPen(QPen(colors.guide, 1.2));
+            painter.drawLine(anchor, QPointF(tag.left(), tag.bottom()));
+            painter.setBrush(colors.background);
+            painter.drawRoundedRect(tag, 3, 3);
+            painter.setBrush(Qt::NoBrush);
+            painter.setPen(colors.guide);
+            painter.drawText(tag, Qt::AlignCenter, annotation.text);
+        }
+    }
 
     auto drawMeasurement = [&](const QLineF& line) {
         const QPointF a = map(line.p1());
