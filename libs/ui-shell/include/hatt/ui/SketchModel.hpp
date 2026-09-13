@@ -5,6 +5,7 @@
 #include <QPointF>
 #include <QRectF>
 #include <QString>
+#include <QUuid>
 #include <QVector>
 
 namespace hatt::ui {
@@ -45,6 +46,12 @@ struct SketchItem {
     QString label;
     int quarterTurns = 0;
     bool closed = false;
+    // Session identities and electrical metadata; persistence is tracked in #6.
+    QString id = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    QString value;
+    QString footprint;
+    QVector<int> pinPadMap;
+    QString sourceId;
 };
 
 using SketchDocument = QVector<SketchItem>;

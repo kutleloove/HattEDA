@@ -5,6 +5,11 @@
 #include <QAction>
 #include <QApplication>
 #include <QDialog>
+#include <QDialogButtonBox>
+#include <QComboBox>
+#include <QDoubleSpinBox>
+#include <QLineEdit>
+#include <QMenu>
 #include <QDockWidget>
 #include <QImage>
 #include <QListWidget>
@@ -24,6 +29,9 @@ using hatt::ui::DesignCanvas;
 using hatt::ui::Workspace;
 
 namespace {
+
+void activateEditor(hatt::ui::MainWindow& window);
+bool showActive(hatt::ui::MainWindow& window);
 
 QAction* action(const hatt::ui::MainWindow& window, const char* name) {
     return window.findChild<QAction*>(QString::fromLatin1(name));
@@ -67,12 +75,67 @@ private slots:
     void keyboardShortcutsDriveToolsAndUndo();
     void escapeReturnsWindowToSelectionMode();
     void snapSettingsArePersisted();
+    void contextPropertiesAcceptAndCancel();
     void selectionStatesFollowTheme_data();
     void selectionStatesFollowTheme();
 
 private:
     QTemporaryDir settingsDir_;
 };
+
+void MainWindowTests::contextPropertiesAcceptAndCancel() {
+    hatt::ui::MainWindow window;
+    QVERIFY(showActive(window));
+    activateEditor(window);
+    auto* canvas = window.activeCanvas();
+    canvas->setTool(CanvasTool::Symbol, QStringLiteral("schematic.resistor"));
+    clickCanvas(canvas, {20.32, 20.32});
+    canvas->setTool(CanvasTool::Select);
+    auto openProperties = [&](bool accept) {
+        canvas->contextMenuRequested(canvas->mapToGlobal(QPoint(100, 100)), 0);
+        auto* menu = window.findChild<QMenu*>(QStringLiteral("CanvasContextMenu"));
+        QVERIFY(menu);
+        auto* properties = menu->findChild<QAction*>(QStringLiteral("hatteda.context.properties"));
+        QVERIFY(properties);
+        menu->hide();
+        QTimer::singleShot(0, [accept] {
+            auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+            QVERIFY(dialog);
+            dialog->findChild<QLineEdit*>(QStringLiteral("ItemLabel"))->setText(QStringLiteral("R99"));
+            dialog->findChild<QDoubleSpinBox*>(QStringLiteral("ItemPositionX"))->setValue(42);
+            dialog->findChild<QLineEdit*>(QStringLiteral("ItemValue"))->setText(QStringLiteral("4.7k"));
+            auto* footprint = dialog->findChild<QComboBox*>(QStringLiteral("ItemFootprint"));
+            footprint->setCurrentIndex(footprint->findData(QStringLiteral("board.r0603")));
+            auto* mapping = dialog->findChild<QLineEdit*>(QStringLiteral("ItemPinPadMap"));
+            mapping->setText(QStringLiteral("1,1"));
+            if (accept) {
+                auto* ok = dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Ok);
+                ok->click();
+                QVERIFY(dialog->isVisible());
+                mapping->setText(QStringLiteral("2,1"));
+                ok->click();
+            }
+            else dialog->reject();
+        });
+        properties->trigger();
+        delete menu;
+    };
+    const auto original = canvas->document().first();
+    openProperties(false);
+    QCOMPARE(canvas->document().first().label, original.label);
+    QCOMPARE(canvas->undoStack()->count(), 1);
+    openProperties(true);
+    QCOMPARE(canvas->document().first().label, QStringLiteral("R99"));
+    QCOMPARE(canvas->document().first().points.first().x(), 42.0);
+    QCOMPARE(canvas->document().first().value, QStringLiteral("4.7k"));
+    QCOMPARE(canvas->document().first().footprint, QStringLiteral("board.r0603"));
+    QCOMPARE(canvas->document().first().pinPadMap, QVector<int>({2, 1}));
+    QCOMPARE(canvas->undoStack()->count(), 2);
+    canvas->undoStack()->undo();
+    QCOMPARE(canvas->document().first().label, original.label);
+    QCOMPARE(canvas->document().first().value, original.value);
+    QCOMPARE(canvas->document().first().footprint, original.footprint);
+}
 
 namespace {
 

@@ -10,6 +10,7 @@ set(CMAKE_AUTOMOC ON)
 include(CTest)
 find_package(Qt6 6.11 REQUIRED COMPONENTS Widgets LinguistTools)
 
+add_subdirectory(libs/electrical)
 add_subdirectory(libs/ui-shell)
 add_subdirectory(apps/hatteda-desktop)
 

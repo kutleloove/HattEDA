@@ -127,6 +127,11 @@ void Theme::apply(QApplication& application, ThemeMode mode) {
             QPushButton[documentTab="true"]:checked { background: #ffffff; color: #111820; border-bottom-color: #087f73; }
             QListWidget { background: #f7f9fa; color: #34404b; }
             QListWidget::item:selected { background: #d7eeea; color: #075f57; border-left-color: #087f73; }
+            QTabWidget::pane { background: #f7f9fa; border-color: #c8d0d7; }
+            QTabBar::tab { background: #e9edf1; color: #53616c; border-color: #c8d0d7; }
+            QTabBar::tab:selected { background: #ffffff; color: #111820; border-top-color: #087f73; }
+            QTabBar::tab:hover:!selected { background: #dfe5ea; color: #26323d; }
+            QTextEdit { background: #f7f9fa; color: #26323d; }
             QStatusBar { background: #e9edf1; color: #53616c; border-color: #c8d0d7; }
         )");
     }

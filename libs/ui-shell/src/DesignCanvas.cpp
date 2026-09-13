@@ -1,6 +1,9 @@
 #include "hatt/ui/DesignCanvas.hpp"
 
 #include <QFont>
+#include <QApplication>
+#include <QContextMenuEvent>
+#include <QTimer>
 #include <QInputDialog>
 #include <QKeyEvent>
 #include <QLineEdit>
@@ -163,7 +166,17 @@ void drawItem(QPainter& painter, const SketchItem& item, const CanvasColors& col
             painter.setPen(selected ? colors.selection : colors.label);
             painter.drawText(QRectF(topCenter.x() - 80, topCenter.y() - font.pixelSize() - 6, 160,
                                     font.pixelSize() + 4),
-                             Qt::AlignHCenter | Qt::AlignBottom, item.label);
+                             Qt::AlignHCenter | Qt::AlignBottom,
+                             item.value.isEmpty() ? item.label : item.label + QStringLiteral("  ") + item.value);
+        }
+        if (selected && !preview) {
+            QFont font = painter.font();
+            font.setPixelSize(10);
+            painter.setFont(font);
+            painter.setPen(colors.selection);
+            for (int pin = 0; pin < symbol->pins.size(); ++pin)
+                painter.drawText(map(symbolToWorld(item, symbol->pins[pin])) + QPointF(5, -5),
+                                 QString::number(pin + 1));
         }
         break;
     }
@@ -303,16 +316,16 @@ QString DesignCanvas::toolHint() const {
     case CanvasTool::Wire:
         return workspace_ == Workspace::Board
                    ? tr("Click to start a track and click to add corners. The track ends on a pad "
-                        "automatically; double-click, Enter or right-click also finishes it.")
+                        "automatically; double-click or Enter finishes, right-click cancels.")
                    : tr("Click to start a wire and click to add corners. The wire ends on a pin "
-                        "automatically; double-click, Enter or right-click also finishes it.");
+                        "automatically; double-click or Enter finishes, right-click cancels.");
     case CanvasTool::Line:
     case CanvasTool::Rectangle:
         return tr("Drag, or click the start point and then the end point.");
     case CanvasTool::Circle:
         return tr("Drag from the centre, or click the centre and then a point on the circle.");
     case CanvasTool::Polyline:
-        return tr("Click to add vertices. Double-click, Enter or right-click finishes; Backspace "
+        return tr("Click to add vertices. Double-click or Enter finishes; right-click cancels. Backspace "
                   "removes the last vertex.");
     case CanvasTool::Arc:
         return tr("Click the start point, the end point, then a point the arc passes through.");
@@ -325,6 +338,7 @@ QString DesignCanvas::toolHint() const {
 }
 
 void DesignCanvas::setTool(CanvasTool tool, const QString& variant) {
+    if (contextMenuTimer_) contextMenuTimer_->stop();
     cancelOperation();
     tool_ = tool;
     variant_ = variant;
@@ -344,6 +358,7 @@ void DesignCanvas::setSnapSettings(const SnapSettings& settings) {
 }
 
 void DesignCanvas::cancelOperation() {
+    if (contextMenuTimer_) contextMenuTimer_->stop();
     pending_.clear();
     pressGesture_ = false;
     if (drag_ == Drag::Move || drag_ == Drag::RubberBand) {
@@ -375,7 +390,42 @@ void DesignCanvas::selectAll() {
 
 void DesignCanvas::clearSelection() { setSelection({}); }
 
+void DesignCanvas::selectItem(int index) { setSelection({index}); }
+
+void DesignCanvas::editItemProperties(int index, const QString& label, QPointF position,
+                                      int quarterTurns) {
+    if (index < 0 || index >= items_.size() || items_[index].points.isEmpty()) return;
+    auto properties = items_[index];
+    properties.label = label;
+    properties.points[0] = position;
+    properties.quarterTurns = quarterTurns;
+    editItemProperties(index, properties);
+}
+
+void DesignCanvas::editItemProperties(int index, const SketchItem& properties) {
+    const QPointF position = properties.points.value(0);
+    if (index < 0 || index >= items_.size() || items_[index].points.isEmpty() ||
+        !std::isfinite(position.x()) || !std::isfinite(position.y())) return;
+    SketchDocument document = items_;
+    auto& item = document[index];
+    const int turns = ((properties.quarterTurns % 4) + 4) % 4;
+    const QPointF anchor = item.points.first();
+    if (item.label == properties.label && anchor == position && item.quarterTurns == turns &&
+        item.value == properties.value && item.footprint == properties.footprint &&
+        item.pinPadMap == properties.pinPadMap) return;
+    const int delta = (turns - item.quarterTurns + 4) % 4;
+    for (int i = 0; i < delta; ++i) rotateItemQuarterTurn(item, anchor);
+    item.quarterTurns = turns;
+    translateItem(item, position - item.points.first());
+    item.label = properties.label;
+    item.value = properties.value;
+    item.footprint = properties.footprint;
+    item.pinPadMap = properties.pinPadMap;
+    pushEdit(tr("Edit properties"), document, {index});
+}
+
 void DesignCanvas::restore(const SketchDocument& document, const QList<int>& selection) {
+    if (contextMenuTimer_) contextMenuTimer_->stop();
     pending_.clear();
     pressGesture_ = false;
     if (drag_ != Drag::Pan) {
@@ -386,6 +436,17 @@ void DesignCanvas::restore(const SketchDocument& document, const QList<int>& sel
     selection_ = selection;
     selection_.removeIf([this](int index) { return index < 0 || index >= items_.size(); });
     emit selectionChanged(static_cast<int>(selection_.size()));
+    emit documentChanged();
+    update();
+}
+
+void DesignCanvas::applyDocumentEdit(const QString& title, const SketchDocument& document) {
+    cancelOperation();
+    pushEdit(title, document, {});
+}
+
+void DesignCanvas::setAirwires(const QVector<QLineF>& lines) {
+    airwires_ = lines;
     update();
 }
 
@@ -416,6 +477,8 @@ void DesignCanvas::duplicateSelection() {
     const QPointF offset(gridSize() * 2, gridSize() * 2);
     for (int index : selection_) {
         SketchItem copy = items_[index];
+        copy.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
+        copy.sourceId.clear();
         translateItem(copy, offset);
         if (copy.kind == SketchItem::Kind::Symbol) {
             const auto* symbol = findSymbol(copy.variant);
@@ -707,6 +770,8 @@ void DesignCanvas::placeSymbol(QPointF world) {
     item.quarterTurns = placementTurns_;
     item.label = symbol->prefix.isEmpty() ? symbol->defaultLabel
                                           : nextDesignator(items_, symbol->prefix);
+    if (variant_ == QLatin1String("schematic.resistor")) item.value = QStringLiteral("1k");
+    if (variant_ == QLatin1String("schematic.vdc")) item.value = QStringLiteral("5");
     SketchDocument document = items_;
     document.append(item);
     pushEdit(tr("Place %1").arg(item.label.isEmpty() ? symbolDisplayName(*symbol) : item.label),
@@ -814,16 +879,28 @@ void DesignCanvas::mousePressEvent(QMouseEvent* event) {
         return;
     }
     if (event->button() == Qt::RightButton) {
-        if (isPathTool(tool_) && pending_.size() >= 2) {
-            finishPath();
-        } else {
+        if (tool_ != CanvasTool::Select || hasPendingOperation() || hasMeasurement_) {
             cancelOperation();
+            setTool(CanvasTool::Select);
+            emit selectToolRequested();
+            return;
         }
+        if (!contextMenuTimer_) {
+            contextMenuTimer_ = new QTimer(this);
+            contextMenuTimer_->setSingleShot(true);
+            connect(contextMenuTimer_, &QTimer::timeout, this, [this] {
+                emit contextMenuRequested(contextMenuPosition_, contextMenuItem_);
+            });
+        }
+        contextMenuPosition_ = event->globalPosition().toPoint();
+        contextMenuItem_ = hitTest(position);
+        contextMenuTimer_->start(QApplication::doubleClickInterval());
         return;
     }
     if (event->button() != Qt::LeftButton) {
         return;
     }
+    if (contextMenuTimer_) contextMenuTimer_->stop();
 
     switch (tool_) {
     case CanvasTool::Select: {
@@ -996,6 +1073,16 @@ void DesignCanvas::mouseReleaseEvent(QMouseEvent* event) {
 }
 
 void DesignCanvas::mouseDoubleClickEvent(QMouseEvent* event) {
+    if (event->button() == Qt::RightButton && contextMenuTimer_ &&
+        contextMenuTimer_->isActive() && tool_ == CanvasTool::Select) {
+        contextMenuTimer_->stop();
+        const int hit = hitTest(event->position());
+        if (hit >= 0 && hit == contextMenuItem_) {
+            setSelection({hit});
+            deleteSelection();
+        }
+        return;
+    }
     if (event->button() == Qt::LeftButton && isPathTool(tool_)) {
         if (!pending_.isEmpty()) {
             const Snap point = snap(event->position(), constraintOrigin());
@@ -1007,6 +1094,22 @@ void DesignCanvas::mouseDoubleClickEvent(QMouseEvent* event) {
         return;
     }
     mousePressEvent(event);
+}
+
+void DesignCanvas::contextMenuEvent(QContextMenuEvent* event) {
+    // Mouse context events are generated separately by Windows after right release.
+    // Our timer arbitrates those gestures; only keyboard requests bypass it.
+    event->accept();
+    if (event->reason() != QContextMenuEvent::Keyboard) return;
+    if (contextMenuTimer_) contextMenuTimer_->stop();
+    if (tool_ != CanvasTool::Select || hasPendingOperation()) {
+        setTool(CanvasTool::Select);
+        emit selectToolRequested();
+    }
+    const int index = selection_.isEmpty() ? -1 : selection_.first();
+    const QPoint position = index >= 0 ? worldToScreen(items_[index].points.value(0)).toPoint()
+                                      : rect().center();
+    emit contextMenuRequested(mapToGlobal(position), index);
 }
 
 void DesignCanvas::wheelEvent(QWheelEvent* event) {
@@ -1104,6 +1207,8 @@ void DesignCanvas::paintEvent(QPaintEvent*) {
     painter.drawLine(QLineF(offset_.x(), offset_.y() - 8, offset_.x(), offset_.y() + 8));
 
     painter.setRenderHint(QPainter::Antialiasing);
+    painter.setPen(strokePen(colors.preview, 1.2, true));
+    for (const auto& line : airwires_) painter.drawLine(QLineF(map(line.p1()), map(line.p2())));
     for (int i = 0; i < items_.size(); ++i) {
         const bool selected = selection_.contains(i);
         if (selected && drag_ == Drag::Move && !moveDelta_.isNull()) {

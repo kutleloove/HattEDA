@@ -1,6 +1,7 @@
 #include "hatt/ui/DesignCanvas.hpp"
 
 #include <QApplication>
+#include <QContextMenuEvent>
 #include <QMouseEvent>
 #include <QSignalSpy>
 #include <QUndoStack>
@@ -75,7 +76,9 @@ private slots:
     void escapeIsLayered();
     void escapeDuringDragCancelsMoveWithoutUndoEntry();
     void wireBackspaceRemovesLastCornerAndEnterFinishes();
-    void wireFinishesOnRightClick();
+    void rightClickCancelsThenRequestsMenu();
+    void doubleRightClickDeletesOnlyTarget();
+    void propertyEditIsUndoable();
     void wireFinishesOnDoubleClick();
     void rightClickWithSinglePointCancelsWire();
     void lineByDragAndRectangleCircleMeasureByTwoClicks();
@@ -360,7 +363,10 @@ void DesignCanvasTests::wireBackspaceRemovesLastCornerAndEnterFinishes() {
     QCOMPARE(canvas_->document().size(), 2);
 }
 
-void DesignCanvasTests::wireFinishesOnRightClick() {
+void DesignCanvasTests::rightClickCancelsThenRequestsMenu() {
+    QSignalSpy menus(canvas_, &DesignCanvas::contextMenuRequested);
+    QSignalSpy selectionTool(canvas_, &DesignCanvas::selectToolRequested);
+    placeResistor(*canvas_, {50.8, 50.8});
     canvas_->setTool(CanvasTool::Wire);
     click(*canvas_, {5.08, 5.08});
     click(*canvas_, {15.24, 5.08});
@@ -370,8 +376,63 @@ void DesignCanvasTests::wireFinishesOnRightClick() {
 
     QVERIFY(!canvas_->hasPendingOperation());
     QCOMPARE(canvas_->document().size(), 1);
-    QCOMPARE(canvas_->document().first().points.size(), 3);
+    QCOMPARE(canvas_->document().first().kind, SketchItem::Kind::Symbol);
     QCOMPARE(canvas_->undoStack()->count(), 1);
+    QCOMPARE(canvas_->tool(), CanvasTool::Select);
+    QCOMPARE(selectionTool.count(), 1);
+    // The OS may classify the next click as a double click with the cancellation click.
+    sendMouse(*canvas_, QEvent::MouseButtonDblClick, {50.8, 50.8}, Qt::RightButton, Qt::RightButton);
+    sendMouse(*canvas_, QEvent::MouseButtonRelease, {50.8, 50.8}, Qt::RightButton, Qt::NoButton);
+    QCOMPARE(canvas_->document().size(), 1);
+    QCOMPARE(menus.count(), 0);
+    QTRY_COMPARE(menus.count(), 1);
+    QCOMPARE(menus.first().at(1).toInt(), 0);
+}
+
+void DesignCanvasTests::doubleRightClickDeletesOnlyTarget() {
+    QSignalSpy menus(canvas_, &DesignCanvas::contextMenuRequested);
+    placeResistor(*canvas_, {20.32, 20.32});
+    click(*canvas_, {50.8, 50.8});
+    canvas_->setTool(CanvasTool::Select);
+    canvas_->selectAll();
+    auto twice = [&](QPointF at) {
+        sendMouse(*canvas_, QEvent::MouseButtonPress, at, Qt::RightButton, Qt::RightButton);
+        sendMouse(*canvas_, QEvent::MouseButtonRelease, at, Qt::RightButton, Qt::NoButton);
+        sendMouse(*canvas_, QEvent::MouseButtonDblClick, at, Qt::RightButton, Qt::RightButton);
+        sendMouse(*canvas_, QEvent::MouseButtonRelease, at, Qt::RightButton, Qt::NoButton);
+    };
+    twice({20.32, 20.32});
+    QCOMPARE(canvas_->document().size(), 1);
+    QCOMPARE(canvas_->undoStack()->count(), 3);
+    canvas_->undoStack()->undo();
+    QCOMPARE(canvas_->document().size(), 2);
+    canvas_->undoStack()->redo();
+    QCOMPARE(canvas_->document().size(), 1);
+    twice({90, 90});
+    QCOMPARE(canvas_->document().size(), 1);
+    QTest::qWait(QApplication::doubleClickInterval() + 30);
+    QCOMPARE(menus.count(), 0);
+    QContextMenuEvent mouseContext(QContextMenuEvent::Mouse, {20, 20}, canvas_->mapToGlobal(QPoint(20, 20)));
+    QApplication::sendEvent(canvas_, &mouseContext);
+    QCOMPARE(menus.count(), 0);
+    QContextMenuEvent keyboardContext(QContextMenuEvent::Keyboard, {20, 20}, canvas_->mapToGlobal(QPoint(20, 20)));
+    QApplication::sendEvent(canvas_, &keyboardContext);
+    QCOMPARE(menus.count(), 1);
+}
+
+void DesignCanvasTests::propertyEditIsUndoable() {
+    placeResistor(*canvas_, {20.32, 20.32});
+    const auto original = canvas_->document().first();
+    canvas_->editItemProperties(0, QStringLiteral("R42"), {30, 40}, 1);
+    QCOMPARE(canvas_->document().first().label, QStringLiteral("R42"));
+    QCOMPARE(canvas_->document().first().points.first(), QPointF(30, 40));
+    QCOMPARE(canvas_->document().first().quarterTurns, 1);
+    QCOMPARE(canvas_->undoStack()->count(), 2);
+    canvas_->undoStack()->undo();
+    QCOMPARE(canvas_->document().first().label, original.label);
+    QCOMPARE(canvas_->document().first().points, original.points);
+    canvas_->undoStack()->redo();
+    QCOMPARE(canvas_->document().first().label, QStringLiteral("R42"));
 }
 
 void DesignCanvasTests::wireFinishesOnDoubleClick() {
