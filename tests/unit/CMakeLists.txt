@@ -24,6 +24,10 @@ add_executable(hatt-component-library-tests ComponentLibraryTests.cpp)
 target_link_libraries(hatt-component-library-tests PRIVATE HattEDA::UiShell Qt6::Test)
 hatt_add_qt_test(hatt-component-library-tests)
 
+add_executable(hatt-design-checks-tests DesignChecksTests.cpp)
+target_link_libraries(hatt-design-checks-tests PRIVATE HattEDA::UiShell Qt6::Test)
+hatt_add_qt_test(hatt-design-checks-tests)
+
 add_executable(hatt-package-from-selection-tests PackageFromSelectionTests.cpp)
 target_link_libraries(hatt-package-from-selection-tests PRIVATE HattEDA::UiShell Qt6::Test)
 hatt_add_qt_test(hatt-package-from-selection-tests)

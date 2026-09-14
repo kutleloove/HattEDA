@@ -127,6 +127,9 @@ public:
     void zoomIn();
     void zoomOut();
     void zoomToFit();
+    // Selects the items with the given ids and centres the view on `location` (or on the
+    // selection when there is no location) without changing the zoom. Used by the checks report.
+    void revealItems(const QStringList& ids, std::optional<QPointF> location);
 
     // Replaces document and selection without creating an undo entry. Used by undo commands.
     void restore(const SketchDocument& document, const QList<int>& selection);

@@ -1,3 +1,4 @@
+#include "hatt/ui/ChecksReport.hpp"
 #include "hatt/ui/DesignCanvas.hpp"
 #include "hatt/ui/MainWindow.hpp"
 #include "hatt/ui/ProjectFile.hpp"
@@ -31,6 +32,7 @@
 #include <QTabWidget>
 #include <QTableWidget>
 #include <QToolButton>
+#include <QTreeWidget>
 #include <QUndoStack>
 #include <QtTest>
 
@@ -96,6 +98,7 @@ private slots:
     void contextPropertiesAcceptAndCancel();
     void componentModeUsesProjectDevicesAndSchematicParts();
     void newDeviceCreatesFootprintAndPinMap();
+    void designChecksReportAndRules();
     void selectionStatesFollowTheme_data();
     void selectionStatesFollowTheme();
 
@@ -977,6 +980,67 @@ void MainWindowTests::undoFollowsActiveWorkspaceAndKeepsTool() {
     QCOMPARE(mergen->tool(), CanvasTool::Symbol);
     action(window, "hatteda.action.redo")->trigger();
     QCOMPARE(mergen->document().size(), 1);
+}
+
+void MainWindowTests::designChecksReportAndRules() {
+    hatt::ui::MainWindow window;
+    QVERIFY(showActive(window));
+    auto* checks = action(window, "hatteda.action.run-checks");
+    QVERIFY(checks && !checks->isEnabled());
+    activateEditor(window);
+    QVERIFY(checks->isEnabled());
+    auto* schematic = window.activeCanvas();
+    schematic->setTool(CanvasTool::Symbol, QStringLiteral("schematic.resistor"));
+    clickCanvas(schematic, {20.32, 20.32});
+    schematic->setTool(CanvasTool::Select);
+    schematic->clearSelection();
+
+    checks->trigger();
+    auto* host = window.findChild<QTabWidget*>(QStringLiteral("ToolWorkspaceHost"));
+    QVERIFY(host);
+    auto* report = qobject_cast<hatt::ui::ChecksReport*>(host->currentWidget());
+    QVERIFY(report);
+    QCOMPARE(report->objectName(), QStringLiteral("hatteda.tool.design-checks"));
+    auto* table = report->findChild<QTreeWidget*>(QStringLiteral("ChecksTable"));
+    QCOMPARE(table->topLevelItemCount(), report->violations().size());
+    const auto& violations = report->violations();
+    const auto pin = std::find_if(violations.begin(), violations.end(), [](const hatt::ui::CheckViolation& v) {
+        return v.rule == QLatin1String("erc.unconnected-pin");
+    });
+    QVERIFY(pin != violations.end());
+    // No board outline and an unplaced part are reported by the DRC.
+    QVERIFY(std::any_of(violations.begin(), violations.end(), [](const auto& v) { return v.rule == QLatin1String("drc.not-placed"); }));
+
+    // Clicking a problem shows it on its canvas.
+    report->activateRow(static_cast<int>(pin - violations.begin()));
+    QCOMPARE(window.activeCanvas(), schematic);
+    QCOMPARE(schematic->selection(), QList<int>({0}));
+
+    // Running again reuses the workspace.
+    const int tabs = window.toolWorkspaceCount();
+    checks->trigger();
+    QCOMPARE(window.toolWorkspaceCount(), tabs);
+
+    QTimer::singleShot(0, [] {
+        auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+        QVERIFY(dialog);
+        QCOMPARE(dialog->objectName(), QStringLiteral("DesignRulesDialog"));
+        auto* ok = dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Ok);
+        auto* clearance = dialog->findChild<QDoubleSpinBox*>(QStringLiteral("RulesClearance"));
+        clearance->setValue(0.0);
+        QVERIFY(!ok->isEnabled());
+        clearance->setValue(0.25);
+        QVERIFY(ok->isEnabled());
+        ok->click();
+    });
+    QVERIFY(window.projectGuard() != nullptr);
+    action(window, "hatteda.action.design-rules")->trigger();
+    QCOMPARE(window.designRules().clearance, 0.25);
+    QVERIFY(window.isWindowModified());
+    QVERIFY(window.saveProject());
+    const auto saved = hatt::ui::loadProjectFile(window.projectPath());
+    QVERIFY2(saved.ok(), qPrintable(saved.error));
+    QCOMPARE(saved.project.rules.clearance, 0.25);
 }
 
 void MainWindowTests::selectionStatesFollowTheme_data() {

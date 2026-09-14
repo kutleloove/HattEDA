@@ -1,5 +1,6 @@
 #pragma once
 
+#include "hatt/ui/DesignChecks.hpp"
 #include "hatt/ui/SketchModel.hpp"
 
 #include <QByteArray>
@@ -20,6 +21,7 @@ struct ProjectData {
     SketchDocument schematic;
     SketchDocument board;
     ProjectLibrary library; // v2: picked devices (component mode)
+    DesignRules rules;      // DRC rules (ADR-0008)
 };
 
 struct ProjectLoad {

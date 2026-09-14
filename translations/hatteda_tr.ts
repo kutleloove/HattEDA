@@ -550,4 +550,74 @@ Son projeler listesinden kaldırılsın mı?</translation></message>
     <message><source>Invalid fabrication file name: %1</source><translation>Geçersiz üretim dosyası adı: %1</translation></message>
     <message><source>Could not write %1: %2</source><translation>%1 yazılamadı: %2</translation></message>
   </context>
+  <context>
+    <name>hatt::ui::DesignChecks</name>
+    <message><source>Design rules cannot be negative.</source><translation>Tasarım kuralları negatif olamaz.</translation></message>
+    <message><source>Design rules must be at most 100 mm.</source><translation>Tasarım kuralları en fazla 100 mm olabilir.</translation></message>
+    <message><source>The clearance must be greater than zero.</source><translation>Yalıtım aralığı sıfırdan büyük olmalı.</translation></message>
+    <message><source>The minimum track width must be greater than zero.</source><translation>En küçük yol genişliği sıfırdan büyük olmalı.</translation></message>
+    <message><source>A %1 has no reference designator.</source><translation>Bir %1 elemanının etiketi yok.</translation></message>
+    <message><source>The reference %1 is used more than once.</source><translation>%1 etiketi birden fazla kez kullanılmış.</translation></message>
+    <message><source>%1 has no value.</source><translation>%1 elemanının değeri yok.</translation></message>
+    <message><source>%1 needs a footprint with %2 pads (or exclude it from the board).</source><translation>%1 için %2 padli bir kılıf gerekiyor (ya da elemanı PCB'den hariç tutun).</translation></message>
+    <message><source>%1: the pin to pad map must use every pad once.</source><translation>%1: pin - pad eşlemesi her padi bir kez kullanmalı.</translation></message>
+    <message><source>A port or power rail has no net name.</source><translation>Bir port veya güç hattının net adı yok.</translation></message>
+    <message><source>Different net names are connected: %1</source><translation>Farklı net adları birbirine bağlanmış: %1</translation></message>
+    <message><source>%1 pin %2 is not connected.</source><translation>%1 elemanının %2 numaralı pini bağlı değil.</translation></message>
+    <message><source>%1 is not connected to any component.</source><translation>%1 hiçbir elemana bağlı değil.</translation></message>
+    <message><source>All pins of %1 are on the same net.</source><translation>%1 elemanının tüm pinleri aynı nette.</translation></message>
+    <message><source>A wire end is not connected.</source><translation>Bir tel ucu boşta.</translation></message>
+    <message><source>The board has no closed board outline, so board edge clearance is not checked.</source><translation>Kartın kapalı bir dış çizgisi yok; kart kenarı mesafesi denetlenmedi.</translation></message>
+    <message><source>Fix the schematic errors (run the electrical check) to check shorts and unrouted nets.</source><translation>Kısa devreleri ve tamamlanmamış netleri denetlemek için önce şema hatalarını düzeltin (elektriksel denetim).</translation></message>
+    <message><source>Track width %1 is below the minimum %2.</source><translation>Yol genişliği %1, en küçük değer %2'nin altında.</translation></message>
+    <message><source>track</source><translation>yol</translation></message>
+    <message><source>via</source><translation>via</translation></message>
+    <message><source>pad %1</source><translation>pad %1</translation></message>
+    <message><source>footprint</source><translation>kılıf</translation></message>
+    <message><source>%1: hole %2 is below the minimum %3.</source><translation>%1: delik %2, en küçük değer %3'ün altında.</translation></message>
+    <message><source>%1: annular ring %2 is below the minimum %3.</source><translation>%1: halka genişliği %2, en küçük değer %3'ün altında.</translation></message>
+    <message><source>Copper joins different nets: %1</source><translation>Bakır farklı netleri birleştiriyor: %1</translation></message>
+    <message><source>Clearance %1 between %2 and %3 is below %4.</source><translation>%2 ile %3 arasındaki %1 aralık, %4 değerinin altında.</translation></message>
+    <message><source>%1 is outside the board outline.</source><translation>%1 kart dış çizgisinin dışında.</translation></message>
+    <message><source>%1 is %2 from the board edge; the minimum is %3.</source><translation>%1 kart kenarına %2 uzakta; en az %3 olmalı.</translation></message>
+    <message><source>%1 and %2 overlap.</source><translation>%1 ile %2 üst üste biniyor.</translation></message>
+    <message numerus="yes"><source>Net %1 is not fully routed: %n unconnected part(s).</source><translation><numerusform>%1 neti tamamlanmamış: %n bağlanmamış parça.</numerusform></translation></message>
+    <message><source>%1 is not placed on the board.</source><translation>%1 karta yerleştirilmemiş.</translation></message>
+  </context>
+  <context>
+    <name>hatt::ui::ChecksReport</name>
+    <message><source>Run again</source><translation>Yeniden çalıştır</translation></message>
+    <message><source>Severity</source><translation>Önem</translation></message>
+    <message><source>Check</source><translation>Denetim</translation></message>
+    <message><source>Problem</source><translation>Sorun</translation></message>
+    <message><source>Click a problem to show it in the schematic or on the PCB.</source><translation>Şemada veya PCB'de görmek için bir sorunun üzerine tıklayın.</translation></message>
+    <message><source>Error</source><translation>Hata</translation></message>
+    <message><source>Warning</source><translation>Uyarı</translation></message>
+    <message><source>ERC · schematic</source><translation>ERC · şema</translation></message>
+    <message><source>DRC · schematic</source><translation>DRC · şema</translation></message>
+    <message><source>DRC · PCB</source><translation>DRC · PCB</translation></message>
+    <message><source>No problems found.</source><translation>Sorun bulunamadı.</translation></message>
+    <message><source>%1 error(s), %2 warning(s).</source><translation>%1 hata, %2 uyarı.</translation></message>
+  </context>
+  <context>
+    <name>hatt::ui::DesignRulesDialog</name>
+    <message><source>Design rules</source><translation>Tasarım kuralları</translation></message>
+    <message><source>Copper clearance</source><translation>Bakır yalıtım aralığı</translation></message>
+    <message><source>Minimum track width</source><translation>En küçük yol genişliği</translation></message>
+    <message><source>Minimum hole</source><translation>En küçük delik</translation></message>
+    <message><source>Minimum annular ring</source><translation>En küçük halka genişliği</translation></message>
+    <message><source>Copper to board edge</source><translation>Bakır - kart kenarı mesafesi</translation></message>
+  </context>
+  <context>
+    <name>hatt::ui::MainWindow</name>
+    <message><source>Run design checks: electrical rules (schematic) and design rules (PCB)</source><translation>Tasarım denetimini çalıştır: elektriksel kurallar (şema) ve tasarım kuralları (PCB)</translation></message>
+    <message><source>Design rules...</source><translation>Tasarım kuralları...</translation></message>
+    <message><source>Design checks</source><translation>Tasarım denetimi</translation></message>
+    <message><source>Design checks: %1 error(s), %2 warning(s)</source><translation>Tasarım denetimi: %1 hata, %2 uyarı</translation></message>
+  </context>
+  <context>
+    <name>hatt::ui::ProjectFile</name>
+    <message><source>The design rules section is invalid.</source><translation>Tasarım kuralları bölümü geçersiz.</translation></message>
+    <message><source>The design rules are invalid: %1</source><translation>Tasarım kuralları geçersiz: %1</translation></message>
+  </context>
 </TS>
