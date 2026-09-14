@@ -28,6 +28,10 @@ add_executable(hatt-design-checks-tests DesignChecksTests.cpp)
 target_link_libraries(hatt-design-checks-tests PRIVATE HattEDA::UiShell Qt6::Test)
 hatt_add_qt_test(hatt-design-checks-tests)
 
+add_executable(hatt-mvp-flow-tests MvpFlowTests.cpp)
+target_link_libraries(hatt-mvp-flow-tests PRIVATE HattEDA::UiShell Qt6::Test)
+hatt_add_qt_test(hatt-mvp-flow-tests)
+
 add_executable(hatt-package-from-selection-tests PackageFromSelectionTests.cpp)
 target_link_libraries(hatt-package-from-selection-tests PRIVATE HattEDA::UiShell Qt6::Test)
 hatt_add_qt_test(hatt-package-from-selection-tests)
