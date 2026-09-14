@@ -67,7 +67,8 @@ changing zoom. Running the checks again reuses the open workspace.
 
 `DesignRules { clearance 0.2, minTrackWidth 0.15, minDrill 0.3, minAnnularRing 0.13,
 boardEdgeClearance 0.3 }` (mm, defaults suitable for common 2-layer prototype services) is part
-of `ProjectData` and edited with `DesignRulesDialog` (`hatteda.action.design-rules`, Design menu).
+of `ProjectData` and edited under `hatteda.action.design-rules` (Design menu; since ADR-0010 the
+Design Rule Manager, which adds region clearance rules, net classes, differential pairs and defaults).
 `.hatt` stores it as an additive top-level object; no `formatVersion` bump:
 
 ```json

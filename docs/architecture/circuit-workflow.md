@@ -116,7 +116,12 @@ Komut çubuğundaki denetim düğmesi veya **Design › Run design checks** (`ha
     - neti olmayan bakır alan: dökülmez, boşluksuz dolu bakır sayılır ve Gerber'e yazılmaz (`drc.zone-unfilled`)
     - neti olan ama altında o netin bakırı olmadığı için hiç bakır dökmeyen alan (`drc.zone-empty`)
   - Neti olan bakır alan dökümüyle (clearance, termal bağlantılar, adacık temizliği) denetlenir. Dökümün değdiği bakır birleşir, örneğin GND dökümü GND netini tamamlar. Başka nete değerse `drc.zone-short`, clearance altında kalırsa `drc.clearance` verir.
-- **Design › Design rules...** (`DesignRulesDialog`) şu değerleri mm cinsinden düzenler: bakır aralığı (0.2), en küçük yol (0.15), en küçük delik (0.3), en küçük halka (0.13), kart kenarı mesafesi (0.3). Kurallar `.hatt` dosyasında `rules` nesnesi olarak saklanır; değiştirmek projeyi kaydedilmemiş yapar.
+- **Design › Design rules...** Proteus tarzı **Tasarım Kuralı Yöneticisi**ni açar (`DesignRuleManagerDialog`, ADR-0010). Sekmeler:
+  - **Design Rules:** Kurallar kart geneli, üst bakır veya alt bakır bölgesi için tanımlanır. Her kuralda pad-pad, pad-yol, yol-yol, grafik (bakır alan) ve kart kenarı aralıkları vardır; kurallar New, Clone ve Delete ile yönetilir. Bu sekmede tüm kart için en küçük yol, delik ve halka genişliği de ayarlanır. Bir katmanın kendi kuralı varsa o katmanda kart kuralının yerine geçer; iki katmanı paylaşan nesnelerde büyük değer geçerlidir.
+  - **Net Classes:** Her sınıf için yol genişliği, boyun genişliği, via çapı/deliği, izin verilen katmanlar ve ratsnest rengi/gizleme ayarlanır; netler sınıfa atanır. Atanmamış netler şöyle sınıflanır: ground veya güç hattı içerenler POWER (0.635 mm), diğerleri SIGNAL (0.3048 mm). DRC, sınıfından ince olan yollar için `drc.net-class-width`, izin verilmeyen katmandaki yollar için `drc.net-class-layer` uyarısı verir.
+  - **Differential Pairs:** Pozitif ve negatif net, genişlik ve aralık saklanır; bunlar için rota ve denetim henüz yoktur.
+  - **Defaults:** termal bağlantı açık/kapalı, termal boşluk, kol genişliği, lehim maskesi payı, serigrafi-pad mesafesi ve eğri toleransı.
+- Kurallar `.hatt` dosyasında `rules` nesnesinde saklanır. Değiştirilmeyen bölümler dosyaya yazılmaz. Kuralları değiştirmek projeyi kaydedilmemiş yapar.
 
 ## Çalışan örnek
 
