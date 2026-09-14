@@ -1,3 +1,4 @@
+#include "hatt/ui/BoardCopper.hpp"
 #include "hatt/ui/DesignChecks.hpp"
 #include "hatt/ui/SketchCircuit.hpp"
 
@@ -267,6 +268,40 @@ private slots:
         report = runDesignRuleCheck(schematic, board, DesignRules{});
         QCOMPARE(withRule(report, "drc.zone-short").size(), 0);
         QCOMPARE(withRule(report, "drc.unrouted").size(), before - 1);
+    }
+
+    void boardCopperModelGroupsAndShapes() {
+        // Shapes: gaps and grown outlines.
+        const CopperShape capsule{{0, 0}, {10, 0}, 0.5, {}};
+        const CopperShape square{{}, {}, 0.0, QPolygonF(QVector<QPointF>{{0, 2}, {1, 2}, {1, 3}, {0, 3}})};
+        QVERIFY(qAbs(copperShapeGap(capsule, square) - 1.5) < 1e-9);
+        QVERIFY(copperShapePath(capsule).contains(QPointF(10.4, 0)));
+        QVERIFY(!copperShapePath(capsule).contains(QPointF(10.6, 0)));
+        QVERIFY(copperShapePath(capsule, 0.2).contains(QPointF(10.6, 0)));
+        QVERIFY(copperShapePath(square, 0.3).contains(QPointF(0.5, 1.8)));
+        QVERIFY(!copperShapePath(square).contains(QPointF(0.5, 1.8)));
+
+        // Model: a track from R1 pad 2 takes the pad's net through its group; near pairs by distance.
+        const SketchDocument schematic = dcDividerExample();
+        SketchDocument board = transferToBoard(schematic, {outline(80, 60)}).document;
+        const auto r1 = *std::find_if(board.begin(), board.end(), [](const SketchItem& i) { return i.label == QLatin1String("R1"); });
+        const QPointF pad2 = itemPads(r1)[1].center;
+        SketchItem stub = track({pad2, pad2 + QPointF(0, 5)}, 0.25);
+        board.append(stub);
+        const BoardCopperModel model = buildBoardCopperModel(schematic, board, 0.2);
+        QVERIFY(model.netsKnown);
+        const auto trackIndex = std::find_if(model.conductors.begin(), model.conductors.end(),
+                                             [&stub](const BoardConductor& c) { return c.itemId == stub.id; }) - model.conductors.begin();
+        const auto padIndex = std::find_if(model.conductors.begin(), model.conductors.end(), [&r1](const BoardConductor& c) {
+                                  return c.itemId == r1.id && c.padIndex == 1;
+                              }) - model.conductors.begin();
+        QVERIFY(trackIndex < model.conductors.size() && padIndex < model.conductors.size());
+        QCOMPARE(model.conductors[trackIndex].net, -1);
+        QVERIFY(model.conductors[padIndex].net >= 0);
+        QCOMPARE(model.groups[trackIndex], model.groups[padIndex]);
+        QCOMPARE(model.groupNets(model.groups[trackIndex]), QVector<int>{model.conductors[padIndex].net});
+        QVERIFY(model.placedSources.contains(schematic.first().id));
+        QCOMPARE(model.conductors[padIndex].name, QStringLiteral("R1.2"));
     }
 
     void routingANetRemovesItsUnroutedWarning() {
