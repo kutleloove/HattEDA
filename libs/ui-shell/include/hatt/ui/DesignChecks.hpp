@@ -64,6 +64,8 @@ struct CheckReport {
 //  drc.annular-ring      Error    copper around a hole narrower than minAnnularRing
 //  drc.clearance         Error    copper of different nets closer than `clearance` on a shared layer
 //  drc.short             Error    copper joining different schematic nets
+//  drc.zone-short        Error    a copper zone (solid, not poured) joining different schematic nets
+//  drc.zone-unfilled     Warning  every copper zone: it is solid copper without clearance
 //  drc.board-edge        Error    copper closer than boardEdgeClearance to the outline or outside it
 //  drc.overlap           Warning  footprints on the same side whose bodies overlap
 //  drc.unrouted          Warning  pads of one schematic net that copper does not join yet

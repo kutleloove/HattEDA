@@ -59,7 +59,7 @@ Komut çubuğundaki denetim düğmesi veya **Design › Run design checks** (`ha
     - değeri boş parça
 - **DRC (kart):** Aynı bakır katmanında birbirine değen yollar, padler ve vialar tek iletken sayılır.
   - Hata:
-    - farklı şema netlerini birleştiren bakır (kısa devre)
+    - farklı şema netlerini birleştiren bakır (kısa devre); bir bakır alan üzerinden olursa `drc.zone-short`
     - clearance altında kalan farklı iletkenler
     - en küçük yol genişliğinin, deliğin veya halka genişliğinin altı
     - kart dış çizgisinin dışındaki ya da kenara çok yakın bakır
@@ -68,6 +68,7 @@ Komut çubuğundaki denetim düğmesi veya **Design › Run design checks** (`ha
     - tamamlanmamış netler
     - karta yerleştirilmemiş parçalar
     - kapalı kart dış çizgisinin olmaması
+    - her bakır alan: henüz dökülmediği için boşluksuz dolu bakırdır (`drc.zone-unfilled`). Alan değdiği bakırı birleştirir, örneğin GND alanı GND netini tamamlar.
 - **Design › Design rules...** (`DesignRulesDialog`) şu değerleri mm cinsinden düzenler: bakır aralığı (0.2), en küçük yol (0.15), en küçük delik (0.3), en küçük halka (0.13), kart kenarı mesafesi (0.3). Kurallar `.hatt` dosyasında `rules` nesnesi olarak saklanır; değiştirmek projeyi kaydedilmemiş yapar.
 
 ## Çalışan örnek
@@ -83,7 +84,7 @@ Kendi devrenizde varsayılan değer ve footprint atamalarını gerekirse özelli
 
 - Proje `.hatt` dosyasına kaydedilir (Ctrl+S, Farklı kaydet Ctrl+Shift+S; ADR-0004). Kaydedilmemiş değişiklik varken pencere başlığında `*` görünür ve kapatma/yeni/aç işlemleri kaydetmeyi sorar. Otomatik kayıt, kurtarma, yedek ve kilit dosyaları ADR-0005'te anlatılır.
 - Netlist uygulama içinde hesaplanır ve `.net` olarak dışa aktarılabilir; netlist import ve genel SPICE formatı yoktur.
-- Bağlantı rehberi otomatik router değildir; airwire'lar pad merkezleri arasında çizilir. Clearance, genişlik, delik, kart kenarı ve katman kontrolleri DRC'dedir (ADR-0008). Bakır alanları doldurulmadığı için DRC'ye katılmaz; net sınıfı kuralları ve istisna listesi yoktur.
+- Bağlantı rehberi otomatik router değildir; airwire'lar pad merkezleri arasında çizilir. Clearance, genişlik, delik, kart kenarı ve katman kontrolleri DRC'dedir (ADR-0008). Bakır alanlar dökülmez; DRC onları dolu bakır olarak değerlendirir, clearance ve kenar kontrolüne katmaz. Net sınıfı kuralları ve istisna listesi yoktur.
 - Footprint/pin eşlemesi değişen veya şemadan silinen bileşenlerin mevcut PCB bağlantıları sessizce dönüştürülmez; kullanıcı incelemesi gerekir.
 - Simülasyon direnç, bağımsız DC gerilim kaynağı, kondansatör (açık) ve bobin (kısa) ile DC çalışma noktasıdır; AC/transient, diyot/transistör/opamp modelleri desteklenmez. Desteklenmeyen eleman hata verir. Akım probu henüz değer göstermez.
 - Değerler `1k`, `4.7k`, `5`, `1meg`, `1e-3` biçiminde girilir. `M` milli, `MEG` mega; `V`/`ohm` eki eklenmez.
