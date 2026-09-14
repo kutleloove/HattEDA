@@ -1,6 +1,7 @@
 #include "hatt/ui/ProjectFile.hpp"
 
 #include "hatt/ui/ComponentLibrary.hpp"
+#include "hatt/ui/DesignChecks.hpp"
 
 #include <QCoreApplication>
 #include <QFile>
@@ -490,6 +491,20 @@ QString libraryFromJson(const QJsonValue& value, ProjectLibrary& library) {
     return {};
 }
 
+// Design rules (ADR-0008) are optional; a missing object or key keeps the default value.
+QString rulesFromJson(const QJsonValue& value, DesignRules& rules) {
+    if (value.isUndefined()) return {};
+    const QJsonObject object = value.toObject();
+    const bool valid = value.isObject() && readLength(object, "clearance", rules.clearance) &&
+                       readLength(object, "minTrackWidth", rules.minTrackWidth) &&
+                       readLength(object, "minDrill", rules.minDrill) &&
+                       readLength(object, "minAnnularRing", rules.minAnnularRing) &&
+                       readLength(object, "boardEdgeClearance", rules.boardEdgeClearance);
+    if (!valid) return tr("The design rules section is invalid.");
+    const QString problem = validateDesignRules(rules);
+    return problem.isEmpty() ? QString() : tr("The design rules are invalid: %1").arg(problem);
+}
+
 } // namespace
 
 QByteArray serializeProject(const ProjectData& project) {
@@ -511,6 +526,12 @@ QByteArray serializeProject(const ProjectData& project) {
         library[QStringLiteral("customDevices")] = devices;
     }
     root[QStringLiteral("library")] = library;
+    const DesignRules& rules = project.rules;
+    root[QStringLiteral("rules")] = QJsonObject{{QStringLiteral("clearance"), rules.clearance},
+                                                {QStringLiteral("minTrackWidth"), rules.minTrackWidth},
+                                                {QStringLiteral("minDrill"), rules.minDrill},
+                                                {QStringLiteral("minAnnularRing"), rules.minAnnularRing},
+                                                {QStringLiteral("boardEdgeClearance"), rules.boardEdgeClearance}};
     return QJsonDocument(root).toJson(QJsonDocument::Indented);
 }
 
@@ -543,6 +564,7 @@ ProjectLoad parseProject(const QByteArray& bytes) {
     // v1 files are silently upgraded: new v2 fields take their defaults during item parsing.
     result.project.name = root.value(QStringLiteral("name")).toString();
     QString error = libraryFromJson(root.value(QStringLiteral("library")), result.project.library);
+    if (error.isEmpty()) error = rulesFromJson(root.value(QStringLiteral("rules")), result.project.rules);
     if (error.isEmpty()) {
         error = documentFromJson(root.value(QStringLiteral("schematic")), Workspace::Schematic,
                                  tr("schematic"), result.project.schematic);

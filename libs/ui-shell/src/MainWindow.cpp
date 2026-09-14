@@ -1,5 +1,6 @@
 #include "hatt/ui/MainWindow.hpp"
 #include "hatt/ui/BoardLayerPanel.hpp"
+#include "hatt/ui/ChecksReport.hpp"
 #include "hatt/ui/CircuitWorkflow.hpp"
 #include "hatt/ui/ComponentLibrary.hpp"
 #include "hatt/ui/LibraryDialogs.hpp"
@@ -950,7 +951,15 @@ void MainWindow::createActions() {
     auto* checks = makeAction(QStringLiteral("hatteda.action.run-checks"), tr("Run design checks"),
                               QStringLiteral("check"));
     checks->setEnabled(false);
-    checks->setToolTip(tr("Electrical and design rule checks are not available yet"));
+    checks->setToolTip(tr("Run design checks: electrical rules (schematic) and design rules (PCB)"));
+    connect(checks, &QAction::triggered, this, [this] {
+        if (shellPages_->currentIndex() == 1) runDesignChecks();
+    });
+    auto* rules = makeAction(QStringLiteral("hatteda.action.design-rules"), tr("Design rules..."), QString());
+    rules->setEnabled(false);
+    connect(rules, &QAction::triggered, this, [this] {
+        if (shellPages_->currentIndex() == 1) editDesignRules();
+    });
 }
 
 QWidget* MainWindow::createEditor() {
@@ -1365,6 +1374,7 @@ void MainWindow::createMenus() {
     designMenu->addAction(actions_.value(QStringLiteral("hatteda.action.decompose")));
     designMenu->addSeparator();
     designMenu->addAction(actions_.value(QStringLiteral("hatteda.action.run-checks")));
+    designMenu->addAction(actions_.value(QStringLiteral("hatteda.action.design-rules")));
 
     auto* helpMenu = menuBar()->addMenu(tr("&Help"));
     connect(helpMenu->addAction(tr("About HattEDA")), &QAction::triggered, this, [this] {
@@ -2369,6 +2379,8 @@ void MainWindow::activateProject(const QString& projectPath, const ProjectData& 
     library_ = project.library;
     registerProjectLibrary(library_);
     libraryModified_ = false;
+    rules_ = project.rules;
+    rulesModified_ = false;
     const SketchDocument* documents[] = {&project.schematic, &project.board};
     for (int i = 0; i < canvases_.size() && i < 2; ++i) {
         canvases_[i]->restore(*documents[i], {});
@@ -2423,6 +2435,7 @@ ProjectData MainWindow::currentProjectData(const QString& path) const {
     project.board = canvases_.value(1)->document();
     project.library = library_;
     project.library.devices = projectDevices();
+    project.rules = rules_;
     return project;
 }
 
@@ -2435,6 +2448,7 @@ bool MainWindow::writeProject(const QString& path) {
     }
     projectGuard_->projectSaved(path);
     libraryModified_ = false;
+    rulesModified_ = false;
     for (auto* canvas : canvases_) {
         canvas->undoStack()->setClean();
     }
@@ -2445,7 +2459,7 @@ bool MainWindow::writeProject(const QString& path) {
 
 bool MainWindow::hasUnsavedChanges() const {
     return !projectPath_.isEmpty() &&
-           (libraryModified_ ||
+           (libraryModified_ || rulesModified_ ||
             std::any_of(canvases_.begin(), canvases_.end(),
                         [](const DesignCanvas* canvas) { return !canvas->undoStack()->isClean(); }));
 }
@@ -2483,6 +2497,9 @@ void MainWindow::updateProjectState() {
     }
     if (auto* saveAs = actions_.value(QStringLiteral("hatteda.action.save-as"))) {
         saveAs->setEnabled(open);
+    }
+    for (const auto* name : {"hatteda.action.run-checks", "hatteda.action.design-rules"}) {
+        if (auto* action = actions_.value(QString::fromLatin1(name))) action->setEnabled(open);
     }
 }
 
@@ -2540,6 +2557,41 @@ void MainWindow::openToolWorkspace(const QString& stableId, const QString& title
     }
     undoGroup_->setActiveStack(nullptr);
     updateEditActions();
+}
+
+void MainWindow::runDesignChecks() {
+    if (projectPath_.isEmpty()) return;
+    const bool created = checksReport_.isNull();
+    if (created) {
+        checksReport_ = new ChecksReport;
+        connect(checksReport_, &ChecksReport::rerunRequested, this, &MainWindow::runDesignChecks);
+        connect(checksReport_, &ChecksReport::violationActivated, this, [this](const CheckViolation& violation) {
+            const bool schematic = violation.workspace == Workspace::Schematic;
+            if (schematic) showMergenWorkspace();
+            else showKayraWorkspace();
+            if (auto* canvas = canvases_.value(schematic ? 0 : 1)) {
+                canvas->revealItems(violation.itemIds, violation.hasLocation ? std::optional<QPointF>(violation.location)
+                                                                             : std::nullopt);
+                canvas->setFocus();
+            }
+        });
+    }
+    const CheckReport electrical = runElectricalRuleCheck(canvases_.value(0)->document());
+    const CheckReport design = runDesignRuleCheck(canvases_.value(0)->document(), canvases_.value(1)->document(), rules_);
+    checksReport_->setResults(electrical, design);
+    openToolWorkspace(QStringLiteral("hatteda.tool.design-checks"), tr("Design checks"), checksReport_);
+    const int errors = electrical.count(CheckSeverity::Error) + design.count(CheckSeverity::Error);
+    const int warnings = electrical.count(CheckSeverity::Warning) + design.count(CheckSeverity::Warning);
+    statusBar()->showMessage(tr("Design checks: %1 error(s), %2 warning(s)").arg(errors).arg(warnings), 6000);
+}
+
+void MainWindow::editDesignRules() {
+    if (projectPath_.isEmpty()) return;
+    DesignRulesDialog dialog(rules_, this);
+    if (dialog.exec() != QDialog::Accepted || dialog.rules() == rules_) return;
+    rules_ = dialog.rules();
+    rulesModified_ = true;
+    updateProjectState();
 }
 
 } // namespace hatt::ui

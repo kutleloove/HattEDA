@@ -313,6 +313,41 @@ private slots:
         QVERIFY(errorFor(root).isEmpty());
     }
 
+    void designRulesRoundTrip() {
+        ProjectData project = sampleProject();
+        project.rules.clearance = 0.254;
+        project.rules.minTrackWidth = 0.127;
+        project.rules.minDrill = 0.35;
+        project.rules.minAnnularRing = 0.1;
+        project.rules.boardEdgeClearance = 0.5;
+        const QByteArray bytes = serializeProject(project);
+        const ProjectLoad load = parseProject(bytes);
+        QVERIFY2(load.ok(), qPrintable(load.error));
+        QVERIFY(load.project.rules == project.rules);
+        QCOMPARE(serializeProject(load.project), bytes);
+
+        // Files without rules (or with some keys missing) use the defaults.
+        QJsonObject root = sampleJson();
+        root.remove(QStringLiteral("rules"));
+        ProjectLoad old = parseProject(QJsonDocument(root).toJson());
+        QVERIFY2(old.ok(), qPrintable(old.error));
+        QVERIFY(old.project.rules == DesignRules{});
+        root[QStringLiteral("rules")] = QJsonObject{{QStringLiteral("clearance"), 0.3}};
+        old = parseProject(QJsonDocument(root).toJson());
+        QVERIFY(old.ok());
+        QCOMPARE(old.project.rules.clearance, 0.3);
+        QCOMPARE(old.project.rules.minDrill, DesignRules{}.minDrill);
+
+        // Wrong types, negative values and a zero clearance are rejected.
+        for (const QJsonValue& rules : {QJsonValue(QStringLiteral("tight")),
+                                        QJsonValue(QJsonObject{{QStringLiteral("minDrill"), -0.1}}),
+                                        QJsonValue(QJsonObject{{QStringLiteral("clearance"), QStringLiteral("0.2")}}),
+                                        QJsonValue(QJsonObject{{QStringLiteral("clearance"), 0}})}) {
+            root[QStringLiteral("rules")] = rules;
+            QVERIFY(!errorFor(root).isEmpty());
+        }
+    }
+
     void customLibraryRoundTrips() {
         ProjectData project;
         FootprintDefinition generated;

@@ -5,6 +5,7 @@
 
 #include <QHash>
 #include <QMainWindow>
+#include <QPointer>
 #include <QString>
 
 class QAction;
@@ -20,6 +21,7 @@ class QUndoGroup;
 namespace hatt::ui {
 
 class BoardLayerPanel;
+class ChecksReport;
 class DesignCanvas;
 class ProjectGuard;
 
@@ -43,6 +45,8 @@ public:
     void addProjectDevices(const QStringList& ids);
     // Removes a device from the pick list; false while the schematic still uses it.
     bool removeProjectDevice(const QString& id);
+    // The project's design rules used by the DRC (ADR-0008).
+    [[nodiscard]] DesignRules designRules() const { return rules_; }
 
 public slots:
     void showMergenWorkspace();
@@ -60,6 +64,10 @@ public slots:
     void newDevice();
     // FootprintEditorDialog without a device: creates a project footprint.
     void newFootprint();
+    // Runs ERC and DRC and shows the results in the `hatteda.tool.design-checks` workspace.
+    void runDesignChecks();
+    // DesignRulesDialog for the project's rules.
+    void editDesignRules();
 
 protected:
     void changeEvent(QEvent* event) override;
@@ -158,6 +166,9 @@ private:
     ProjectGuard* projectGuard_ = nullptr;
     QLabel* coordinateLabel_ = nullptr;
     QLabel* zoomLabel_ = nullptr;
+    DesignRules rules_;
+    bool rulesModified_ = false;
+    QPointer<ChecksReport> checksReport_;
 };
 
 } // namespace hatt::ui

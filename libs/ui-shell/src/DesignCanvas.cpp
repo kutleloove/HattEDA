@@ -1098,6 +1098,19 @@ void DesignCanvas::zoomToFit() {
     update();
 }
 
+void DesignCanvas::revealItems(const QStringList& ids, std::optional<QPointF> location) {
+    QList<int> selection;
+    for (int index = 0; index < items_.size(); ++index) {
+        if (ids.contains(items_[index].id)) selection.append(index);
+    }
+    setSelection(selection);
+    const QRectF bounds = selectionBounds();
+    if (!location && bounds.isNull()) return;
+    const QPointF centre = location ? *location : bounds.center();
+    offset_ = QPointF(width() / 2.0, height() / 2.0) - centre * scale_;
+    update();
+}
+
 QPointF DesignCanvas::snapToGrid(QPointF world) const {
     const double grid = gridSize();
     return {std::round(world.x() / grid) * grid, std::round(world.y() / grid) * grid};
