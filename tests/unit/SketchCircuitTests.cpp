@@ -78,6 +78,74 @@ private slots:
         QVERIFY2(result.success, result.error.c_str());
         QVERIFY(std::abs(result.voltages[1] - 1.0) < 1e-10);
     }
+    void parallelResistorsWithGroundAndProbeSolve() {
+        registerBuiltInCatalog();
+        SketchDocument document;
+        auto part = [&](const QString& variant, const QString& label, QPointF at, const QString& value = {}) {
+            SketchItem item;
+            item.kind = SketchItem::Kind::Symbol;
+            item.variant = variant;
+            item.label = label;
+            item.points = {at};
+            item.value = value;
+            document << item;
+        };
+        auto wire = [&](std::initializer_list<QPointF> points) {
+            SketchItem item;
+            item.kind = SketchItem::Kind::Wire;
+            item.points = points;
+            document << item;
+        };
+
+        part(QStringLiteral("catalog.device.vdc"), QStringLiteral("V1"), {20, 30}, QStringLiteral("5"));
+        part(QStringLiteral("catalog.device.resistor"), QStringLiteral("R1"), {45, 20}, QStringLiteral("1k"));
+        part(QStringLiteral("catalog.device.resistor"), QStringLiteral("R2"), {45, 30}, QStringLiteral("1k"));
+        part(QStringLiteral("catalog.device.resistor"), QStringLiteral("R3"), {45, 40}, QStringLiteral("1k"));
+        part(QStringLiteral("schematic.ground"), QString(), {30, 50});
+        part(QStringLiteral("schematic.voltage-probe"), QStringLiteral("VP1"), {30, 20});
+
+        // V1 pin 1 feeds the three left pins; all right pins and V1 pin 2 share ground.
+        wire({{20, 24.92}, {30, 24.92}, {30, 20}, {39.92, 20}});
+        wire({{30, 24.92}, {30, 30}, {39.92, 30}});
+        wire({{30, 30}, {30, 40}, {39.92, 40}});
+        wire({{50.08, 20}, {55, 20}, {55, 50}, {30, 50}});
+        wire({{50.08, 30}, {55, 30}});
+        wire({{50.08, 40}, {55, 40}});
+        wire({{20, 35.08}, {20, 50}, {30, 50}});
+
+        const auto snapshot = analyzeSchematic(document);
+        QVERIFY2(snapshot.errors.isEmpty(), qPrintable(snapshot.errors.join("; ")));
+        QVERIFY2(snapshot.simulationErrors.isEmpty(), qPrintable(snapshot.simulationErrors.join("; ")));
+        const auto result = hatt::electrical::solveDc(snapshot.dc);
+        QVERIFY2(result.success, result.error.c_str());
+        QCOMPARE(result.currents.size(), std::size_t(4));
+        for (int resistor = 1; resistor <= 3; ++resistor)
+            QVERIFY(std::abs(result.currents[resistor] - 0.005) < 1e-10);
+        QVERIFY(std::abs(result.currents[0] + 0.015) < 1e-10);
+        QCOMPARE(snapshot.probes.size(), 1);
+        const int probeNet = snapshot.dcNets.indexOf(snapshot.probes.first().net);
+        QVERIFY(probeNet >= 0);
+        QVERIFY(std::abs(result.voltages[probeNet] - 5.0) < 1e-10);
+    }
+    void dcPreflightExplainsGroundAndOpenReturn() {
+        auto document = dcDividerExample();
+        document.erase(std::remove_if(document.begin(), document.end(), [](const SketchItem& item) {
+            return item.variant == QLatin1String("schematic.ground");
+        }), document.end());
+        auto snapshot = analyzeSchematic(document);
+        QVERIFY(snapshot.simulationErrors.join(' ').contains("Ground"));
+
+        document = dcDividerExample();
+        // Remove the wire that joins V1 pin 2 to the grounded return bus.
+        const QPointF sourceReturn{20.32, 35.56};
+        document.erase(std::remove_if(document.begin(), document.end(), [&](const SketchItem& item) {
+            return item.kind == SketchItem::Kind::Wire && item.points.contains(sourceReturn);
+        }), document.end());
+        snapshot = analyzeSchematic(document);
+        const QString errors = snapshot.simulationErrors.join(' ');
+        QVERIFY2(errors.contains("V1 pin 2"), qPrintable(errors));
+        QVERIFY(errors.contains("not connected"));
+    }
     void transferPreservesPlacementAndRouting() {
         auto schematic = dcDividerExample();
         auto transfer = transferToBoard(schematic, {});

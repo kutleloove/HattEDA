@@ -25,6 +25,8 @@
 #include <functional>
 #include <limits>
 #include <numeric>
+#include <queue>
+#include <vector>
 
 namespace hatt::ui {
 namespace {
@@ -69,6 +71,7 @@ struct CanvasColors {
     QColor preview;
     QColor label;
     QColor guide;
+    QColor airwire;
     std::array<QColor, BoardLayerCount> layers;
 };
 
@@ -102,6 +105,7 @@ CanvasColors canvasColors(Workspace workspace, const QPalette& palette) {
         colors.preview = QColor("#ffb45d");
         colors.label = QColor("#8fa0ae");
         colors.guide = QColor("#ff5fc8");
+        colors.airwire = QColor("#5cff72");
     } else {
         colors.background = QColor(board ? "#f4f6f7" : "#fbfbf8");
         colors.gridMinor = QColor(board ? "#e5e9ec" : "#eaece5");
@@ -116,6 +120,7 @@ CanvasColors canvasColors(Workspace workspace, const QPalette& palette) {
         colors.preview = QColor("#c05f00");
         colors.label = QColor("#5e6b76");
         colors.guide = QColor("#c2187f");
+        colors.airwire = QColor("#168a36");
     }
     return colors;
 }
@@ -123,6 +128,30 @@ CanvasColors canvasColors(Workspace workspace, const QPalette& palette) {
 QPen strokePen(const QColor& color, double width, bool dashed = false) {
     QPen pen(color, width, dashed ? Qt::DashLine : Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
     return pen;
+}
+
+// Proteus-style route preview: two solid corridor edges with a fine dashed centre line. It reads
+// as a clearance/track guide rather than already committed copper.
+void drawRouteGhost(QPainter& painter, const QVector<QPointF>& points, double width, double scale,
+                    const QColor& base, const WorldToScreen& map) {
+    if (points.size() < 2) return;
+    QColor edge = base;
+    edge.setAlpha(225);
+    QColor centre = base;
+    centre.setAlpha(165);
+    painter.setBrush(Qt::NoBrush);
+    for (qsizetype i = 1; i < points.size(); ++i) {
+        QLineF segment(map(points[i - 1]), map(points[i]));
+        if (segment.length() < 1e-6) continue;
+        QLineF normal = segment.normalVector();
+        normal.setLength(std::max(2.0, width * scale / 2.0 + 1.0));
+        const QPointF shift = normal.p2() - normal.p1();
+        painter.setPen(strokePen(edge, 1.0));
+        painter.drawLine(segment.translated(shift));
+        painter.drawLine(segment.translated(-shift));
+        painter.setPen(strokePen(centre, 1.0, true));
+        painter.drawLine(segment);
+    }
 }
 
 // Same size as the explicit junction symbol (0.5 mm radius), never smaller than the wire.
@@ -536,6 +565,26 @@ QVector<QPointF> diagonalRoute(QPointF from, QPointF to) {
                     : from + QPointF(0.0, std::copysign(ay - ax, dy))};
 }
 
+double segmentDistance(const QLineF& first, const QLineF& second) {
+    QPointF intersection;
+    if (first.intersects(second, &intersection) == QLineF::BoundedIntersection) return 0.0;
+    return std::min({distanceToSegment(first.p1(), second),
+                     distanceToSegment(first.p2(), second),
+                     distanceToSegment(second.p1(), first),
+                     distanceToSegment(second.p2(), first)});
+}
+
+bool segmentIntersectsRect(const QLineF& segment, const QRectF& rect) {
+    if (rect.contains(segment.p1()) || rect.contains(segment.p2())) return true;
+    const std::array<QLineF, 4> edges = {
+        QLineF(rect.topLeft(), rect.topRight()), QLineF(rect.topRight(), rect.bottomRight()),
+        QLineF(rect.bottomRight(), rect.bottomLeft()), QLineF(rect.bottomLeft(), rect.topLeft())};
+    return std::any_of(edges.begin(), edges.end(), [&](const QLineF& edge) {
+        QPointF intersection;
+        return segment.intersects(edge, &intersection) == QLineF::BoundedIntersection;
+    });
+}
+
 } // namespace
 
 DesignCanvas::DesignCanvas(Workspace workspace, QWidget* parent)
@@ -735,6 +784,11 @@ void DesignCanvas::setViaSize(double diameter, double drill) {
         viaDiameter_ = diameter;
         viaDrill_ = drill;
     }
+    update();
+}
+
+void DesignCanvas::setRoutingClearance(double millimetres) {
+    if (std::isfinite(millimetres) && millimetres > 0.0) routingClearance_ = millimetres;
     update();
 }
 
@@ -1512,24 +1566,189 @@ std::optional<QPointF> DesignCanvas::assistedRouteTarget(QPointF cursor) const {
     return best;
 }
 
+std::optional<QVector<QPointF>> DesignCanvas::obstacleAvoidingRoute(QPointF from,
+                                                                    QPointF to) const {
+    if (workspace_ != Workspace::Board || samePoint(from, to)) return QVector<QPointF>{};
+
+    struct TrackObstacle {
+        QLineF segment;
+        double clearance = 0.0;
+    };
+    QVector<QRectF> areas;
+    QVector<TrackObstacle> tracks;
+    const double routeRadius = currentTrackWidth() / 2.0;
+    const int copperLayer = layerBit(routeLayer());
+    for (const auto& item : items_) {
+        for (const PlacedPad& pad : itemPads(item)) {
+            if ((pad.layers & copperLayer) == 0 || samePoint(pad.center, from) ||
+                samePoint(pad.center, to)) {
+                continue;
+            }
+            const QRectF bounds = QPolygonF(padOutline(pad)).boundingRect();
+            const double expansion = routeRadius + routingClearance_;
+            areas.append(bounds.adjusted(-expansion, -expansion, expansion, expansion));
+        }
+        if (item.kind == SketchItem::Kind::Wire && item.layer == routeLayer()) {
+            const double separation = routeRadius + trackWidth(item) / 2.0 + routingClearance_;
+            for (const QLineF& segment : itemSegments(item)) {
+                // Joining an existing track at either endpoint is intentional. Its other segments
+                // remain obstacles, so the new route cannot casually cross the trace elsewhere.
+                if (distanceToSegment(from, segment) <= 1e-6 ||
+                    distanceToSegment(to, segment) <= 1e-6) {
+                    continue;
+                }
+                tracks.append({segment, separation});
+            }
+        } else if (item.kind == SketchItem::Kind::Polyline &&
+                   item.variant == CopperZoneVariant && item.layer == routeLayer() &&
+                   item.points.size() >= 3) {
+            QRectF bounds = QPolygonF(item.points).boundingRect();
+            const double expansion = routeRadius + routingClearance_;
+            areas.append(bounds.adjusted(-expansion, -expansion, expansion, expansion));
+        }
+    }
+    auto blocked = [&](QPointF a, QPointF b) {
+        const QLineF candidate(a, b);
+        if (std::any_of(areas.begin(), areas.end(),
+                        [&](const QRectF& area) { return segmentIntersectsRect(candidate, area); })) {
+            return true;
+        }
+        return std::any_of(tracks.begin(), tracks.end(), [&](const TrackObstacle& obstacle) {
+            return segmentDistance(candidate, obstacle.segment) < obstacle.clearance - 1e-6;
+        });
+    };
+    auto pathIsClear = [&](const QVector<QPointF>& path) {
+        for (qsizetype i = 1; i < path.size(); ++i) {
+            if (blocked(path[i - 1], path[i])) return false;
+        }
+        return true;
+    };
+
+    QVector<QPointF> direct{from};
+    if (snap_.orthogonal) {
+        direct += orthogonalRoute(from, to, {}, {}, gridSize());
+    } else if (snap_.diagonal) {
+        direct += diagonalRoute(from, to);
+    }
+    direct.append(to);
+    if (pathIsClear(direct)) {
+        direct.removeFirst();
+        direct.removeLast();
+        return direct;
+    }
+
+    const double step = std::max(0.05, gridSize());
+    const QPointF delta = to - from;
+    const int goalX = qRound(delta.x() / step);
+    const int goalY = qRound(delta.y() / step);
+    int margin = std::max(8, qRound(std::min(30.0, std::max(5.0, QLineF(from, to).length() * 0.25)) /
+                                    step));
+    int minX = std::min(0, goalX) - margin;
+    int maxX = std::max(0, goalX) + margin;
+    int minY = std::min(0, goalY) - margin;
+    int maxY = std::max(0, goalY) + margin;
+    const double marginWorld = margin * step;
+    const QRectF corridor(from, to);
+    const QRectF relevant = corridor.normalized().adjusted(-marginWorld, -marginWorld,
+                                                            marginWorld, marginWorld);
+    auto includeBounds = [&](const QRectF& bounds) {
+        if (!relevant.intersects(bounds)) return;
+        minX = std::min(minX, static_cast<int>(std::floor((bounds.left() - from.x()) / step)) - 2);
+        maxX = std::max(maxX, static_cast<int>(std::ceil((bounds.right() - from.x()) / step)) + 2);
+        minY = std::min(minY, static_cast<int>(std::floor((bounds.top() - from.y()) / step)) - 2);
+        maxY = std::max(maxY, static_cast<int>(std::ceil((bounds.bottom() - from.y()) / step)) + 2);
+    };
+    for (const QRectF& area : areas) includeBounds(area);
+    for (const TrackObstacle& obstacle : tracks) {
+        QRectF bounds(obstacle.segment.p1(), obstacle.segment.p2());
+        bounds = bounds.normalized().adjusted(-obstacle.clearance, -obstacle.clearance,
+                                              obstacle.clearance, obstacle.clearance);
+        includeBounds(bounds);
+    }
+    auto dimensions = [&] { return QSize(maxX - minX + 1, maxY - minY + 1); };
+    const QSize size = dimensions();
+    const qint64 total64 = static_cast<qint64>(size.width()) * size.height();
+    if (total64 <= 0 || total64 > 120000) return std::nullopt;
+    const int total = static_cast<int>(total64);
+    auto indexOf = [&](int x, int y) { return (y - minY) * size.width() + x - minX; };
+    auto coordinates = [&](int index) {
+        return QPoint(index % size.width() + minX, index / size.width() + minY);
+    };
+    auto world = [&](int x, int y) { return from + QPointF(x * step, y * step); };
+
+    const int start = indexOf(0, 0);
+    const int goal = indexOf(goalX, goalY);
+    const double infinity = std::numeric_limits<double>::infinity();
+    QVector<double> cost(total, infinity);
+    QVector<int> parent(total, -1);
+    QVector<bool> closed(total, false);
+    using QueueEntry = std::pair<double, int>;
+    std::priority_queue<QueueEntry, std::vector<QueueEntry>, std::greater<>> open;
+    cost[start] = 0.0;
+    open.push({QLineF(from, to).length(), start});
+    const bool diagonal = snap_.diagonal && !snap_.orthogonal;
+    const std::array<QPoint, 8> moves = {QPoint(1, 0),  QPoint(-1, 0), QPoint(0, 1),
+                                         QPoint(0, -1), QPoint(1, 1),  QPoint(1, -1),
+                                         QPoint(-1, 1), QPoint(-1, -1)};
+    bool found = false;
+    while (!open.empty()) {
+        const int current = open.top().second;
+        open.pop();
+        if (closed[current]) continue;
+        closed[current] = true;
+        if (current == goal && !blocked(world(goalX, goalY), to)) {
+            found = true;
+            break;
+        }
+        const QPoint coordinate = coordinates(current);
+        const int moveCount = diagonal ? 8 : 4;
+        for (int move = 0; move < moveCount; ++move) {
+            const int x = coordinate.x() + moves[move].x();
+            const int y = coordinate.y() + moves[move].y();
+            if (x < minX || x > maxX || y < minY || y > maxY) continue;
+            const int next = indexOf(x, y);
+            if (closed[next] || blocked(world(coordinate.x(), coordinate.y()), world(x, y))) {
+                continue;
+            }
+            const double edge = move < 4 ? step : step * std::sqrt(2.0);
+            const double nextCost = cost[current] + edge;
+            if (nextCost >= cost[next]) continue;
+            cost[next] = nextCost;
+            parent[next] = current;
+            const double estimate = QLineF(world(x, y), to).length();
+            open.push({nextCost + estimate, next});
+        }
+    }
+    if (!found) return std::nullopt;
+    QVector<QPointF> route{to};
+    for (int current = goal; current != start; current = parent[current]) {
+        if (current < 0 || parent[current] < 0) return std::nullopt;
+        route.prepend(world(coordinates(current).x(), coordinates(current).y()));
+    }
+    route.prepend(from);
+    simplifyPath(route);
+    if (!pathIsClear(route)) return std::nullopt;
+    route.removeFirst();
+    route.removeLast();
+    return route;
+}
+
 QVector<QPointF> DesignCanvas::routePreviewTo(QPointF point) const {
     if (pending_.isEmpty()) return {};
     QVector<QPointF> result = pending_;
-    result += routeTo(point);
+    if (workspace_ == Workspace::Board) {
+        const auto routed = obstacleAvoidingRoute(pending_.last(), point);
+        if (!routed) return result;
+        result += *routed;
+    } else {
+        result += routeTo(point);
+    }
     if (result.isEmpty() || !samePoint(result.last(), point)) result.append(point);
     const auto target = assistedRouteTarget(point);
     if (!target || samePoint(*target, point)) return result;
-    QPointF leaving;
-    if (result.size() >= 2) {
-        const QPointF run = result.last() - result[result.size() - 2];
-        if (std::abs(run.y()) < 1e-6) leaving = QPointF(std::copysign(1.0, run.x()), 0);
-        else if (std::abs(run.x()) < 1e-6) leaving = QPointF(0, std::copysign(1.0, run.y()));
-    }
-    if (snap_.orthogonal) {
-        result += orthogonalRoute(point, *target, leaving, pinDirectionAt(items_, *target), gridSize());
-    } else if (snap_.diagonal) {
-        result += diagonalRoute(point, *target);
-    }
+    const auto completion = obstacleAvoidingRoute(point, *target);
+    if (!completion) return result;
+    result += *completion;
     if (!samePoint(result.last(), *target)) result.append(*target);
     simplifyPath(result);
     return result;
@@ -1539,9 +1758,16 @@ QVector<QPointF> DesignCanvas::currentRoutePreview() const {
     return hoverValid_ ? routePreviewTo(hover_.point) : QVector<QPointF>();
 }
 
-void DesignCanvas::appendPathPoint(const Snap& point) {
-    pending_ += routeTo(point.point);
+bool DesignCanvas::appendPathPoint(const Snap& point) {
+    if (workspace_ == Workspace::Board && tool_ == CanvasTool::Wire) {
+        const auto routed = obstacleAvoidingRoute(pending_.last(), point.point);
+        if (!routed) return false;
+        pending_ += *routed;
+    } else {
+        pending_ += routeTo(point.point);
+    }
     pending_.append(point.point);
+    return true;
 }
 
 double DesignCanvas::currentTrackWidth() const noexcept {
@@ -1978,9 +2204,10 @@ void DesignCanvas::mousePressEvent(QMouseEvent* event) {
         } else {
             const bool closing = tool_ == CanvasTool::Polyline && pending_.size() >= 3 &&
                                  samePoint(point.point, pending_.first());
-            appendPathPoint(point);
-            if (closing ||
-                (tool_ == CanvasTool::Wire && point.kind == SnapKind::Object && pending_.size() >= 2)) {
+            const bool appended = appendPathPoint(point);
+            if (appended &&
+                (closing || (tool_ == CanvasTool::Wire && point.kind == SnapKind::Object &&
+                             pending_.size() >= 2))) {
                 finishPath();
             }
         }
@@ -2166,7 +2393,7 @@ void DesignCanvas::mouseDoubleClickEvent(QMouseEvent* event) {
         workspace_ == Workspace::Board) {
         if (!pending_.isEmpty()) {
             const Snap point = snap(event->position(), constraintOrigin());
-            if (!samePoint(point.point, pending_.last())) appendPathPoint(point);
+            if (!samePoint(point.point, pending_.last()) && !appendPathPoint(point)) return;
             setActiveLayer(oppositeSideLayer(routeLayer()));
         }
         return;
@@ -2175,7 +2402,7 @@ void DesignCanvas::mouseDoubleClickEvent(QMouseEvent* event) {
         if (!pending_.isEmpty()) {
             const Snap point = snap(event->position(), constraintOrigin());
             if (!samePoint(point.point, pending_.last())) {
-                appendPathPoint(point);
+                if (!appendPathPoint(point)) return;
             }
             finishPath();
         }
@@ -2325,7 +2552,7 @@ void DesignCanvas::paintEvent(QPaintEvent*) {
     painter.drawLine(QLineF(offset_.x(), offset_.y() - 8, offset_.x(), offset_.y() + 8));
 
     painter.setRenderHint(QPainter::Antialiasing);
-    painter.setPen(strokePen(colors.preview, 1.2, true));
+    painter.setPen(strokePen(colors.airwire, 1.0));
     for (const auto& line : airwires_) painter.drawLine(QLineF(map(line.p1()), map(line.p2())));
     const bool dragging = drag_ == Drag::Move && moveDocument_.size() == items_.size();
     const SketchDocument& shown = dragging ? moveDocument_ : items_;
@@ -2439,14 +2666,15 @@ void DesignCanvas::paintEvent(QPaintEvent*) {
                 if (!board || tool_ != CanvasTool::Wire) preview.points.append(hover_.point);
                 preview.variant = variant_;
                 if (board && tool_ == CanvasTool::Wire) {
-                    // Assisted continuation to the netlist target is a dashed ghost, clearly
-                    // distinct from already committed copper.
+                    // The route corridor mirrors Proteus: pale solid edges and a dashed centre,
+                    // never the copper-layer colour used by committed tracks.
                     preview.layer = routeLayer();
                     preview.width = currentTrackWidth();
-                    drawItem(painter, preview, colors, board, false, true, scale_, map, view);
+                    drawRouteGhost(painter, preview.points, preview.width, scale_, colors.stroke,
+                                   map);
                     if (const auto target = assistedRouteTarget(hover_.point)) {
                         const QPointF centre = map(*target);
-                        painter.setPen(strokePen(colors.preview, 1.5, true));
+                        painter.setPen(strokePen(colors.stroke, 1.5));
                         painter.setBrush(Qt::NoBrush);
                         painter.drawEllipse(centre, 9, 9);
                         painter.drawLine(centre - QPointF(5, 0), centre + QPointF(5, 0));
@@ -2563,7 +2791,9 @@ void DesignCanvas::paintEvent(QPaintEvent*) {
 
     if (hoverValid_ && drag_ == Drag::None && tool_ != CanvasTool::Select) {
         const QPointF point = map(hover_.marker);
-        painter.setPen(strokePen(colors.preview, 1.5));
+        painter.setPen(strokePen(board && tool_ == CanvasTool::Wire ? colors.stroke
+                                                                    : colors.preview,
+                                 1.5));
         switch (hover_.kind) {
         case SnapKind::Object:
             painter.drawRect(QRectF(point - QPointF(6, 6), QSizeF(12, 12)));

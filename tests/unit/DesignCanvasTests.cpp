@@ -143,6 +143,7 @@ private slots:
     void createArrayCopiesInRowOrder();
     void pcbRouteStartsOnPadLayerAndFitsPad();
     void pcbRoutePreviewCompletesToAirwireTarget();
+    void pcbAssistedRouteAvoidsCopperObstacles();
     void pcbDoubleClickPlacesViaAndChangesLayer();
 
 private:
@@ -960,6 +961,41 @@ void DesignCanvasTests::pcbRoutePreviewCompletesToAirwireTarget() {
     QVERIFY(preview.size() >= 3);
     QVERIFY(samePoint(preview.first(), from));
     QVERIFY(samePoint(preview.last(), to));
+}
+
+void DesignCanvasTests::pcbAssistedRouteAvoidsCopperObstacles() {
+    DesignCanvas board(Workspace::Board);
+    board.resize(900, 600);
+    board.setSnapSettings(SnapSettings{});
+    board.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&board));
+    const QPointF from(5.08, 10.16);
+    const QPointF to(45.72, 10.16);
+    SketchItem barrier = wireThrough({{25.4, 0.0}, {25.4, 20.32}});
+    barrier.layer = BoardLayer::BottomCopper;
+    barrier.width = 1.0;
+    board.applyDocumentEdit(QStringLiteral("Setup"),
+                            {smdPadAt(from, BoardLayer::BottomCopper),
+                             smdPadAt(to, BoardLayer::BottomCopper),
+                             smdPadAt({20.32, 10.16}, BoardLayer::BottomCopper, 3.0, 3.0),
+                             barrier});
+    board.setAirwires({QLineF(from, to)});
+    board.setActiveLayer(BoardLayer::BottomCopper);
+    board.setTool(CanvasTool::Wire);
+
+    click(board, from);
+    sendMouse(board, QEvent::MouseMove, {12.7, 10.16}, Qt::NoButton, Qt::NoButton);
+    const QVector<QPointF> preview = board.currentRoutePreview();
+    QVERIFY(preview.size() >= 4);
+    QVERIFY(samePoint(preview.last(), to));
+    const QLineF copperBarrier({25.4, 0.0}, {25.4, 20.32});
+    bool detoured = false;
+    for (const QPointF& point : preview) {
+        if (point.y() < -0.85 || point.y() > 21.17) detoured = true;
+        QVERIFY(hatt::ui::distanceToSegment(point, copperBarrier) >= 0.85 - 1e-6 ||
+                samePoint(point, from) || samePoint(point, to));
+    }
+    QVERIFY(detoured);
 }
 
 void DesignCanvasTests::pcbDoubleClickPlacesViaAndChangesLayer() {

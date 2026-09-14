@@ -16,6 +16,9 @@ QString tr(const char* text) { return QCoreApplication::translate("hatt::ui::Cir
     QT_TRANSLATE_NOOP("hatt::ui::CircuitWorkflow", "unknown simulation model '%1'"),
     QT_TRANSLATE_NOOP("hatt::ui::CircuitWorkflow", "%1: %2"),
     QT_TRANSLATE_NOOP("hatt::ui::CircuitWorkflow", "%1: the DC model requires exactly two pins."),
+    QT_TRANSLATE_NOOP("hatt::ui::CircuitWorkflow", "Add a Ground terminal and wire its pin to the circuit return net (normally the voltage source negative pin)."),
+    QT_TRANSLATE_NOOP("hatt::ui::CircuitWorkflow", "%1 pin %2 is not connected to another component or terminal."),
+    QT_TRANSLATE_NOOP("hatt::ui::CircuitWorkflow", "The DC section at %1 pin %2 has no path to Ground."),
 };
 electrical::Point point(QPointF p) { return {p.x(), p.y()}; }
 bool component(const SketchItem& item) {
@@ -156,6 +159,44 @@ CircuitSnapshot analyzeSchematic(const SketchDocument& document) {
         if (!fixedValue && !electrical::parseSpiceValue(item.value.toStdString(), e.value))
             result.simulationErrors << tr("%1: invalid value '%2'.").arg(item.label, item.value);
         result.dc.elements.push_back(e);
+    }
+    if (!result.dc.elements.empty()) {
+        if (result.dc.ground < 0) {
+            result.simulationErrors << tr("Add a Ground terminal and wire its pin to the circuit return net (normally the voltage source negative pin).");
+        } else {
+            QVector<QVector<int>> adjacent(result.dc.netCount);
+            for (const auto& e : result.dc.elements) {
+                if (e.positive < 0 || e.negative < 0 || e.positive >= result.dc.netCount ||
+                    e.negative >= result.dc.netCount) continue;
+                adjacent[e.positive].append(e.negative);
+                adjacent[e.negative].append(e.positive);
+            }
+            QVector<bool> reachable(result.dc.netCount, false);
+            QVector<int> pending{result.dc.ground};
+            reachable[result.dc.ground] = true;
+            for (qsizetype i = 0; i < pending.size(); ++i) {
+                for (int net : adjacent[pending[i]]) if (!reachable[net]) {
+                    reachable[net] = true;
+                    pending.append(net);
+                }
+            }
+            bool reportedFloating = false;
+            for (const auto& e : result.dc.elements) {
+                for (int pin = 1; pin <= 2; ++pin) {
+                    const int net = pin == 1 ? e.positive : e.negative;
+                    if (net < 0 || net >= result.dc.netCount) continue;
+                    const QString reference = QString::fromStdString(e.reference);
+                    if (!reportedFloating && !reachable[net]) {
+                        result.simulationErrors << tr("The DC section at %1 pin %2 has no path to Ground.")
+                                                       .arg(reference).arg(pin);
+                        reportedFloating = true;
+                    }
+                    if (result.connectivity.nets[net].pins.size() <= 1)
+                        result.simulationErrors << tr("%1 pin %2 is not connected to another component or terminal.")
+                                                       .arg(reference).arg(pin);
+                }
+            }
+        }
     }
     // Nets no element touches (a lone probe, an unused port) are left out of the solve.
     QVector<int> dcIndex(result.dc.netCount, -1);

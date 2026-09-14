@@ -162,6 +162,7 @@ public:
     [[nodiscard]] double trackWidthSetting() const noexcept { return trackWidth_; }
     void setTrackWidth(double millimetres);
     void setViaSize(double diameter, double drill);
+    void setRoutingClearance(double millimetres);
     // Layer colour for the palette's theme (dark or light).
     [[nodiscard]] static QColor layerColor(BoardLayer layer, const QPalette& palette);
 
@@ -233,7 +234,9 @@ private:
     [[nodiscard]] QVector<QPointF> routeTo(QPointF point) const;
     [[nodiscard]] QVector<QPointF> routePreviewTo(QPointF point) const;
     [[nodiscard]] std::optional<QPointF> assistedRouteTarget(QPointF cursor) const;
-    void appendPathPoint(const Snap& point);
+    [[nodiscard]] std::optional<QVector<QPointF>> obstacleAvoidingRoute(QPointF from,
+                                                                        QPointF to) const;
+    bool appendPathPoint(const Snap& point);
     [[nodiscard]] QPointF snapToGrid(QPointF world) const;
     [[nodiscard]] QPointF constrainAngle(QPointF point, QPointF origin) const;
     [[nodiscard]] const QPointF* constraintOrigin() const;
@@ -287,6 +290,7 @@ private:
     int visibleLayers_ = AllLayersMask;
     double trackWidth_ = DefaultTrackWidth;
     double activeRouteWidth_ = 0.0;
+    double routingClearance_ = 0.2;
     double viaDiameter_ = DefaultViaDiameter;
     double viaDrill_ = DefaultViaDrill;
     bool pressGesture_ = false;

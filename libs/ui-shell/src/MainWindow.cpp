@@ -2439,6 +2439,7 @@ void MainWindow::activateProject(const QString& projectPath, const ProjectData& 
     libraryModified_ = false;
     rules_ = project.rules;
     rulesModified_ = false;
+    if (canvases_.size() > 1) canvases_[1]->setRoutingClearance(rules_.clearance);
     const SketchDocument* documents[] = {&project.schematic, &project.board};
     for (int i = 0; i < canvases_.size() && i < 2; ++i) {
         canvases_[i]->restore(*documents[i], {});
@@ -2701,6 +2702,7 @@ void MainWindow::editDesignRules() {
     DesignRulesDialog dialog(rules_, this);
     if (dialog.exec() != QDialog::Accepted || dialog.rules() == rules_) return;
     rules_ = dialog.rules();
+    if (canvases_.size() > 1) canvases_[1]->setRoutingClearance(rules_.clearance);
     rulesModified_ = true;
     updateProjectState();
 }
