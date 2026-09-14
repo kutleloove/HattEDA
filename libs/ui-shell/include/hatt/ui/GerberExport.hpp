@@ -1,6 +1,7 @@
 #pragma once
 
 #include "hatt/ui/SketchModel.hpp"
+#include "hatt/ui/ZoneFill.hpp"
 
 #include <QByteArray>
 #include <QPointF>
@@ -36,6 +37,9 @@ struct CamPrimitive {
     Kind kind = Kind::Flash;
     CamAperture aperture;
     QVector<QPointF> points; // Flash: one point; Stroke: polyline; Region: closed outline
+    // Region only: clear polarity (Gerber LPC) removes copper drawn earlier on the layer. Poured zones
+    // use it for knockouts and are written before every other primitive of the layer.
+    bool clear = false;
 };
 
 enum class CamLayerKind { TopCopper, BottomCopper, TopSilk, BottomSilk, TopMask, BottomMask, TopPaste,
@@ -55,12 +59,14 @@ struct CamOutput {
     QVector<CamLayer> layers; // always all nine, in CamLayerKind order
     QVector<CamDrillHit> drills;
     int skippedTexts = 0; // text on layers without a fabrication file
-    int skippedZones = 0; // copper zones left out (CamOptions::includeZones is false)
+    int skippedZones = 0; // copper zones left out: no pour in CamOptions::zoneFills
 };
 
 struct CamOptions {
-    // Copper zones as solid regions. Off by default: without pour and clearance a zone shorts
-    // every pad and track it covers.
+    // Poured copper (ZoneFill.hpp); zones listed here are exported with their clearances.
+    QVector<ZoneFillResult> zoneFills;
+    // Zones without a pour as solid regions. Off by default: a solid zone shorts every pad and
+    // track it covers.
     bool includeZones = false;
     // Footprint designators (item labels) on the footprint's silkscreen, above the footprint.
     bool designators = true;

@@ -44,6 +44,8 @@ add_library(hatt-ui-shell STATIC
     src/StrokeFont.cpp
     include/hatt/ui/CamPreview.hpp
     src/CamPreview.cpp
+    include/hatt/ui/ZoneFill.hpp
+    src/ZoneFill.cpp
 )
 
 add_library(HattEDA::UiShell ALIAS hatt-ui-shell)

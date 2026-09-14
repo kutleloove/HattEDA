@@ -2,6 +2,7 @@
 
 #include "hatt/ui/LayerColors.hpp"
 
+#include <QImage>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPainterPath>
@@ -103,43 +104,60 @@ void CamPreview::paintEvent(QPaintEvent*) {
     const bool dark = palette().color(QPalette::Window).lightness() < 128;
     painter.fillRect(rect(), dark ? QColor(QStringLiteral("#080b0f")) : QColor(QStringLiteral("#f4f6f7")));
 
-    // World transform: millimetres with Y up.
-    painter.translate(offset_);
-    painter.scale(scale_, -scale_);
+    // Each layer is rendered opaque on its own image, like a Gerber plotter (clear polarity erases
+    // earlier copper of that layer only), then composited with the layer's opacity.
+    const qreal ratio = devicePixelRatioF();
     for (CamLayerKind kind : DrawOrder) {
         if (!isLayerVisible(kind)) continue;
-        QColor color = boardLayerColor(boardLayerOf(kind), dark);
-        color.setAlpha(kind == CamLayerKind::TopMask || kind == CamLayerKind::BottomMask ||
-                               kind == CamLayerKind::TopPaste || kind == CamLayerKind::BottomPaste
-                           ? 110
-                           : 210);
-        for (const CamPrimitive& primitive : output_.layers.value(static_cast<int>(kind)).primitives) {
+        const auto& primitives = output_.layers.value(static_cast<int>(kind)).primitives;
+        if (primitives.isEmpty()) continue;
+        QImage image((QSizeF(size()) * ratio).toSize(), QImage::Format_ARGB32_Premultiplied);
+        image.setDevicePixelRatio(ratio);
+        image.fill(Qt::transparent);
+        QPainter plot(&image);
+        plot.setRenderHint(QPainter::Antialiasing);
+        plot.translate(offset_);
+        plot.scale(scale_, -scale_); // millimetres with Y up
+        const QColor color = boardLayerColor(boardLayerOf(kind), dark);
+        for (const CamPrimitive& primitive : primitives) {
+            const bool clear = primitive.kind == CamPrimitive::Kind::Region && primitive.clear;
+            plot.setCompositionMode(clear ? QPainter::CompositionMode_Clear : QPainter::CompositionMode_SourceOver);
             switch (primitive.kind) {
             case CamPrimitive::Kind::Flash: {
                 const QRectF shape = apertureRect(primitive.aperture, primitive.points.value(0));
-                painter.setPen(Qt::NoPen);
-                painter.setBrush(color);
+                plot.setPen(Qt::NoPen);
+                plot.setBrush(color);
                 if (primitive.aperture.shape == CamApertureShape::Rectangle) {
-                    painter.drawRect(shape);
+                    plot.drawRect(shape);
                 } else {
                     const double radius = std::min(shape.width(), shape.height()) / 2.0;
-                    painter.drawRoundedRect(shape, radius, radius);
+                    plot.drawRoundedRect(shape, radius, radius);
                 }
                 break;
             }
             case CamPrimitive::Kind::Stroke:
-                painter.setPen(QPen(color, primitive.aperture.width, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
-                painter.setBrush(Qt::NoBrush);
-                painter.drawPolyline(QPolygonF(primitive.points));
+                plot.setPen(QPen(color, primitive.aperture.width, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+                plot.setBrush(Qt::NoBrush);
+                plot.drawPolyline(QPolygonF(primitive.points));
                 break;
             case CamPrimitive::Kind::Region:
-                painter.setPen(Qt::NoPen);
-                painter.setBrush(color);
-                painter.drawPolygon(QPolygonF(primitive.points));
+                plot.setPen(Qt::NoPen);
+                plot.setBrush(color);
+                plot.drawPolygon(QPolygonF(primitive.points));
                 break;
             }
         }
+        plot.end();
+        const bool faint = kind == CamLayerKind::TopMask || kind == CamLayerKind::BottomMask ||
+                           kind == CamLayerKind::TopPaste || kind == CamLayerKind::BottomPaste;
+        painter.setOpacity(faint ? 0.43 : 0.82);
+        painter.drawImage(QPointF(0, 0), image);
+        painter.setOpacity(1.0);
     }
+
+    // World transform: millimetres with Y up.
+    painter.translate(offset_);
+    painter.scale(scale_, -scale_);
     if (drillsVisible_) {
         painter.setPen(Qt::NoPen);
         painter.setBrush(dark ? QColor(QStringLiteral("#080b0f")) : QColor(QStringLiteral("#ffffff")));

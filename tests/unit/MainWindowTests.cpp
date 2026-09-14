@@ -101,6 +101,7 @@ private slots:
     void designChecksReportAndRules();
     void fabricationExportAsksAboutRuleErrors();
     void assemblyExportsWriteCsv();
+    void zoneNetPropertyPoursOnTheCanvas();
     void selectionStatesFollowTheme_data();
     void selectionStatesFollowTheme();
 
@@ -1168,6 +1169,46 @@ void MainWindowTests::fabricationExportAsksAboutRuleErrors() {
     QVERIFY(asked);
     QCOMPARE(window.toolWorkspaceCount(), 1);
     QVERIFY(window.findChild<QWidget*>(QStringLiteral("hatteda.tool.design-checks")) != nullptr);
+}
+
+void MainWindowTests::zoneNetPropertyPoursOnTheCanvas() {
+    hatt::ui::MainWindow window;
+    QVERIFY(showActive(window));
+    activateEditor(window);
+    window.showKayraWorkspace();
+    auto* board = window.activeCanvas();
+    hatt::ui::SketchItem zone;
+    zone.kind = hatt::ui::SketchItem::Kind::Polyline;
+    zone.variant = hatt::ui::CopperZoneVariant;
+    zone.closed = true;
+    zone.layer = hatt::ui::BoardLayer::TopCopper;
+    zone.points = {QPointF(0, 0), QPointF(20, 0), QPointF(20, 20), QPointF(0, 20)};
+    board->applyDocumentEdit(QStringLiteral("Draw"), {zone});
+    QVERIFY(board->zoneFills().isEmpty()); // no net: not poured
+
+    QTimer::singleShot(0, [] {
+        auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+        QVERIFY(dialog);
+        auto* net = dialog->findChild<QComboBox*>(QStringLiteral("ItemZoneNet"));
+        QVERIFY(net);
+        QCOMPARE(net->currentData().toString(), QString());
+        net->setEditText(QStringLiteral("GND"));
+        dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Ok)->click();
+    });
+    board->contextMenuRequested(board->mapToGlobal(QPoint(100, 100)), 0);
+    auto* menu = window.findChild<QMenu*>(QStringLiteral("CanvasContextMenu"));
+    QVERIFY(menu);
+    auto* properties = menu->findChild<QAction*>(QStringLiteral("hatteda.context.properties"));
+    QVERIFY(properties);
+    menu->hide();
+    properties->trigger();
+    QCOMPARE(board->document().first().net, QStringLiteral("GND"));
+    QCOMPARE(board->zoneFills().size(), 1);
+    QVERIFY(board->zoneFills().value(board->document().first().id).contains(QPointF(10, 10)));
+
+    action(window, "hatteda.action.undo")->trigger();
+    QVERIFY(board->document().first().net.isEmpty());
+    QVERIFY(board->zoneFills().isEmpty());
 }
 
 QTEST_MAIN(MainWindowTests)
