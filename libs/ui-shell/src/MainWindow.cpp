@@ -4,7 +4,9 @@
 #include "hatt/ui/CircuitWorkflow.hpp"
 #include "hatt/ui/ComponentLibrary.hpp"
 #include "hatt/ui/CamPreview.hpp"
+#include "hatt/ui/BoardCopper.hpp"
 #include "hatt/ui/GerberExport.hpp"
+#include "hatt/ui/ZoneFill.hpp"
 #include "hatt/ui/LibraryDialogs.hpp"
 #include "hatt/ui/ManufacturingExport.hpp"
 
@@ -430,6 +432,8 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
         // Queued: the list may be rebuilt (and the tool reset) only after the edit has finished.
         connect(canvas, &DesignCanvas::documentChanged, this, &MainWindow::refreshComponentList,
                 Qt::QueuedConnection);
+        // Pours depend on both documents (nets come from the schematic) and on the design rules.
+        connect(canvas, &DesignCanvas::documentChanged, this, &MainWindow::refreshZoneFills);
         connect(canvas, &DesignCanvas::contextMenuRequested, this,
                 [this, canvas](QPoint position, int index) {
                     if (canvas == editingCanvas()) showCanvasContextMenu(canvas, position, index);
@@ -596,6 +600,7 @@ void MainWindow::editItemProperties(DesignCanvas* canvas, int index) {
     QDoubleSpinBox* trackWidthField = nullptr;
     QDoubleSpinBox* viaDiameterField = nullptr;
     QDoubleSpinBox* viaDrillField = nullptr;
+    QComboBox* zoneNet = nullptr;
     auto size = [&](const QString& name, double millimetres, double minimum) {
         auto* field = new QDoubleSpinBox(&dialog);
         field->setObjectName(name);
@@ -656,8 +661,30 @@ void MainWindow::editItemProperties(DesignCanvas* canvas, int index) {
             form->addRow(tr("Via drill"), viaDrillField);
             break;
         default:
-            if (item.variant == CopperZoneVariant) layerChoice(CopperLayerMask);
-            else if (item.variant != BoardOutlineVariant) layerChoice(AllLayersMask);
+            if (item.variant == CopperZoneVariant) {
+                layerChoice(CopperLayerMask);
+                // Pour net: the schematic's nets, or any name typed in (e.g. before the schematic exists).
+                zoneNet = new QComboBox(&dialog);
+                zoneNet->setObjectName(QStringLiteral("ItemZoneNet"));
+                zoneNet->setEditable(true);
+                zoneNet->addItem(tr("None (not poured)"), QString());
+                const BoardCopperModel model = buildBoardCopperModel(canvases_.value(0)->document(), {});
+                QStringList nets = model.netNames;
+                nets.removeAll(QString());
+                nets.sort(Qt::CaseInsensitive);
+                for (const QString& net : nets) zoneNet->addItem(net, net);
+                const int current = zoneNet->findData(item.net);
+                if (current >= 0) {
+                    zoneNet->setCurrentIndex(current);
+                } else {
+                    zoneNet->setEditText(item.net);
+                }
+                zoneNet->setToolTip(tr("The zone is poured for this net and keeps the design rule clearance "
+                                       "from other copper"));
+                form->addRow(tr("Net"), zoneNet);
+            } else if (item.variant != BoardOutlineVariant) {
+                layerChoice(AllLayersMask);
+            }
             break;
         }
     }
@@ -745,6 +772,10 @@ void MainWindow::editItemProperties(DesignCanvas* canvas, int index) {
         if (viaDiameterField) {
             properties.width = fromDisplayUnit(viaDiameterField->value(), unit);
             properties.drillDiameter = fromDisplayUnit(viaDrillField->value(), unit);
+        }
+        if (zoneNet) {
+            const bool listed = zoneNet->currentIndex() >= 0 && zoneNet->currentText() == zoneNet->itemText(zoneNet->currentIndex());
+            properties.net = listed ? zoneNet->currentData().toString() : zoneNet->currentText().trimmed();
         }
         properties.pinPadMap = pinPadMap;
         canvas->editItemProperties(index, properties);
@@ -2563,7 +2594,10 @@ void MainWindow::exportFabricationFiles() {
         this, tr("Export fabrication files"), QFileInfo(projectPath_).absolutePath());
     if (directory.isEmpty()) return;
 
-    const CamOutput output = buildCamOutput(canvases_.value(1)->document());
+    CamOptions options;
+    options.zoneFills = pourZones(canvases_.value(0)->document(), canvases_.value(1)->document(), rules_.clearance,
+                                  rules_.boardEdgeClearance);
+    const CamOutput output = buildCamOutput(canvases_.value(1)->document(), options);
     const QString baseName = QFileInfo(projectPath_).completeBaseName();
     const QString version = QCoreApplication::applicationVersion().isEmpty()
                                 ? QStringLiteral("development")
@@ -2579,8 +2613,8 @@ void MainWindow::exportFabricationFiles() {
     auto* pageLayout = new QVBoxLayout(page);
     if (output.skippedZones > 0) {
         auto* notice = new QLabel(
-            tr("%n copper zone(s) were NOT exported: zones have no pour or clearance yet and would short "
-               "every net they cover. Route those connections with tracks, or add copper in your CAM tool.",
+            tr("%n copper zone(s) without a net were NOT exported: an unpoured zone would short every net it "
+               "covers. Choose the zone's net in its properties to pour it with clearance.",
                nullptr, output.skippedZones),
             page);
         notice->setObjectName(QStringLiteral("FabricationZonesNotice"));
@@ -2764,6 +2798,7 @@ void MainWindow::editDesignRules() {
     if (dialog.exec() != QDialog::Accepted || dialog.rules() == rules_) return;
     rules_ = dialog.rules();
     rulesModified_ = true;
+    refreshZoneFills();
     updateProjectState();
 }
 
@@ -2794,6 +2829,17 @@ bool MainWindow::exportPlacement(const QString& path) {
     if (projectPath_.isEmpty()) return false;
     const QVector<PlacementLine> lines = buildPlacement(canvases_.value(1)->document());
     return writeAssemblyFile(path, tr("Export pick and place"), QStringLiteral("-pick-place.csv"), placementCsv(lines));
+}
+
+void MainWindow::refreshZoneFills() {
+    auto* board = canvases_.value(1, nullptr);
+    if (board == nullptr) return;
+    QHash<QString, QPainterPath> fills;
+    for (const ZoneFillResult& fill : pourZones(canvases_.value(0)->document(), board->document(), rules_.clearance,
+                                                rules_.boardEdgeClearance)) {
+        fills.insert(fill.zoneId, fill.fill);
+    }
+    board->setZoneFills(fills);
 }
 
 } // namespace hatt::ui

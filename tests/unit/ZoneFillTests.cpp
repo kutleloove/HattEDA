@@ -1,8 +1,13 @@
+#include "hatt/ui/BoardCopper.hpp"
 #include "hatt/ui/GerberExport.hpp"
 #include "hatt/ui/ProjectFile.hpp"
+#include "hatt/ui/SketchCircuit.hpp"
 #include "hatt/ui/ZoneFill.hpp"
 
+#include <QLineF>
 #include <QtTest>
+
+#include <algorithm>
 
 using namespace hatt::ui;
 
@@ -40,6 +45,7 @@ private slots:
     void boardEdgeClearanceShrinksThePour();
     void contoursCarryHoleDepth();
     void gerberWritesPourBeforeCopperWithClearPolarity();
+    void schematicNetsDecideWhatThePourJoins();
     void zoneNetRoundTripsThroughProjectFile();
 };
 
@@ -119,6 +125,42 @@ void ZoneFillTests::gerberWritesPourBeforeCopperWithClearPolarity() {
 
     // Without a pour the zone is still left out.
     QCOMPARE(buildCamOutput(board).skippedZones, 1);
+}
+
+void ZoneFillTests::schematicNetsDecideWhatThePourJoins() {
+    const SketchDocument schematic = dcDividerExample();
+    SketchItem outline;
+    outline.kind = SketchItem::Kind::Polyline;
+    outline.variant = BoardOutlineVariant;
+    outline.closed = true;
+    outline.layer = BoardLayer::BoardEdge;
+    outline.points = {{0, 0}, {80, 0}, {80, 60}, {0, 60}};
+    BoardTransfer transfer = transferToBoard(schematic, {outline});
+    QVERIFY2(transfer.errors.isEmpty(), qPrintable(transfer.errors.join(QLatin1Char('\n'))));
+    SketchDocument board = transfer.document;
+    const auto header = std::find_if(board.begin(), board.end(), [](const SketchItem& item) {
+        return item.kind == SketchItem::Kind::Symbol && item.label == QLatin1String("V1");
+    });
+    QVERIFY(header != board.end());
+    const QVector<PlacedPad> headerPads = itemPads(*header);
+    QCOMPARE(headerPads.size(), 2);
+
+    const BoardCopperModel model = buildBoardCopperModel(schematic, board);
+    QVERIFY(model.netsKnown);
+    QString plusNet;
+    for (const BoardConductor& conductor : model.conductors) {
+        if (conductor.kind == ConductorKind::Pad && QLineF(conductor.pad.center, headerPads[0].center).length() < 1e-6) {
+            plusNet = model.netNames.value(conductor.net);
+        }
+    }
+    QVERIFY(!plusNet.isEmpty());
+
+    board.append(zoneItem(plusNet, {1, 1, 78, 58}, BoardLayer::BottomCopper));
+    const auto fills = pourZones(schematic, board, 0.2, 0.3);
+    QCOMPARE(fills.size(), 1);
+    QVERIFY(fills.first().fill.contains(headerPads[0].center));  // own net: joined
+    QVERIFY(!fills.first().fill.contains(headerPads[1].center)); // other net: cleared
+    QVERIFY(fills.first().fill.contains(QPointF(5, 5)));
 }
 
 void ZoneFillTests::zoneNetRoundTripsThroughProjectFile() {

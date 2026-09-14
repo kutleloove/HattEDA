@@ -1,5 +1,7 @@
 #include "hatt/ui/ZoneFill.hpp"
 
+#include "hatt/ui/BoardCopper.hpp"
+
 #include <QPainterPathStroker>
 
 #include <algorithm>
@@ -121,6 +123,51 @@ QVector<ZoneFillResult> fillZones(const SketchDocument& board, const QVector<Zon
         results.append({zone.id, zone.layer, zone.net, fill});
     }
     return results;
+}
+
+QVector<ZoneObstacle> netCopperObstacles(const SketchDocument& schematic, const SketchDocument& board) {
+    SketchDocument withoutZones;
+    withoutZones.reserve(board.size());
+    bool hasZone = false;
+    for (const SketchItem& item : board) {
+        if (item.variant == CopperZoneVariant) {
+            hasZone = true;
+            continue;
+        }
+        withoutZones.append(item);
+    }
+    QVector<ZoneObstacle> obstacles;
+    if (!hasZone) return obstacles;
+    const BoardCopperModel model = buildBoardCopperModel(schematic, withoutZones);
+    for (qsizetype i = 0; i < model.conductors.size(); ++i) {
+        const BoardConductor& conductor = model.conductors[i];
+        if (conductor.kind == ConductorKind::Zone) continue;
+        ZoneObstacle obstacle;
+        obstacle.itemId = conductor.itemId;
+        obstacle.layers = conductor.layers;
+        if (model.netsKnown) {
+            const QVector<int> nets = model.groupNets(model.groups.value(i, static_cast<int>(i)));
+            if (nets.size() == 1) {
+                obstacle.net = model.netNames.value(nets.first());
+            } else if (nets.size() > 1) {
+                obstacle.net = QStringLiteral("\x01short"); // never a zone net
+            }
+        }
+        for (const CopperShape& shape : conductor.shapes) {
+            obstacle.outline = obstacle.outline.united(copperShapePath(shape));
+        }
+        obstacles.append(obstacle);
+    }
+    return obstacles;
+}
+
+QVector<ZoneFillResult> pourZones(const SketchDocument& schematic, const SketchDocument& board, double clearance,
+                                  double boardEdgeClearance) {
+    const bool anyNet = std::any_of(board.begin(), board.end(), [](const SketchItem& item) {
+        return item.variant == CopperZoneVariant && !item.net.isEmpty();
+    });
+    if (!anyNet) return {};
+    return fillZones(board, netCopperObstacles(schematic, board), clearance, boardEdgeClearance);
 }
 
 QVector<ZoneContour> zoneContours(const QPainterPath& fill) {

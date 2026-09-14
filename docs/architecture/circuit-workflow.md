@@ -57,10 +57,15 @@ Dışa aktarmadan önce DRC çalışır. **Hata** varsa `FabricationChecksDialog
 **Raporu aç** (tasarım denetimi sekmesini açar, dosya yazmaz) veya **İptal**. Uyarılar soru çıkarmaz,
 sayıları durum satırında bildirilir.
 
-Bakır alanların (copper zone) henüz dolgusu ve clearance'ı yoktur; katı bakır olarak üretilirse
-kapsadığı bütün netleri kısa devre eder. Bu yüzden zone'lar Gerber'e **yazılmaz**; Gerber sekmesinin
-üstünde `FabricationZonesNotice` uyarısı ve durum satırında sayısı görünür (`CamOptions::includeZones`
-yalnız bilinçli kullanım içindir).
+**Bakır alan dolgusu (ADR-0009):** Bir bakır alanın (copper zone) özelliklerinden **Net** seçilir
+(`ItemZoneNet`; şemadaki netler listelenir, ad elle de yazılabilir). Netli alan kendi katmanında
+dökülür: alan poligonu, kart dış çizgisi varsa kenar boşluğu kadar içeride kalır ve başka netlerin
+bakırından tasarım kurallarındaki clearance kadar oyulur. Aynı netin padleri ve yolları dolguya
+bağlanır (henüz termal yok). Dolgu kanvasta katman renginde çizilir; belge, şema veya kurallar
+değişince yeniden hesaplanır. Gerber'de dolgu katmanın en başına yazılır, oyuklar LPC (clear) bölge
+olarak çıkar. Netsiz alan dökülmez ve Gerber'e **yazılmaz**, çünkü katı bakır kapsadığı bütün netleri
+kısa devre ederdi; Gerber sekmesinin üstünde `FabricationZonesNotice` uyarısı ve durum satırında sayısı
+görünür (`CamOptions::includeZones` yalnız bilinçli kullanım içindir).
 
 Kılıf etiketleri (R1, U1) kılıfın üstüne, kılıfın serigrafi katmanına 1 mm yüksekliğinde tek çizgili
 fontla (`StrokeFont.hpp`) yazılır; alt yüzdekiler aynalanır. Kartta yerleştirilen metinler kendi

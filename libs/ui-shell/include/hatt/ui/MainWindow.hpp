@@ -74,6 +74,8 @@ public slots:
     // or writing failed (the error is shown).
     bool exportBom(const QString& path = {});
     bool exportPlacement(const QString& path = {});
+    // Re-pours the board's copper zones (ZoneFill.hpp) and hands the result to the board canvas.
+    void refreshZoneFills();
 
 protected:
     void changeEvent(QEvent* event) override;

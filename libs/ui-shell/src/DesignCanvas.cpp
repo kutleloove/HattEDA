@@ -305,7 +305,8 @@ void drawItem(QPainter& painter, const SketchItem& item, const CanvasColors& col
         const QColor base = board ? graphicsColor() : outline ? colors.outline : colors.graphics;
         const QColor color = pick(base);
         painter.setPen(strokePen(color, outline ? std::max(width, 2.0) : width, preview));
-        if (zone) {
+        if (zone && (item.net.isEmpty() || preview)) {
+            // Zones with a net show their pour (setZoneFills) instead of a wash over the outline.
             QColor fill = board ? base : colors.copper;
             fill.setAlpha(preview ? 40 : 70);
             painter.setBrush(fill);
@@ -840,7 +841,7 @@ void DesignCanvas::editItemProperties(int index, const SketchItem& properties) {
         item.pinPadMap == properties.pinPadMap && item.excludeFromBoard == properties.excludeFromBoard &&
         item.layer == properties.layer && item.onBottom == properties.onBottom &&
         item.pad == properties.pad && item.width == properties.width &&
-        item.drillDiameter == properties.drillDiameter) return;
+        item.drillDiameter == properties.drillDiameter && item.net == properties.net) return;
     const int delta = (turns - item.quarterTurns + 4) % 4;
     for (int i = 0; i < delta; ++i) rotateItemQuarterTurn(item, anchor);
     item.quarterTurns = turns;
@@ -855,6 +856,7 @@ void DesignCanvas::editItemProperties(int index, const SketchItem& properties) {
     item.pad = properties.pad;
     item.width = properties.width;
     item.drillDiameter = properties.drillDiameter;
+    item.net = properties.net;
     pushEdit(tr("Edit properties"), document, {index});
 }
 
@@ -889,6 +891,11 @@ void DesignCanvas::setAirwires(const QVector<QLineF>& lines) {
 
 void DesignCanvas::setAnnotations(const QVector<CanvasAnnotation>& annotations) {
     annotations_ = annotations;
+    update();
+}
+
+void DesignCanvas::setZoneFills(const QHash<QString, QPainterPath>& fills) {
+    zoneFills_ = fills;
     update();
 }
 
@@ -2188,6 +2195,21 @@ void DesignCanvas::paintEvent(QPaintEvent*) {
     const LayerView view{visibleLayers_, activeLayer_};
     // Board: the inactive side first, then the active side; hidden layers are skipped.
     for (int rank = board ? 0 : 1; rank <= 1; ++rank) {
+        // Poured copper lies under the other items of its side. It is not redrawn during a move,
+        // when the pour is out of date.
+        for (int i = 0; board && !dragging && i < shown.size(); ++i) {
+            const SketchItem& zone = shown[i];
+            if (zone.variant != CopperZoneVariant || drawRank(zone, view) != rank || !itemVisible(zone)) continue;
+            const auto fill = zoneFills_.constFind(zone.id);
+            if (fill == zoneFills_.constEnd()) continue;
+            const QTransform toScreen(scale_, 0, 0, scale_, offset_.x(), offset_.y());
+            QColor color = sideColor(colors.layers[static_cast<int>(zone.layer)], layerBit(zone.layer), view);
+            color.setAlphaF(color.alphaF() * 0.55);
+            painter.setPen(Qt::NoPen);
+            painter.setBrush(color);
+            painter.drawPath(toScreen.map(*fill));
+            painter.setBrush(Qt::NoBrush);
+        }
         for (int i = 0; i < shown.size(); ++i) {
             if (board && (drawRank(shown[i], view) != rank || !itemVisible(shown[i]))) continue;
             drawItem(painter, shown[i], colors, board, selection_.contains(i), false, scale_, map, view);

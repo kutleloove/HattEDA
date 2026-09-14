@@ -636,7 +636,10 @@ Son projeler listesinden kaldırılsın mı?</translation></message>
     <message numerus="yes"><source>The board has %n design rule error(s). Boards made from these files may not work.</source><translation><numerusform>Kartta %n tasarım kuralı hatası var. Bu dosyalarla üretilen kart çalışmayabilir.</numerusform></translation></message>
     <message><source>Export anyway</source><translation>Yine de dışa aktar</translation></message>
     <message><source>Open report</source><translation>Raporu aç</translation></message>
-    <message numerus="yes"><source>%n copper zone(s) were NOT exported: zones have no pour or clearance yet and would short every net they cover. Route those connections with tracks, or add copper in your CAM tool.</source><translation><numerusform>%n bakır alan dışa AKTARILMADI: zone'ların henüz dolgusu ve clearance'ı yok, kapsadıkları bütün netleri kısa devre ederlerdi. Bu bağlantıları yollarla çizin veya bakırı CAM aracınızda ekleyin.</numerusform></translation></message>
+    <message numerus="yes"><source>%n copper zone(s) without a net were NOT exported: an unpoured zone would short every net it covers. Choose the zone's net in its properties to pour it with clearance.</source><translation><numerusform>Netsiz %n bakır alan dışa AKTARILMADI: dökülmemiş bir alan kapsadığı bütün netleri kısa devre ederdi. Clearance ile dökülmesi için alanın özelliklerinden netini seçin.</numerusform></translation></message>
+    <message><source>None (not poured)</source><translation>Yok (dökülmez)</translation></message>
+    <message><source>The zone is poured for this net and keeps the design rule clearance from other copper</source><translation>Alan bu net için dökülür ve diğer bakırdan tasarım kuralındaki clearance kadar uzak durur</translation></message>
+    <message><source>Net</source><translation>Net</translation></message>
     <message numerus="yes"><source>; %n copper zone(s) not exported</source><translation><numerusform>; %n bakır alan dışa aktarılmadı</numerusform></translation></message>
     <message numerus="yes"><source>; %n design rule error(s)</source><translation><numerusform>; %n tasarım kuralı hatası</numerusform></translation></message>
     <message numerus="yes"><source>; %n design rule warning(s)</source><translation><numerusform>; %n tasarım kuralı uyarısı</numerusform></translation></message>

@@ -36,6 +36,15 @@ struct ZoneFillResult {
 [[nodiscard]] QVector<ZoneFillResult> fillZones(const SketchDocument& board, const QVector<ZoneObstacle>& obstacles,
                                                 double clearance, double boardEdgeClearance);
 
+// Copper with nets from the board copper model (BoardCopper.hpp). Zones are left out of the model,
+// so a zone never merges the groups it covers. A group's net is its single schematic net; a group
+// without nets gets an empty net and a group joining several nets (a short) a name that matches no
+// zone, so pours keep clear of both.
+[[nodiscard]] QVector<ZoneObstacle> netCopperObstacles(const SketchDocument& schematic, const SketchDocument& board);
+// Pours every zone of `board` with the project's clearance and board edge clearance.
+[[nodiscard]] QVector<ZoneFillResult> pourZones(const SketchDocument& schematic, const SketchDocument& board,
+                                                double clearance, double boardEdgeClearance);
+
 // Contours of a fill with their nesting depth: even depth adds copper, odd depth removes it.
 // Drawing contours in increasing depth reproduces the fill (used for Gerber polarity).
 struct ZoneContour {

@@ -3,8 +3,10 @@
 #include "hatt/ui/SketchModel.hpp"
 #include "hatt/ui/Units.hpp"
 
+#include <QHash>
 #include <QLineF>
 #include <QList>
+#include <QPainterPath>
 #include <QPointF>
 #include <QString>
 #include <QWidget>
@@ -139,6 +141,10 @@ public:
     // Read-only overlay labels such as simulated probe voltages; not part of the document.
     void setAnnotations(const QVector<CanvasAnnotation>& annotations);
     [[nodiscard]] QVector<CanvasAnnotation> annotations() const { return annotations_; }
+    // Poured copper of zones by item id (ZoneFill.hpp), drawn under the board items in the zone's
+    // layer colour; computed by the host because pouring needs the schematic nets.
+    void setZoneFills(const QHash<QString, QPainterPath>& fills);
+    [[nodiscard]] QHash<QString, QPainterPath> zoneFills() const { return zoneFills_; }
 
     static void paintSymbolPreview(QPainter& painter, const QRectF& target, const QString& symbolId,
                                    const QPalette& palette);
@@ -262,6 +268,7 @@ private:
     SketchDocument items_;
     QVector<QLineF> airwires_;
     QVector<CanvasAnnotation> annotations_;
+    QHash<QString, QPainterPath> zoneFills_;
     QList<int> selection_;
     CanvasTool tool_ = CanvasTool::Select;
     QString variant_;
