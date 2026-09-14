@@ -1,3 +1,4 @@
+#include "hatt/ui/CamPreview.hpp"
 #include "hatt/ui/GerberExport.hpp"
 #include "hatt/ui/StrokeFont.hpp"
 
@@ -17,6 +18,7 @@ private slots:
     void zonesAreLeftOutUnlessRequested();
     void designatorsAndTextGoToSilkscreen();
     void strokeFontCoversDesignators();
+    void previewDrawsLayersInBoardColours();
 };
 
 void GerberExportTests::buildsCopperMaskPasteOutlineAndDrills() {
@@ -129,6 +131,31 @@ void GerberExportTests::designatorsAndTextGoToSilkscreen() {
         }
     }
     QVERIFY2(lowest >= -bounds.top() + CamDesignatorGap - 1e-6, qPrintable(QString::number(lowest)));
+}
+
+void GerberExportTests::previewDrawsLayersInBoardColours() {
+    SketchItem pad;
+    pad.kind = SketchItem::Kind::Pad;
+    pad.points = {{0.0, 0.0}};
+    pad.pad = {1, PadShape::Rect, 4.0, 4.0, 0.0, layerBit(BoardLayer::TopCopper)};
+    CamPreview preview;
+    preview.resize(200, 200);
+    preview.setOutput(buildCamOutput({pad}));
+    QVERIFY(!preview.outputBounds().isNull());
+    QCOMPARE(preview.outputBounds().width(), 4.0 + 2.0 * CamMaskExpansion); // mask opening is largest
+
+    auto centre = [&preview] { return preview.grab().toImage().pixelColor(100, 100); };
+    const QColor background = [&] {
+        CamPreview empty;
+        empty.resize(200, 200);
+        return empty.grab().toImage().pixelColor(100, 100);
+    }();
+    QVERIFY(centre() != background);
+    preview.setLayerVisible(CamLayerKind::TopCopper, false);
+    preview.setLayerVisible(CamLayerKind::TopMask, false);
+    preview.setLayerVisible(CamLayerKind::TopPaste, false);
+    QCOMPARE(centre(), background);
+    QVERIFY(!preview.isLayerVisible(CamLayerKind::TopCopper));
 }
 
 void GerberExportTests::strokeFontCoversDesignators() {

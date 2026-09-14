@@ -3,6 +3,7 @@
 #include "hatt/ui/ChecksReport.hpp"
 #include "hatt/ui/CircuitWorkflow.hpp"
 #include "hatt/ui/ComponentLibrary.hpp"
+#include "hatt/ui/CamPreview.hpp"
 #include "hatt/ui/GerberExport.hpp"
 #include "hatt/ui/LibraryDialogs.hpp"
 
@@ -2574,13 +2575,51 @@ void MainWindow::exportFabricationFiles() {
     }
     auto* layout = new QHBoxLayout;
     pageLayout->addLayout(layout, 1);
+
+    // Left: layer toggles for the graphical preview, then the written files.
+    auto* side = new QVBoxLayout;
+    auto* layers = new QListWidget(page);
+    layers->setObjectName(QStringLiteral("CamLayerList"));
+    layers->setMinimumWidth(210);
+    auto* graphic = new CamPreview(page);
+    graphic->setOutput(output);
+    for (const CamLayer& layer : output.layers) {
+        auto* item = new QListWidgetItem(
+            tr("%1  (%2)").arg(camLayerName(layer.kind)).arg(layer.primitives.size()), layers);
+        item->setFlags(Qt::ItemIsEnabled | Qt::ItemIsUserCheckable);
+        item->setCheckState(Qt::Checked);
+        item->setData(Qt::UserRole, static_cast<int>(layer.kind));
+    }
+    auto* drills = new QListWidgetItem(tr("Drill holes  (%1)").arg(output.drills.size()), layers);
+    drills->setFlags(Qt::ItemIsEnabled | Qt::ItemIsUserCheckable);
+    drills->setCheckState(Qt::Checked);
+    drills->setData(Qt::UserRole, -1);
+    connect(layers, &QListWidget::itemChanged, graphic, [graphic](QListWidgetItem* item) {
+        const int kind = item->data(Qt::UserRole).toInt();
+        const bool visible = item->checkState() == Qt::Checked;
+        if (kind < 0) {
+            graphic->setDrillsVisible(visible);
+        } else {
+            graphic->setLayerVisible(static_cast<CamLayerKind>(kind), visible);
+        }
+    });
+    side->addWidget(layers, 1);
     auto* list = new QListWidget(page);
     list->setObjectName(QStringLiteral("GerberFileList"));
     list->setMinimumWidth(210);
+    side->addWidget(list, 1);
+    layout->addLayout(side);
+
+    // Right: the preview drawing and the raw text of the selected file.
+    auto* views = new QTabWidget(page);
+    views->setObjectName(QStringLiteral("CamViews"));
+    views->setDocumentMode(true);
+    views->addTab(graphic, tr("Preview"));
     auto* preview = new QTextEdit(page);
     preview->setObjectName(QStringLiteral("GerberTextPreview"));
     preview->setReadOnly(true);
     preview->setLineWrapMode(QTextEdit::NoWrap);
+    views->addTab(preview, tr("File text"));
     for (const CamFile& file : files) {
         auto* item = new QListWidgetItem(file.fileName, list);
         item->setData(Qt::UserRole, file.content);
@@ -2590,9 +2629,18 @@ void MainWindow::exportFabricationFiles() {
             preview->setPlainText(QString::fromUtf8(list->item(row)->data(Qt::UserRole).toByteArray()));
         }
     });
-    layout->addWidget(list);
-    layout->addWidget(preview, 1);
+    connect(list, &QListWidget::itemClicked, views, [views, preview] { views->setCurrentWidget(preview); });
+    layout->addWidget(views, 1);
     list->setCurrentRow(0);
+    // A new export replaces the previous result instead of re-showing stale files.
+    for (int index = 0; index < toolWorkspaces_->count(); ++index) {
+        if (toolWorkspaces_->widget(index)->objectName() == QLatin1String("hatteda.tool.gerber-viewer")) {
+            auto* old = toolWorkspaces_->widget(index);
+            toolWorkspaces_->removeTab(index);
+            old->deleteLater();
+            break;
+        }
+    }
     openToolWorkspace(QStringLiteral("hatteda.tool.gerber-viewer"), tr("Gerber output"), page);
 
     QString message = tr("Exported %1 fabrication files to %2")

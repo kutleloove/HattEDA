@@ -48,7 +48,10 @@ dokuz Gerber X2 katmanı (üst/alt bakır, serigrafi, lehim maskesi, pasta ve ka
 Excellon PTH delik dosyası üretir. Pad, via, yol, bakır alan, kılıf serigrafisi ve kart kenarı aynı
 `itemPads`, katman ve geometri yardımcılarından okunur. Editörün aşağı-pozitif Y koordinatı CAM'de
 yukarı-pozitif olacak şekilde çevrilir. Sonuçlar atomik olarak seçilen klasöre yazılır ve
-`hatteda.tool.gerber-viewer` sekmesinde dosya listesiyle ham çıktı önizlemesi açılır.
+`hatteda.tool.gerber-viewer` sekmesi açılır: soldaki `CamLayerList` ile katmanlar ve delikler
+açılıp kapatılır, **Önizleme** (`CamPreview`) dosyalara yazılan aynı primitifleri katman renkleriyle
+çizer (tekerlek yakınlaştırır, sürükleme kaydırır, sağ tık sığdırır), `GerberFileList`'ten seçilen
+dosyanın ham metni **Dosya metni** sekmesinde görünür. Yeni bir dışa aktarma önceki sekmenin yerini alır.
 
 Dışa aktarmadan önce DRC çalışır. **Hata** varsa `FabricationChecksDialog` sorar: **Yine de dışa aktar**,
 **Raporu aç** (tasarım denetimi sekmesini açar, dosya yazmaz) veya **İptal**. Uyarılar soru çıkarmaz,

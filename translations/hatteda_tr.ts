@@ -629,5 +629,13 @@ Son projeler listesinden kaldırılsın mı?</translation></message>
     <message numerus="yes"><source>; %n copper zone(s) not exported</source><translation><numerusform>; %n bakır alan dışa aktarılmadı</numerusform></translation></message>
     <message numerus="yes"><source>; %n design rule error(s)</source><translation><numerusform>; %n tasarım kuralı hatası</numerusform></translation></message>
     <message numerus="yes"><source>; %n design rule warning(s)</source><translation><numerusform>; %n tasarım kuralı uyarısı</numerusform></translation></message>
+    <message><source>%1  (%2)</source><translation>%1  (%2)</translation></message>
+    <message><source>Drill holes  (%1)</source><translation>Delikler  (%1)</translation></message>
+    <message><source>Preview</source><translation>Önizleme</translation></message>
+    <message><source>File text</source><translation>Dosya metni</translation></message>
+  </context>
+  <context>
+    <name>hatt::ui::CamPreview</name>
+    <message><source>Nothing to fabricate on this board yet</source><translation>Bu kartta henüz üretilecek bir şey yok</translation></message>
   </context>
 </TS>

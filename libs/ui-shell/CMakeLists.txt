@@ -38,6 +38,8 @@ add_library(hatt-ui-shell STATIC
     src/GerberExport.cpp
     include/hatt/ui/StrokeFont.hpp
     src/StrokeFont.cpp
+    include/hatt/ui/CamPreview.hpp
+    src/CamPreview.cpp
 )
 
 add_library(HattEDA::UiShell ALIAS hatt-ui-shell)
