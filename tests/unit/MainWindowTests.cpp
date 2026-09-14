@@ -1204,7 +1204,9 @@ void MainWindowTests::zoneNetPropertyPoursOnTheCanvas() {
     properties->trigger();
     QCOMPARE(board->document().first().net, QStringLiteral("GND"));
     QCOMPARE(board->zoneFills().size(), 1);
-    QVERIFY(board->zoneFills().value(board->document().first().id).contains(QPointF(10, 10)));
+    // Poured, but nothing on the board belongs to GND yet, so the whole pour is an island.
+    QVERIFY(board->zoneFills().contains(board->document().first().id));
+    QVERIFY(board->zoneFills().value(board->document().first().id).isEmpty());
 
     action(window, "hatteda.action.undo")->trigger();
     QVERIFY(board->document().first().net.isEmpty());
