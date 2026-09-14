@@ -19,6 +19,7 @@ class QUndoGroup;
 
 namespace hatt::ui {
 
+class BoardLayerPanel;
 class DesignCanvas;
 class ProjectGuard;
 
@@ -65,7 +66,8 @@ protected:
     void closeEvent(QCloseEvent* event) override;
 
 private:
-    enum class ToolMode { Select, Component, Connect, Terminal, Probe, Draw, Measure };
+    // Package, Via and Pad are Kayra only (Proteus ARES modes); Probe is Mergen only.
+    enum class ToolMode { Select, Component, Connect, Terminal, Probe, Draw, Measure, Package, Via, Pad };
 
     void createActions();
     void createMenus();
@@ -126,6 +128,8 @@ private:
     QListWidget* objectSelector_ = nullptr;
     QWidget* deviceBar_ = nullptr;
     QWidget* boardPartsBar_ = nullptr;
+    // Kayra layer visibility and the active layer selector at the bottom left (BoardLayerPanel).
+    BoardLayerPanel* boardLayerPanel_ = nullptr;
     QPushButton* removeDeviceButton_ = nullptr;
     QStringList componentKeys_;
     // Board component mode: footprints waiting for placement, indexed by the selector rows.

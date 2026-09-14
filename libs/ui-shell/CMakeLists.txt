@@ -20,6 +20,8 @@ add_library(hatt-ui-shell STATIC
     src/LibraryDialogs.cpp
     src/Theme.cpp
     src/Units.cpp
+    include/hatt/ui/BoardLayerPanel.hpp
+    src/BoardLayerPanel.cpp
 )
 
 add_library(HattEDA::UiShell ALIAS hatt-ui-shell)

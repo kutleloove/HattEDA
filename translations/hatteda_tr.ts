@@ -372,4 +372,72 @@ Son projeler listesinden kaldırılsın mı?</translation></message>
     <message><source>The footprint '%1' is invalid: %2</source><translation>'%1' kılıfı geçersiz: %2</translation></message>
     <message><source>The library has an invalid device '%1'.</source><translation>Kütüphanede geçersiz bir eleman var: '%1'.</translation></message>
   </context>
+  <context>
+    <name>hatt::ui::BoardLayer</name>
+    <message><source>Top copper</source><translation>Üst bakır</translation></message>
+    <message><source>Bottom copper</source><translation>Alt bakır</translation></message>
+    <message><source>Top silk</source><translation>Üst serigrafi</translation></message>
+    <message><source>Bottom silk</source><translation>Alt serigrafi</translation></message>
+    <message><source>Top resist</source><translation>Üst lehim maskesi</translation></message>
+    <message><source>Bottom resist</source><translation>Alt lehim maskesi</translation></message>
+    <message><source>Top paste</source><translation>Üst pasta</translation></message>
+    <message><source>Bottom paste</source><translation>Alt pasta</translation></message>
+    <message><source>Board edge</source><translation>Kart kenarı</translation></message>
+  </context>
+  <context>
+    <name>hatt::ui::PadStyle</name>
+    <message><source>Round through-hole pad</source><translation>Yuvarlak delikli pad</translation></message>
+    <message><source>Square through-hole pad</source><translation>Kare delikli pad</translation></message>
+    <message><source>Oval (DIL) pad</source><translation>Oval (DIL) pad</translation></message>
+    <message><source>SMD rectangular pad</source><translation>Dikdörtgen SMD pad</translation></message>
+    <message><source>SMD round pad</source><translation>Yuvarlak SMD pad</translation></message>
+  </context>
+  <context>
+    <name>hatt::ui::BoardLayerPanel</name>
+    <message><source>VISIBLE LAYERS</source><translation>GÖRÜNÜR KATMANLAR</translation></message>
+    <message><source>Shown layers; hidden layers cannot be selected</source><translation>Gösterilen katmanlar; gizli katmanlar seçilemez</translation></message>
+    <message><source>ACTIVE LAYER</source><translation>AKTİF KATMAN</translation></message>
+    <message><source>Layer for new tracks, pads and 2D graphics (Space swaps top and bottom copper, Page Up / Page Down select them)</source><translation>Yeni yol, pad ve 2B çizimlerin katmanı (Space üst ve alt bakırı değiştirir, Page Up / Page Down bunları seçer)</translation></message>
+  </context>
+  <context>
+    <name>hatt::ui::DesignCanvas</name>
+    <message><source>Click to place a %1. SMD pads go to the active copper layer; pads are numbered in placement order. Ctrl+R rotates before placing.</source><translation>%1 yerleştirmek için tıklayın. SMD padler aktif bakır katmanına gider; padler yerleştirme sırasına göre numaralanır. Ctrl+R yerleştirmeden önce döndürür.</translation></message>
+    <message><source>Choose a pad from the list.</source><translation>Listeden bir pad seçin.</translation></message>
+    <message><source>Click to place a via that joins the top and bottom copper layers. While routing, Space, Page Up or Page Down changes the layer and adds a via automatically.</source><translation>Üst ve alt bakır katmanlarını birleştiren bir via yerleştirmek için tıklayın. Yol çizerken Space, Page Up veya Page Down katmanı değiştirir ve otomatik via ekler.</translation></message>
+    <message><source>Choose a pad from the list first.</source><translation>Önce listeden bir pad seçin.</translation></message>
+    <message><source>Place pad %1</source><translation>Pad %1 yerleştir</translation></message>
+    <message><source>Place via</source><translation>Via yerleştir</translation></message>
+    <message><source>Route track</source><translation>Yol çiz</translation></message>
+    <message><source>PCB layout  ·  %1</source><translation>PCB yerleşimi  ·  %1</translation></message>
+  </context>
+  <context>
+    <name>hatt::ui::MainWindow</name>
+    <message><source>Package mode</source><translation>Kılıf modu</translation></message>
+    <message><source>Via mode</source><translation>Via modu</translation></message>
+    <message><source>Pad mode</source><translation>Pad modu</translation></message>
+    <message><source>Only available in Kayra</source><translation>Yalnızca Kayra'da kullanılabilir</translation></message>
+    <message><source>%1  ·  %2 mm</source><translation>%1  ·  %2 mm</translation></message>
+    <message><source>%1  ·  %2 / %3 mm</source><translation>%1  ·  %2 / %3 mm</translation></message>
+    <message><source>Track %1</source><translation>Yol %1</translation></message>
+    <message><source>Layer</source><translation>Katman</translation></message>
+    <message><source>Place on the bottom side (mirrored)</source><translation>Alt yüze yerleştir (aynalı)</translation></message>
+    <message><source>Track width</source><translation>Yol genişliği</translation></message>
+    <message><source>Pad number</source><translation>Pad numarası</translation></message>
+    <message><source>Round</source><translation>Yuvarlak</translation></message>
+    <message><source>Rectangular</source><translation>Dikdörtgen</translation></message>
+    <message><source>Oval</source><translation>Oval</translation></message>
+    <message><source>Shape</source><translation>Şekil</translation></message>
+    <message><source>0 makes a surface mount pad on the selected copper layer</source><translation>0, seçili bakır katmanında yüzey montaj pad'i oluşturur</translation></message>
+    <message><source>Width (X)</source><translation>Genişlik (X)</translation></message>
+    <message><source>Height (Y)</source><translation>Yükseklik (Y)</translation></message>
+    <message><source>Drill (0 = SMD)</source><translation>Delik (0 = SMD)</translation></message>
+    <message><source>Via diameter</source><translation>Via çapı</translation></message>
+    <message><source>Via drill</source><translation>Via deliği</translation></message>
+    <message><source>The drill must be smaller than the pad.</source><translation>Delik pad'den küçük olmalıdır.</translation></message>
+    <message><source>The via drill must be smaller than the via diameter.</source><translation>Via deliği via çapından küçük olmalıdır.</translation></message>
+  </context>
+  <context>
+    <name>hatt::ui::ProjectFile</name>
+    <message><source>%1 has an invalid width.</source><translation>%1 geçersiz genişliğe sahip.</translation></message>
+  </context>
 </TS>

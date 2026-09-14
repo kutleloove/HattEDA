@@ -1,4 +1,5 @@
 #include "hatt/ui/MainWindow.hpp"
+#include "hatt/ui/BoardLayerPanel.hpp"
 #include "hatt/ui/CircuitWorkflow.hpp"
 #include "hatt/ui/ComponentLibrary.hpp"
 #include "hatt/ui/LibraryDialogs.hpp"
@@ -60,6 +61,11 @@ constexpr int ToolRole = Qt::UserRole;
 constexpr int VariantRole = Qt::UserRole + 1;
 constexpr int IconRole = Qt::UserRole + 2;
 constexpr int PartRole = Qt::UserRole + 3;
+// Track or via style name ("T12", "V32") of a board connect or via mode row.
+constexpr int StyleRole = Qt::UserRole + 4;
+
+const QString TrackStyleKey = QStringLiteral("editor/board/trackStyle");
+const QString ViaStyleKey = QStringLiteral("editor/board/viaStyle");
 
 QColor iconColor(const QPalette& palette) {
     return palette.color(QPalette::Window).lightness() < 128 ? QColor(QStringLiteral("#b4bfca"))
@@ -99,6 +105,28 @@ QIcon makeIcon(const QString& kind, const QColor& color) {
         painter.setPen(Qt::NoPen);
         painter.drawEllipse(QPointF(3, 18), 2, 2);
         painter.drawEllipse(QPointF(21, 6), 2, 2);
+    } else if (kind == QLatin1String("package")) {
+        // Footprint: silk outline with two rows of pads.
+        rect(6, 4, 12, 16);
+        poly({{10.5, 4}, {12, 6}, {13.5, 4}});
+        painter.setBrush(color);
+        for (double y : {7.0, 11.0, 15.0}) {
+            rect(3, y, 3, 2);
+            rect(18, y, 3, 2);
+        }
+    } else if (kind == QLatin1String("via")) {
+        painter.drawEllipse(QPointF(12, 12), 7.5, 7.5);
+        painter.drawEllipse(QPointF(12, 12), 3, 3);
+        line(3, 12, 4.5, 12);
+        line(19.5, 12, 21, 12);
+    } else if (kind == QLatin1String("pad")) {
+        QColor fill = color;
+        fill.setAlpha(110);
+        painter.setBrush(fill);
+        rect(3, 5, 9, 9);
+        painter.drawEllipse(QPointF(16, 15), 5, 5);
+        painter.setBrush(Qt::NoBrush);
+        painter.drawEllipse(QPointF(16, 15), 1.8, 1.8);
     } else if (kind == QLatin1String("terminal")) {
         poly({{3, 8}, {13, 8}, {17, 12}, {13, 16}, {3, 16}}, true);
         line(17, 12, 21, 12);
@@ -235,7 +263,12 @@ QIcon symbolIcon(const QString& symbolId, const QPalette& palette) {
     pixmap.setDevicePixelRatio(2.0);
     pixmap.fill(Qt::transparent);
     QPainter painter(&pixmap);
-    DesignCanvas::paintSymbolPreview(painter, QRectF(2, 2, 28, 28), symbolId, palette);
+    // Pad tool rows carry a pad style id (or "via") instead of a symbol id.
+    if (findSymbol(symbolId) != nullptr) {
+        DesignCanvas::paintSymbolPreview(painter, QRectF(2, 2, 28, 28), symbolId, palette);
+    } else {
+        DesignCanvas::paintPadPreview(painter, QRectF(6, 6, 20, 20), symbolId, palette);
+    }
     painter.end();
     return QIcon(pixmap);
 }
@@ -255,8 +288,13 @@ protected:
     void paintEvent(QPaintEvent*) override {
         QPainter painter(this);
         const QRectF area = QRectF(rect()).adjusted(18, 12, -18, -30);
-        if (!symbolId_.isEmpty()) {
+        if (!symbolId_.isEmpty() && findSymbol(symbolId_) != nullptr) {
             DesignCanvas::paintSymbolPreview(painter, area, symbolId_, palette());
+        } else if (!symbolId_.isEmpty()) {
+            const double side = std::min(area.width(), area.height()) * 0.6;
+            DesignCanvas::paintPadPreview(painter, QRectF(area.center() - QPointF(side, side) / 2,
+                                                          QSizeF(side, side)),
+                                          symbolId_, palette());
         } else if (!iconKind_.isEmpty()) {
             const QRect iconRect(QPoint(0, 0), QSize(56, 56));
             makeIcon(iconKind_, iconColor(palette()))
@@ -516,6 +554,82 @@ void MainWindow::editItemProperties(DesignCanvas* canvas, int index) {
         form->addRow(QString(), excludeFromBoard);
     }
     const LengthUnit unit = canvas->lengthUnit();
+    // Board items (#28, #30): layer, board side, pad geometry, track width and via size.
+    QComboBox* layer = nullptr;
+    QCheckBox* bottomSide = nullptr;
+    QSpinBox* padNumber = nullptr;
+    QComboBox* padShape = nullptr;
+    QDoubleSpinBox* padWidth = nullptr;
+    QDoubleSpinBox* padHeight = nullptr;
+    QDoubleSpinBox* padDrill = nullptr;
+    QDoubleSpinBox* trackWidthField = nullptr;
+    QDoubleSpinBox* viaDiameterField = nullptr;
+    QDoubleSpinBox* viaDrillField = nullptr;
+    auto size = [&](const QString& name, double millimetres, double minimum) {
+        auto* field = new QDoubleSpinBox(&dialog);
+        field->setObjectName(name);
+        field->setDecimals(unit == LengthUnit::Millimetre ? 3 : 4);
+        field->setRange(toDisplayUnit(minimum, unit), toDisplayUnit(100.0, unit));
+        field->setSuffix(QLatin1Char(' ') + unitSymbol(unit));
+        field->setValue(toDisplayUnit(millimetres, unit));
+        return field;
+    };
+    auto layerChoice = [&](int allowed) {
+        layer = new QComboBox(&dialog);
+        layer->setObjectName(QStringLiteral("ItemLayer"));
+        for (int index = 0; index < BoardLayerCount; ++index) {
+            if (allowed & (1 << index)) layer->addItem(boardLayerName(static_cast<BoardLayer>(index)), index);
+        }
+        layer->setCurrentIndex(qMax(0, layer->findData(static_cast<int>(item.layer))));
+        form->addRow(tr("Layer"), layer);
+    };
+    if (canvas->workspace() == Workspace::Board) {
+        switch (item.kind) {
+        case SketchItem::Kind::Symbol:
+            bottomSide = new QCheckBox(tr("Place on the bottom side (mirrored)"), &dialog);
+            bottomSide->setObjectName(QStringLiteral("ItemBottomSide"));
+            bottomSide->setChecked(item.onBottom);
+            form->addRow(QString(), bottomSide);
+            break;
+        case SketchItem::Kind::Wire:
+            layerChoice(CopperLayerMask);
+            trackWidthField = size(QStringLiteral("ItemTrackWidth"), trackWidth(item), 0.05);
+            form->addRow(tr("Track width"), trackWidthField);
+            break;
+        case SketchItem::Kind::Pad:
+            padNumber = new QSpinBox(&dialog);
+            padNumber->setObjectName(QStringLiteral("ItemPadNumber"));
+            padNumber->setRange(1, 9999);
+            padNumber->setValue(item.pad.number);
+            form->addRow(tr("Pad number"), padNumber);
+            padShape = new QComboBox(&dialog);
+            padShape->setObjectName(QStringLiteral("ItemPadShape"));
+            padShape->addItem(tr("Round"), static_cast<int>(PadShape::Round));
+            padShape->addItem(tr("Rectangular"), static_cast<int>(PadShape::Rect));
+            padShape->addItem(tr("Oval"), static_cast<int>(PadShape::Oval));
+            padShape->setCurrentIndex(qMax(0, padShape->findData(static_cast<int>(item.pad.shape))));
+            form->addRow(tr("Shape"), padShape);
+            padWidth = size(QStringLiteral("ItemPadWidth"), item.pad.width, 0.05);
+            padHeight = size(QStringLiteral("ItemPadHeight"), item.pad.height, 0.05);
+            padDrill = size(QStringLiteral("ItemPadDrill"), item.pad.drillDiameter, 0.0);
+            padDrill->setToolTip(tr("0 makes a surface mount pad on the selected copper layer"));
+            form->addRow(tr("Width (X)"), padWidth);
+            form->addRow(tr("Height (Y)"), padHeight);
+            form->addRow(tr("Drill (0 = SMD)"), padDrill);
+            layerChoice(CopperLayerMask);
+            break;
+        case SketchItem::Kind::Via:
+            viaDiameterField = size(QStringLiteral("ItemViaDiameter"), viaDiameter(item), 0.1);
+            viaDrillField = size(QStringLiteral("ItemViaDrill"), viaDrill(item), 0.05);
+            form->addRow(tr("Via diameter"), viaDiameterField);
+            form->addRow(tr("Via drill"), viaDrillField);
+            break;
+        default:
+            if (item.variant == CopperZoneVariant) layerChoice(CopperLayerMask);
+            else if (item.variant != BoardOutlineVariant) layerChoice(AllLayersMask);
+            break;
+        }
+    }
     auto coordinate = [&](const QString& name, double millimetres) {
         auto* field = new QDoubleSpinBox(&dialog);
         field->setObjectName(name);
@@ -564,6 +678,15 @@ void MainWindow::editItemProperties(DesignCanvas* canvas, int index) {
                 }
             }
         }
+        if (padDrill && padDrill->value() > 0.0 &&
+            padDrill->value() >= std::min(padWidth->value(), padHeight->value())) {
+            validation->setText(tr("The drill must be smaller than the pad."));
+            return;
+        }
+        if (viaDrillField && viaDrillField->value() >= viaDiameterField->value()) {
+            validation->setText(tr("The via drill must be smaller than the via diameter."));
+            return;
+        }
         dialog.accept();
     });
     connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
@@ -575,6 +698,23 @@ void MainWindow::editItemProperties(DesignCanvas* canvas, int index) {
         if (value) properties.value = value->text();
         if (footprint) properties.footprint = footprint->currentData().toString();
         if (excludeFromBoard) properties.excludeFromBoard = excludeFromBoard->isChecked();
+        if (layer) properties.layer = static_cast<BoardLayer>(layer->currentData().toInt());
+        if (bottomSide) properties.onBottom = bottomSide->isChecked();
+        if (trackWidthField) properties.width = fromDisplayUnit(trackWidthField->value(), unit);
+        if (padNumber) {
+            properties.pad.number = padNumber->value();
+            properties.pad.shape = static_cast<PadShape>(padShape->currentData().toInt());
+            properties.pad.width = fromDisplayUnit(padWidth->value(), unit);
+            properties.pad.height = fromDisplayUnit(padHeight->value(), unit);
+            properties.pad.drillDiameter = fromDisplayUnit(padDrill->value(), unit);
+            // Through-hole pads conduct on both copper layers; SMD pads on their own layer.
+            properties.pad.layers = properties.pad.drillDiameter > 0.0 ? CopperLayerMask
+                                                                        : layerBit(properties.layer);
+        }
+        if (viaDiameterField) {
+            properties.width = fromDisplayUnit(viaDiameterField->value(), unit);
+            properties.drillDiameter = fromDisplayUnit(viaDrillField->value(), unit);
+        }
         properties.pinPadMap = pinPadMap;
         canvas->editItemProperties(index, properties);
     }
@@ -629,7 +769,10 @@ void MainWindow::createActions() {
     const QList<ToolSpec> tools = {
         {ToolMode::Select, "hatteda.tool.select", tr("Selection mode"), "select", "V"},
         {ToolMode::Component, "hatteda.tool.component", tr("Component mode"), "component", "A"},
+        {ToolMode::Package, "hatteda.tool.package", tr("Package mode"), "package", "K"},
         {ToolMode::Connect, "hatteda.tool.connect", tr("Wire and track mode"), "wire", "W"},
+        {ToolMode::Via, "hatteda.tool.via", tr("Via mode"), "via", "I"},
+        {ToolMode::Pad, "hatteda.tool.pad", tr("Pad mode"), "pad", "O"},
         {ToolMode::Terminal, "hatteda.tool.terminal", tr("Terminal and port mode"), "terminal", "R"},
         {ToolMode::Probe, "hatteda.tool.probe", tr("Probe mode"), "probe", "P"},
         {ToolMode::Draw, "hatteda.tool.draw", tr("2D graphics mode"), "draw", "D"},
@@ -914,6 +1057,20 @@ QWidget* MainWindow::createEditor() {
             [this] { applyObjectSelection(); });
     contextLayout->addWidget(objectSelector_, 1);
     contextLayout->addStretch();
+    // Board layers at the bottom left (Proteus ARES); the panel and the board canvas keep the
+    // active layer in sync, including Space / Page Up / Page Down on the canvas.
+    boardLayerPanel_ = new BoardLayerPanel(contextPanel);
+    if (auto* board = canvases_.value(1, nullptr)) {
+        board->setActiveLayer(boardLayerPanel_->activeLayer());
+        board->setVisibleLayers(boardLayerPanel_->visibleLayers());
+        connect(boardLayerPanel_, &BoardLayerPanel::activeLayerChanged, board, [board](BoardLayer layer) {
+            board->setActiveLayer(layer);
+            board->setFocus();
+        });
+        connect(boardLayerPanel_, &BoardLayerPanel::visibleLayersChanged, board, &DesignCanvas::setVisibleLayers);
+        connect(board, &DesignCanvas::activeLayerChanged, boardLayerPanel_, &BoardLayerPanel::setActiveLayer);
+    }
+    contextLayout->addWidget(boardLayerPanel_);
     bodyLayout->addWidget(contextPanel);
 
     primaryWorkspaces_ = new QStackedWidget(body);
@@ -1216,8 +1373,61 @@ void MainWindow::rebuildObjectSelector() {
             }
             componentKeys_ = componentListKeys();
             break;
+        case ToolMode::Package:
+            // Proteus ARES package mode: any footprint, without a schematic part.
+            if (workspace == Workspace::Board) addSymbols(SymbolCategory::Component);
+            break;
+        case ToolMode::Connect:
+            if (workspace == Workspace::Board) {
+                for (const auto& style : trackStyles()) {
+                    const QString name = QLatin1String(style.name);
+                    auto* item = new QListWidgetItem(
+                        makeIcon(QStringLiteral("wire"), color),
+                        tr("%1  ·  %2 mm").arg(name).arg(style.width, 0, 'f', 3), objectSelector_);
+                    item->setData(ToolRole, static_cast<int>(CanvasTool::Wire));
+                    item->setData(IconRole, QStringLiteral("wire"));
+                    item->setData(StyleRole, name);
+                }
+            }
+            break;
+        case ToolMode::Via:
+            if (workspace == Workspace::Board) {
+                for (const auto& style : viaStyles()) {
+                    const QString name = QLatin1String(style.name);
+                    auto* item = new QListWidgetItem(
+                        symbolIcon(QStringLiteral("via"), palette()),
+                        tr("%1  ·  %2 / %3 mm").arg(name).arg(style.diameter, 0, 'f', 2).arg(style.drill, 0, 'f', 2),
+                        objectSelector_);
+                    item->setData(ToolRole, static_cast<int>(CanvasTool::Via));
+                    item->setData(VariantRole, QStringLiteral("via"));
+                    item->setData(StyleRole, name);
+                }
+            }
+            break;
+        case ToolMode::Pad:
+            if (workspace == Workspace::Board) {
+                for (const auto& style : padStyles()) {
+                    const QString id = QLatin1String(style.id);
+                    auto* item = new QListWidgetItem(symbolIcon(id, palette()), padStyleDisplayName(style),
+                                                     objectSelector_);
+                    item->setData(ToolRole, static_cast<int>(CanvasTool::Pad));
+                    item->setData(VariantRole, id);
+                }
+            }
+            break;
         case ToolMode::Terminal:
-            addSymbols(SymbolCategory::Terminal);
+            if (workspace == Workspace::Board) {
+                // Test points and mounting holes; pads and vias have their own modes.
+                for (const auto* symbol : symbolsFor(workspace, SymbolCategory::Terminal)) {
+                    if (symbol->id == QLatin1String("board.via")) continue; // superseded by the via tool
+                    auto* item = new QListWidgetItem(symbolIcon(symbol->id, palette()),
+                                                     symbolDisplayName(*symbol), objectSelector_);
+                    item->setData(ToolRole, static_cast<int>(CanvasTool::Symbol));
+                    item->setData(VariantRole, symbol->id);
+                }
+            } else {
+                addSymbols(SymbolCategory::Terminal);
+            }
             break;
         case ToolMode::Probe:
             addSymbols(SymbolCategory::Probe);
@@ -1237,7 +1447,6 @@ void MainWindow::rebuildObjectSelector() {
             }
             break;
         case ToolMode::Select:
-        case ToolMode::Connect:
         case ToolMode::Measure:
             break;
         }
@@ -1250,8 +1459,23 @@ void MainWindow::rebuildObjectSelector() {
                                                                    : tr("COMPONENTS TO PLACE"));
         deviceBar_->setVisible(componentMode && workspace == Workspace::Schematic);
         boardPartsBar_->setVisible(componentMode && workspace == Workspace::Board);
+        boardLayerPanel_->setVisible(workspace == Workspace::Board);
         if (hasObjects) {
-            const int row = rememberedObjectRows_.value(rememberKey(static_cast<int>(toolMode_), workspace), 0);
+            int fallback = 0;
+            if (workspace == Workspace::Board &&
+                (toolMode_ == ToolMode::Connect || toolMode_ == ToolMode::Via)) {
+                // Track and via styles persist across sessions.
+                const bool track = toolMode_ == ToolMode::Connect;
+                const QString style = QSettings()
+                                          .value(track ? TrackStyleKey : ViaStyleKey,
+                                                 track ? QStringLiteral("T12") : QStringLiteral("V32"))
+                                          .toString();
+                for (int row = 0; row < objectSelector_->count(); ++row) {
+                    if (objectSelector_->item(row)->data(StyleRole).toString() == style) fallback = row;
+                }
+            }
+            const int row =
+                rememberedObjectRows_.value(rememberKey(static_cast<int>(toolMode_), workspace), fallback);
             objectSelector_->setCurrentRow(std::clamp(row, 0, objectSelector_->count() - 1));
         }
     }
@@ -1275,13 +1499,34 @@ void MainWindow::applyObjectSelection() {
         tool = CanvasTool::Wire;
         iconKind = QStringLiteral("wire");
         caption = workspace == Workspace::Board ? tr("Track") : tr("Wire");
+        if (auto* item = objectSelector_->currentItem()) {
+            const QString style = item->data(StyleRole).toString();
+            for (const auto& track : trackStyles()) {
+                if (style == QLatin1String(track.name)) canvas->setTrackWidth(track.width);
+            }
+            QSettings().setValue(TrackStyleKey, style);
+            caption = tr("Track %1").arg(style);
+            rememberedObjectRows_.insert(rememberKey(static_cast<int>(toolMode_), workspace),
+                                         objectSelector_->currentRow());
+        }
         break;
     case ToolMode::Measure:
         tool = CanvasTool::Measure;
         iconKind = QStringLiteral("measure");
         caption = tr("Measure distance");
         break;
+    case ToolMode::Via:
+        if (auto* item = objectSelector_->currentItem()) {
+            const QString style = item->data(StyleRole).toString();
+            for (const auto& via : viaStyles()) {
+                if (style == QLatin1String(via.name)) canvas->setViaSize(via.diameter, via.drill);
+            }
+            QSettings().setValue(ViaStyleKey, style);
+        }
+        [[fallthrough]];
     case ToolMode::Component:
+    case ToolMode::Package:
+    case ToolMode::Pad:
     case ToolMode::Terminal:
     case ToolMode::Probe:
     case ToolMode::Draw:
@@ -1290,7 +1535,7 @@ void MainWindow::applyObjectSelection() {
             variant = item->data(VariantRole).toString();
             iconKind = item->data(IconRole).toString();
             caption = item->text();
-            if (tool == CanvasTool::Symbol) {
+            if (tool == CanvasTool::Symbol || tool == CanvasTool::Pad || tool == CanvasTool::Via) {
                 symbolId = variant;
             }
             rememberedObjectRows_.insert(rememberKey(static_cast<int>(toolMode_), workspace),
@@ -1487,7 +1732,16 @@ void MainWindow::workspaceChanged() {
     probe->setEnabled(!board);
     probe->setToolTip(board ? tr("Probes are only available in Mergen")
                             : withShortcut(probe->text(), probe->shortcut()));
-    activateToolMode(board && toolMode_ == ToolMode::Probe ? ToolMode::Select : toolMode_);
+    for (const char* id : {"hatteda.tool.package", "hatteda.tool.via", "hatteda.tool.pad"}) {
+        auto* boardOnly = actions_.value(QString::fromLatin1(id));
+        boardOnly->setEnabled(board);
+        boardOnly->setToolTip(board ? withShortcut(boardOnly->text(), boardOnly->shortcut())
+                                    : tr("Only available in Kayra"));
+    }
+    const bool boardMode =
+        toolMode_ == ToolMode::Package || toolMode_ == ToolMode::Via || toolMode_ == ToolMode::Pad;
+    const bool unavailable = board ? toolMode_ == ToolMode::Probe : boardMode;
+    activateToolMode(unavailable ? ToolMode::Select : toolMode_);
     zoomLabel_->setText(tr("Zoom %1%").arg(canvas->zoomPercent()));
     updateGridActions();
     if (editingCanvas() != nullptr) {
@@ -1580,7 +1834,8 @@ void MainWindow::updateEditActions() {
     enable("hatteda.action.delete", selected > 0);
     enable("hatteda.action.duplicate", selected > 0);
     enable("hatteda.action.array", selected > 0);
-    enable("hatteda.action.rotate", selected > 0 || (canvas != nullptr && canvas->tool() == CanvasTool::Symbol));
+    enable("hatteda.action.rotate", selected > 0 || (canvas != nullptr && (canvas->tool() == CanvasTool::Symbol ||
+                                                                            canvas->tool() == CanvasTool::Pad)));
     enable("hatteda.action.select-all", canvas != nullptr && !canvas->document().isEmpty());
     for (const char* id : {"hatteda.action.zoom-in", "hatteda.action.zoom-out", "hatteda.action.fit"}) {
         enable(id, canvas != nullptr);

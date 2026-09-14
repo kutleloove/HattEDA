@@ -73,9 +73,10 @@ struct CanvasColors {
 // Top copper and bottom copper follow the design system's copper and secondary layer tokens.
 QColor boardLayerColor(BoardLayer layer, bool dark) {
     switch (layer) {
-    case BoardLayer::TopCopper: return QColor(dark ? "#f4a261" : "#d9822b");
-    case BoardLayer::BottomCopper: return QColor(dark ? "#62b6ff" : "#1f78c1");
-    case BoardLayer::TopSilk: return QColor(dark ? "#e6dfa6" : "#7a6a00");
+    // Proteus ARES / KiCad convention: top copper red, bottom copper blue.
+    case BoardLayer::TopCopper: return QColor(dark ? "#ff4d4d" : "#d11f1f");
+    case BoardLayer::BottomCopper: return QColor(dark ? "#4d8dff" : "#1f4fd1");
+    case BoardLayer::TopSilk: return QColor(dark ? "#f2f2f2" : "#3a3a3a");
     case BoardLayer::BottomSilk: return QColor(dark ? "#c9a3e6" : "#7a48a3");
     case BoardLayer::TopResist: return QColor(dark ? "#4cc38a" : "#1d8a5c");
     case BoardLayer::BottomResist: return QColor(dark ? "#5cc8c8" : "#1f8080");
@@ -107,8 +108,8 @@ CanvasColors canvasColors(Workspace workspace, const QPalette& palette) {
         colors.gridMajor = QColor(board ? "#1c2630" : "#202b36");
         colors.origin = QColor("#2f6f68");
         colors.stroke = QColor(board ? "#d9e1e8" : "#c9d4de");
-        colors.wire = QColor(board ? "#f4a261" : "#8fd694");
-        colors.copper = QColor("#f4a261");
+        colors.wire = QColor(board ? "#ff4d4d" : "#8fd694");
+        colors.copper = QColor("#ff4d4d");
         colors.graphics = QColor(board ? "#62b6ff" : "#c9d4de");
         colors.outline = QColor("#e9c46a");
         colors.selection = QColor("#18b6a4");
@@ -121,8 +122,8 @@ CanvasColors canvasColors(Workspace workspace, const QPalette& palette) {
         colors.gridMajor = QColor(board ? "#ced5db" : "#d4d8cd");
         colors.origin = QColor("#7fb8b1");
         colors.stroke = QColor(board ? "#3a4652" : "#2d3a45");
-        colors.wire = QColor(board ? "#c96f28" : "#2e7d32");
-        colors.copper = QColor("#d9822b");
+        colors.wire = QColor(board ? "#d11f1f" : "#2e7d32");
+        colors.copper = QColor("#d11f1f");
         colors.graphics = QColor(board ? "#1f78c1" : "#2d3a45");
         colors.outline = QColor("#b8860b");
         colors.selection = QColor("#087f73");

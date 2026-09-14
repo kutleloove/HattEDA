@@ -75,6 +75,7 @@ private slots:
     void toolWorkspaceIsOpenedOnce();
     void toolActionsDriveCanvasAndObjectSelector();
     void probeModeIsUnavailableInKayra();
+    void kayraPadViaPackageModesAndLayerSelector();
     void undoFollowsActiveWorkspaceAndKeepsTool();
 
     // Automated regression coverage supporting issue #2; not manual verification.
@@ -671,7 +672,8 @@ void MainWindowTests::toolModesAreMutuallyExclusive() {
     const auto buttons = window.findChildren<QToolButton*>();
     QList<QToolButton*> modes;
     for (auto* button : buttons) {
-        if (button->property("rail").toBool()) modes.append(button);
+        // Workspace-specific modes (Kayra package/via/pad) are disabled in Mergen.
+        if (button->property("rail").toBool() && button->isEnabled()) modes.append(button);
     }
     QVERIFY(modes.size() >= 2);
     modes.at(1)->click();
@@ -739,6 +741,60 @@ void MainWindowTests::probeModeIsUnavailableInKayra() {
     QVERIFY(!action(window, "hatteda.tool.probe")->isEnabled());
     QVERIFY(action(window, "hatteda.tool.select")->isChecked());
     QCOMPARE(window.activeCanvas()->tool(), CanvasTool::Select);
+}
+
+void MainWindowTests::kayraPadViaPackageModesAndLayerSelector() {
+    QSettings().remove(QStringLiteral("editor/board"));
+    hatt::ui::MainWindow window;
+    window.resize(1440, 900);
+    auto* selector = window.findChild<QListWidget*>(QStringLiteral("ObjectSelector"));
+    auto* layers = window.findChild<QComboBox*>(QStringLiteral("ActiveLayer"));
+    QVERIFY(selector && layers);
+    for (const char* id : {"hatteda.tool.package", "hatteda.tool.via", "hatteda.tool.pad"}) {
+        QVERIFY2(!action(window, id)->isEnabled(), id);
+    }
+
+    window.showKayraWorkspace();
+    auto* board = window.activeCanvas();
+    QCOMPARE(board->workspace(), Workspace::Board);
+
+    action(window, "hatteda.tool.pad")->trigger();
+    QVERIFY(action(window, "hatteda.tool.pad")->isEnabled());
+    QCOMPARE(board->tool(), CanvasTool::Pad);
+    QCOMPARE(selector->count(), static_cast<int>(hatt::ui::padStyles().size()));
+    clickCanvas(board, {5.08, 5.08});
+    QCOMPARE(board->document().size(), 1);
+    QCOMPARE(board->document().first().kind, hatt::ui::SketchItem::Kind::Pad);
+
+    action(window, "hatteda.tool.via")->trigger();
+    QCOMPARE(board->tool(), CanvasTool::Via);
+    selector->setCurrentRow(selector->count() - 1);
+    clickCanvas(board, {10.16, 5.08});
+    QCOMPARE(board->document().size(), 2);
+    QCOMPARE(board->document().last().width, hatt::ui::viaStyles().last().diameter);
+
+    action(window, "hatteda.tool.connect")->trigger();
+    QCOMPARE(board->tool(), CanvasTool::Wire);
+    QCOMPARE(selector->count(), static_cast<int>(hatt::ui::trackStyles().size()));
+    QCOMPARE(selector->currentItem()->text().left(3), QStringLiteral("T12"));
+    selector->setCurrentRow(0);
+    QCOMPARE(board->trackWidthSetting(), hatt::ui::trackStyles().first().width);
+
+    action(window, "hatteda.tool.package")->trigger();
+    QCOMPARE(board->tool(), CanvasTool::Symbol);
+    QVERIFY(board->toolVariant().startsWith(QStringLiteral("board.")));
+
+    // The bottom-left selector and the canvas share the active layer.
+    layers->setCurrentIndex(static_cast<int>(hatt::ui::BoardLayer::BoardEdge));
+    QCOMPARE(board->activeLayer(), hatt::ui::BoardLayer::BoardEdge);
+    board->setActiveLayer(hatt::ui::BoardLayer::BottomCopper);
+    QCOMPARE(layers->currentIndex(), static_cast<int>(hatt::ui::BoardLayer::BottomCopper));
+
+    window.showMergenWorkspace();
+    QVERIFY(!action(window, "hatteda.tool.package")->isEnabled());
+    QVERIFY(action(window, "hatteda.tool.select")->isChecked());
+    QVERIFY(window.findChild<QWidget*>(QStringLiteral("BoardLayerPanel"))->isHidden());
+    QSettings().remove(QStringLiteral("editor/board"));
 }
 
 void MainWindowTests::undoFollowsActiveWorkspaceAndKeepsTool() {
