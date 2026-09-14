@@ -9,7 +9,13 @@
 #include <QApplication>
 #include <QContextMenuEvent>
 #include <QTimer>
+#include <QDialog>
+#include <QDialogButtonBox>
+#include <QDoubleSpinBox>
+#include <QFormLayout>
 #include <QInputDialog>
+#include <QLabel>
+#include <QPushButton>
 #include <QKeyEvent>
 #include <QLineEdit>
 #include <QMouseEvent>
@@ -71,6 +77,7 @@ struct CanvasColors {
     QColor label;
     QColor guide;
     std::array<QColor, BoardLayerCount> layers;
+    QColor throughHole; // pads and vias on both copper layers
 };
 
 // Top copper and bottom copper follow the design system's copper and secondary layer tokens.
@@ -89,6 +96,7 @@ CanvasColors canvasColors(Workspace workspace, const QPalette& palette) {
     for (int layer = 0; layer < BoardLayerCount; ++layer) {
         colors.layers[layer] = boardLayerColor(static_cast<BoardLayer>(layer), dark);
     }
+    colors.throughHole = throughHoleColor(dark);
     if (dark) {
         colors.background = QColor(board ? "#080b0f" : "#0b1016");
         colors.gridMinor = QColor(board ? "#10171e" : "#131b23");
@@ -196,7 +204,12 @@ void drawPads(QPainter& painter, const QVector<PlacedPad>& pads, const CanvasCol
         if (shown == 0) continue;
         const bool onActive = (shown & layerBit(activeCopper)) != 0;
         const BoardLayer layer = onActive ? activeCopper : oppositeSideLayer(activeCopper);
-        QColor fill = preview ? colors.preview : colors.layers[static_cast<int>(layer)];
+        // Through-hole copper shows on both sides, so it gets its own colour (Proteus: purple) instead
+        // of following the active layer; SMD pads keep the colour of their copper layer.
+        const bool throughHole = shown == CopperLayerMask;
+        QColor fill = preview       ? colors.preview
+                      : throughHole ? colors.throughHole
+                                    : colors.layers[static_cast<int>(layer)];
         if (preview) fill.setAlpha(150);
         else if (!onActive) fill.setAlpha(150);
         QPolygonF outline;
@@ -351,6 +364,25 @@ void drawItem(QPainter& painter, const SketchItem& item, const CanvasColors& col
         break;
     }
     case SketchItem::Kind::Text: {
+        if (board) {
+            // The fabrication font (StrokeFont), so the canvas shows what the Gerber files contain;
+            // bottom-side text is mirrored.
+            const double height = item.width > 0.0 ? item.width : TextHeightMm;
+            const QPointF topLeft = item.points.first();
+            const double axis = topLeft.x() + strokeTextWidth(item.label, height) / 2.0;
+            const bool mirrored = isBottomLayer(item.layer);
+            const double lineWidth = std::max(isCopperLayer(item.layer) ? 0.254 : 0.15, height * 0.12);
+            painter.setPen(strokePen(pick(graphicsColor()), std::max(1.0, lineWidth * scale), preview));
+            for (QVector<QPointF> line : strokeText(item.label, topLeft, height)) {
+                QPolygonF screen;
+                for (QPointF point : line) {
+                    if (mirrored) point.setX(2.0 * axis - point.x());
+                    screen << map(point);
+                }
+                painter.drawPolyline(screen);
+            }
+            break;
+        }
         QFont font = painter.font();
         font.setPixelSize(std::max(6, static_cast<int>(TextHeightMm * scale * 0.8)));
         painter.setFont(font);
@@ -1612,21 +1644,50 @@ void DesignCanvas::placeVia(QPointF world) {
 }
 
 void DesignCanvas::placeText(QPointF world) {
-    bool accepted = false;
-    const QString text = QInputDialog::getText(this, tr("Place text"), tr("Text:"),
-                                               QLineEdit::Normal, QString(), &accepted)
-                             .trimmed();
-    if (!accepted || text.isEmpty()) {
-        return;
-    }
-    SketchItem item;
-    item.kind = SketchItem::Kind::Text;
-    item.points = {world};
-    item.label = text;
-    if (workspace_ == Workspace::Board) item.layer = graphicsLayer();
-    SketchDocument document = items_;
-    document.append(item);
-    pushEdit(tr("Place text"), document, {});
+    // Asked after the click has finished: a modal dialog opened inside the mouse press handler can
+    // swallow the release and leave the canvas in a half-finished gesture.
+    QTimer::singleShot(0, this, [this, world] {
+        const bool board = workspace_ == Workspace::Board;
+        QDialog dialog(this);
+        dialog.setObjectName(QStringLiteral("PlaceTextDialog"));
+        dialog.setWindowTitle(tr("Place text"));
+        auto* form = new QFormLayout(&dialog);
+        auto* content = new QLineEdit(&dialog);
+        content->setObjectName(QStringLiteral("TextContent"));
+        form->addRow(tr("Text"), content);
+        QDoubleSpinBox* height = nullptr;
+        if (board) {
+            height = new QDoubleSpinBox(&dialog);
+            height->setObjectName(QStringLiteral("TextHeight"));
+            height->setDecimals(2);
+            height->setRange(0.5, 50.0);
+            height->setSingleStep(0.25);
+            height->setSuffix(QStringLiteral(" mm"));
+            height->setValue(textHeight_);
+            form->addRow(tr("Height"), height);
+            form->addRow(new QLabel(tr("Goes on %1").arg(boardLayerName(graphicsLayer())), &dialog));
+        }
+        auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+        form->addRow(buttons);
+        const auto updateOk = [&] { buttons->button(QDialogButtonBox::Ok)->setEnabled(!content->text().trimmed().isEmpty()); };
+        connect(content, &QLineEdit::textChanged, &dialog, updateOk);
+        connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+        connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+        updateOk();
+        if (dialog.exec() != QDialog::Accepted) return;
+        SketchItem item;
+        item.kind = SketchItem::Kind::Text;
+        item.points = {world};
+        item.label = content->text().trimmed();
+        if (board) {
+            item.layer = graphicsLayer();
+            textHeight_ = height->value();
+            item.width = textHeight_;
+        }
+        SketchDocument document = items_;
+        document.append(item);
+        pushEdit(tr("Place text"), document, {});
+    });
 }
 
 void DesignCanvas::finishTwoPoint(QPointF world) {

@@ -288,6 +288,7 @@ private:
     double trackWidth_ = DefaultTrackWidth;
     double viaDiameter_ = DefaultViaDiameter;
     double viaDrill_ = DefaultViaDrill;
+    double textHeight_ = TextHeightMm; // last board text height, mm
     bool pressGesture_ = false;
     QPointF pressScreen_;
 
