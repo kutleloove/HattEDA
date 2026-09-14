@@ -10,6 +10,9 @@
 #include <functional>
 #include <initializer_list>
 #include <limits>
+#include <map>
+#include <memory>
+#include <vector>
 
 namespace hatt::ui {
 namespace {
@@ -415,13 +418,36 @@ const QVector<SymbolDefinition>& symbolLibrary() {
     return library;
 }
 
+namespace {
+// Project-defined symbols by id. Replaced definitions move to `retired` so earlier pointers stay
+// valid; the registry is only touched from the GUI thread.
+struct SymbolRegistry {
+    std::map<QString, std::unique_ptr<SymbolDefinition>> symbols;
+    std::vector<std::unique_ptr<SymbolDefinition>> retired;
+};
+SymbolRegistry& registry() {
+    static SymbolRegistry instance;
+    return instance;
+}
+} // namespace
+
 const SymbolDefinition* findSymbol(const QString& id) {
     for (const auto& symbol : symbolLibrary()) {
         if (symbol.id == id) {
             return &symbol;
         }
     }
-    return nullptr;
+    const auto found = registry().symbols.find(id);
+    return found != registry().symbols.end() ? found->second.get() : nullptr;
+}
+
+void registerSymbols(const QVector<SymbolDefinition>& symbols) {
+    auto& entries = registry();
+    for (const auto& symbol : symbols) {
+        auto& slot = entries.symbols[symbol.id];
+        if (slot) entries.retired.push_back(std::move(slot));
+        slot = std::make_unique<SymbolDefinition>(symbol);
+    }
 }
 
 QList<const SymbolDefinition*> symbolsFor(Workspace workspace, SymbolCategory category) {
@@ -435,6 +461,7 @@ QList<const SymbolDefinition*> symbolsFor(Workspace workspace, SymbolCategory ca
 }
 
 QString symbolDisplayName(const SymbolDefinition& symbol) {
+    if (!symbol.displayName.isEmpty()) return symbol.displayName;
     return QCoreApplication::translate("hatt::ui::SymbolLibrary", symbol.name);
 }
 

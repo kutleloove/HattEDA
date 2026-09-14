@@ -1281,7 +1281,11 @@ void DesignCanvas::placeSymbol(QPointF world) {
         const auto* footprint = findSymbol(symbol->defaultFootprint);
         if (footprint != nullptr && footprint->pins.size() == symbol->pins.size()) {
             item.footprint = footprint->id;
-            for (int pad = 1; pad <= symbol->pins.size(); ++pad) item.pinPadMap.append(pad);
+            if (symbol->defaultPinPadMap.size() == symbol->pins.size()) {
+                item.pinPadMap = symbol->defaultPinPadMap;
+            } else {
+                for (int pad = 1; pad <= symbol->pins.size(); ++pad) item.pinPadMap.append(pad);
+            }
         }
     }
     item.kind = SketchItem::Kind::Symbol;

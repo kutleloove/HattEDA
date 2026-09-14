@@ -59,7 +59,8 @@ Stored in `ProjectData` and written as the `"library"` object of the `.hatt` fil
   part uses it. Unknown or non-component ids and a non-object library are rejected on load. A
   missing `library` or `devices` (files written before #27) reads as an empty list, so no format
   version bump was needed: the field is additive and older v2 readers ignore it.
-- User-created devices and packages are added by #29.
+- User-created devices and footprints (`customDevices`, `customFootprints`) are added by #29,
+  see ADR-0007.
 
 Related defaults (not stored): `SymbolDefinition::defaultValue` / `defaultFootprint` give newly
 placed schematic parts a value and a pin-count-matching footprint with a one-to-one pin-to-pad

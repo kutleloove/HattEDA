@@ -16,6 +16,19 @@ Aktif çizim/yerleştirme/taşıma sırasında sağ tık taslağı iptal eder ve
 - **Auto placer...** (`hatteda.action.auto-place`, PCB component modunda `hatteda.parts.auto-place` düğmesi) `AutoPlacerDialog` açar: yerleşim ızgarası (`AutoPlacerGrid`) ve elemanlar arası boşluk (`AutoPlacerSpacing`) PCB biriminde girilir, `pcb/autoPlacer/grid|spacing` ayarlarında hatırlanır; tüm bekleyen parçalar tek undo adımıyla yerleşir.
 - **Export netlist...** (`hatteda.action.export-netlist`) `.net` metin dosyası yazar: `*PARTS` (referans, eleman, değer, kılıf) ve `*NETS` (`net: R1.1 V1.2`) bölümleri. Portlar/raylar net adı verir ama parça olarak listelenmez.
 
+## Eleman ve kılıf oluşturma (Make Device / Make Package, #29)
+
+- **Yeni eleman...** (`hatteda.devices.new`, Design › New device...) `DeviceEditorDialog` açar. Ad, etiket öneki (1-8 harf), varsayılan değer, pin sayısı ve isteğe bağlı pin adları girilir. Şema sembolü kendiliğinden üretilir: 2 pine kadar küçük kutu, fazlası solda yukarıdan aşağı, sağda aşağıdan yukarı pinli IC kutusu. Oluşan eleman projenin eleman listesine eklenir.
+- **Datasheet bilgileri** isteğe bağlıdır: üretici, parça no, bağlantı, kılıf tipi, delikli/SMD, pin aralığı, sıra aralığı, gövde, bacak ölçüleri ve pin başına en fazla akım. 0 değeri "bilinmiyor" demektir.
+- **Kılıf** listesi pin sayısı aynı olan hazır ve proje kılıflarını gösterir. **Elemandan kılıf oluştur...** `FootprintEditorDialog` açar. Pad sayısı elemanın pin sayısına kilitlidir. Sağdaki `DeviceInfoBox` elemanın bilgilerini gösterir:
+  - Datasheet geometrisi varsa pin aralığı, sıra aralığı ve pad ölçüleri ondan üretilir (`suggestFootprint`).
+  - Pin akımı girilmişse IPC-2221'e göre (1 oz, 10 °C) en az bakır genişliği gösterilir. Pin aralığı izin verdiği ölçüde padler genişletilir ve yolların da en az bu genişlikte çizilmesi önerilir.
+  - Hiç bilgi yoksa yalnız pin sayısı bilinir. Kılıf tam o sayıda padle, genel 2.54 mm delikli bir başlangıçla açılır.
+- **Pin → pad** tablosu (`DevicePinMap`) kılıf seçilince dolar. Her pin için pad numarası seçilir, her pad bir kez kullanılmalıdır. Yeni yerleştirilen parçalar bu eşlemeyi alır.
+- **Yeni kılıf...** (Design menüsü) aynı kılıf penceresini elemansız açar: iki uçlu, tek sıra, çift sıra (DIP/SOIC) veya dört kenar (QFP) dizilim; canlı önizleme; çakışan padler ve padden büyük delik reddedilir.
+- Kanvasta çizilen pad ve serigrafiden kılıf yapma (Make Package, #28) aynı `FootprintDefinition` yapısının açık geometri (`pads` + `pins` + `shapes`) biçimini kullanır.
+- Hepsi `.hatt` dosyasında `library.customDevices` ve `library.customFootprints` olarak saklanır (ADR-0007). Kütüphane belgelerden önce okunur. Geçersiz bir satır dosyanın açılmasını adıyla belirtilen bir hatayla durdurur.
+
 ## Simülasyon başlat/durdur (#22)
 
 Komut çubuğundaki oynat düğmesi veya **Circuit → Start simulation** (F12) canlı simülasyonu başlatır. Probe modundaki **Voltage probe** bir tele veya pine konduğunda gerilimi şemada etiket olarak görünür. Simülasyon çalışırken değer değiştirmek, parça eklemek veya taşımak devreyi yeniden çözer. Durdur düğmesi (Shift+F12) etiketleri kaldırır. Hata olursa sonuç sekmesi açılır ve simülasyon durur. DC modelinde kondansatör açık devre, bobin kısa devredir.

@@ -1,5 +1,7 @@
 #include "hatt/ui/ProjectFile.hpp"
 
+#include "hatt/ui/ComponentLibrary.hpp"
+
 #include <QCoreApplication>
 #include <QFile>
 #include <QJsonArray>
@@ -250,6 +252,235 @@ QString documentFromJson(const QJsonValue& value, Workspace workspace, const QSt
     return {};
 }
 
+QJsonArray pointsToJson(const QVector<QPointF>& points) {
+    QJsonArray array;
+    for (const QPointF& point : points) array.append(QJsonArray{point.x(), point.y()});
+    return array;
+}
+
+bool pointFromJson(const QJsonValue& value, QPointF& point) {
+    const QJsonArray pair = value.toArray();
+    if (!value.isArray() || pair.size() != 2 || !pair[0].isDouble() || !pair[1].isDouble() ||
+        !std::isfinite(pair[0].toDouble()) || !std::isfinite(pair[1].toDouble())) {
+        return false;
+    }
+    point = {pair[0].toDouble(), pair[1].toDouble()};
+    return true;
+}
+
+QJsonObject footprintToJson(const FootprintDefinition& footprint) {
+    if (footprint.isExplicit()) {
+        QJsonArray pads;
+        for (int i = 0; i < footprint.pads.size(); ++i) {
+            QJsonObject pad = padToJson(footprint.pads[i]);
+            const QPointF at = footprint.pins.value(i);
+            pad[QStringLiteral("at")] = QJsonArray{at.x(), at.y()};
+            pads.append(pad);
+        }
+        QJsonArray shapes;
+        for (const SymbolShape& shape : footprint.shapes) {
+            QJsonObject object{{QStringLiteral("points"), pointsToJson(shape.points)}};
+            if (shape.closed) object[QStringLiteral("closed")] = true;
+            if (shape.filled) object[QStringLiteral("filled")] = true;
+            shapes.append(object);
+        }
+        return {{QStringLiteral("id"), footprint.id},
+                {QStringLiteral("name"), footprint.name},
+                {QStringLiteral("pads"), pads},
+                {QStringLiteral("shapes"), shapes}};
+    }
+    const FootprintParams& p = footprint.params;
+    return {{QStringLiteral("id"), footprint.id},
+            {QStringLiteral("name"), footprint.name},
+            {QStringLiteral("style"), packageStyleToken(p.style)},
+            {QStringLiteral("padCount"), p.padCount},
+            {QStringLiteral("pitch"), p.pitch},
+            {QStringLiteral("rowSpacing"), p.rowSpacing},
+            {QStringLiteral("padShape"), QLatin1String(padShapeToString(p.shape))},
+            {QStringLiteral("padWidth"), p.padWidth},
+            {QStringLiteral("padLength"), p.padLength},
+            {QStringLiteral("drill"), p.drill},
+            {QStringLiteral("bodyWidth"), p.bodyWidth},
+            {QStringLiteral("bodyLength"), p.bodyLength}};
+}
+
+QJsonObject deviceToJson(const DeviceDefinition& device) {
+    QJsonObject object{{QStringLiteral("id"), device.id},
+                       {QStringLiteral("name"), device.name},
+                       {QStringLiteral("prefix"), device.prefix},
+                       {QStringLiteral("pinCount"), device.pinCount}};
+    if (!device.defaultValue.isEmpty()) object[QStringLiteral("value")] = device.defaultValue;
+    if (!device.footprint.isEmpty()) object[QStringLiteral("footprint")] = device.footprint;
+    if (!device.pinNames.isEmpty()) object[QStringLiteral("pinNames")] = QJsonArray::fromStringList(device.pinNames);
+    if (!device.pinPadMap.isEmpty()) {
+        QJsonArray map;
+        for (int pad : device.pinPadMap) map.append(pad);
+        object[QStringLiteral("pinPadMap")] = map;
+    }
+    const DeviceSpec& s = device.spec;
+    QJsonObject spec;
+    auto text = [&spec](const char* key, const QString& value) {
+        if (!value.isEmpty()) spec[QLatin1String(key)] = value;
+    };
+    auto number = [&spec](const char* key, double value) {
+        if (value != 0.0) spec[QLatin1String(key)] = value;
+    };
+    text("manufacturer", s.manufacturer);
+    text("partNumber", s.partNumber);
+    text("datasheet", s.datasheet);
+    if (s.package != PackageStyle::None) spec[QStringLiteral("package")] = packageStyleToken(s.package);
+    if (s.throughHole) spec[QStringLiteral("throughHole")] = true;
+    number("pitch", s.pitch);
+    number("rowSpacing", s.rowSpacing);
+    number("bodyWidth", s.bodyWidth);
+    number("bodyLength", s.bodyLength);
+    number("leadWidth", s.leadWidth);
+    number("leadLength", s.leadLength);
+    number("pinCurrent", s.pinCurrent);
+    if (!spec.isEmpty()) object[QStringLiteral("spec")] = spec;
+    return object;
+}
+
+// Reads a non-negative finite length; a missing key keeps `target`.
+bool readLength(const QJsonObject& object, const char* key, double& target) {
+    const QJsonValue value = object.value(QLatin1String(key));
+    if (value.isUndefined()) return true;
+    if (!value.isDouble() || !std::isfinite(value.toDouble()) || value.toDouble() < 0) return false;
+    target = value.toDouble();
+    return true;
+}
+
+// Reads the library before the documents: custom symbols must be registered so that document items
+// using them validate.
+QString libraryFromJson(const QJsonValue& value, ProjectLibrary& library) {
+    // The library is optional: v1 files and early v2 files have none or an empty object.
+    if (value.isUndefined()) return {};
+    if (!value.isObject()) return tr("The library section is invalid.");
+    const QJsonObject object = value.toObject();
+    const QJsonValue devices = object.value(QStringLiteral("devices"));
+    const QJsonValue footprints = object.value(QStringLiteral("customFootprints"));
+    const QJsonValue customDevices = object.value(QStringLiteral("customDevices"));
+    for (const QJsonValue& list : {devices, footprints, customDevices}) {
+        if (!list.isUndefined() && !list.isArray()) return tr("The library section is invalid.");
+    }
+    QSet<QString> ids;
+    for (const QJsonValue& entry : footprints.toArray()) {
+        const QJsonObject o = entry.toObject();
+        FootprintDefinition footprint;
+        footprint.id = o.value(QStringLiteral("id")).toString();
+        footprint.name = o.value(QStringLiteral("name")).toString();
+        const bool identified = entry.isObject() && footprint.id.startsWith(CustomFootprintPrefix) &&
+                                !ids.contains(footprint.id) && !footprint.name.trimmed().isEmpty();
+        if (identified && o.contains(QStringLiteral("pads"))) {
+            // Explicit geometry (Make Package): pads with positions and silkscreen shapes.
+            const QJsonValue pads = o.value(QStringLiteral("pads"));
+            const QJsonValue shapes = o.value(QStringLiteral("shapes"));
+            bool valid = pads.isArray() && (shapes.isUndefined() || shapes.isArray());
+            for (const QJsonValue& padValue : pads.toArray()) {
+                const QJsonObject pad = padValue.toObject();
+                QPointF at;
+                valid = valid && padValue.isObject() && pad.value(QStringLiteral("number")).isDouble() &&
+                        pad.value(QStringLiteral("width")).isDouble() &&
+                        pad.value(QStringLiteral("height")).isDouble() &&
+                        pad.value(QStringLiteral("layers")).isDouble() &&
+                        pointFromJson(pad.value(QStringLiteral("at")), at);
+                footprint.pads.append(padFromJson(pad));
+                footprint.pins.append(at);
+            }
+            for (const QJsonValue& shapeValue : shapes.toArray()) {
+                const QJsonObject object = shapeValue.toObject();
+                SymbolShape shape;
+                valid = valid && shapeValue.isObject() && object.value(QStringLiteral("points")).isArray();
+                for (const QJsonValue& pointValue : object.value(QStringLiteral("points")).toArray()) {
+                    QPointF point;
+                    valid = valid && pointFromJson(pointValue, point);
+                    shape.points.append(point);
+                }
+                shape.closed = object.value(QStringLiteral("closed")).toBool();
+                shape.filled = object.value(QStringLiteral("filled")).toBool();
+                footprint.shapes.append(shape);
+            }
+            if (!valid) return tr("The library has an invalid footprint '%1'.").arg(footprint.name);
+            const QString problem = validateExplicitFootprint(footprint);
+            if (!problem.isEmpty()) return tr("The footprint '%1' is invalid: %2").arg(footprint.name, problem);
+            ids.insert(footprint.id);
+            library.customFootprints.append(footprint);
+            continue;
+        }
+        FootprintParams& p = footprint.params;
+        const QJsonValue count = o.value(QStringLiteral("padCount"));
+        const bool valid = entry.isObject() && footprint.id.startsWith(CustomFootprintPrefix) && !ids.contains(footprint.id) &&
+                           !footprint.name.trimmed().isEmpty() &&
+                           packageStyleFromToken(o.value(QStringLiteral("style")).toString(), p.style) && count.isDouble() &&
+                           count.toDouble() == std::floor(count.toDouble()) && readLength(o, "pitch", p.pitch) &&
+                           readLength(o, "rowSpacing", p.rowSpacing) && readLength(o, "padWidth", p.padWidth) &&
+                           readLength(o, "padLength", p.padLength) && readLength(o, "drill", p.drill) &&
+                           readLength(o, "bodyWidth", p.bodyWidth) && readLength(o, "bodyLength", p.bodyLength);
+        if (!valid) return tr("The library has an invalid footprint '%1'.").arg(footprint.name);
+        p.padCount = count.toInt();
+        p.shape = padShapeFromString(o.value(QStringLiteral("padShape")).toString());
+        const QString problem = validateFootprintParams(p);
+        if (!problem.isEmpty()) return tr("The footprint '%1' is invalid: %2").arg(footprint.name, problem);
+        ids.insert(footprint.id);
+        library.customFootprints.append(footprint);
+    }
+    registerProjectLibrary(library);
+    for (const QJsonValue& entry : customDevices.toArray()) {
+        const QJsonObject o = entry.toObject();
+        DeviceDefinition device;
+        device.id = o.value(QStringLiteral("id")).toString();
+        device.name = o.value(QStringLiteral("name")).toString();
+        device.prefix = o.value(QStringLiteral("prefix")).toString();
+        device.defaultValue = o.value(QStringLiteral("value")).toString();
+        device.footprint = o.value(QStringLiteral("footprint")).toString();
+        const QJsonValue count = o.value(QStringLiteral("pinCount"));
+        const QJsonObject spec = o.value(QStringLiteral("spec")).toObject();
+        DeviceSpec& s = device.spec;
+        s.manufacturer = spec.value(QStringLiteral("manufacturer")).toString();
+        s.partNumber = spec.value(QStringLiteral("partNumber")).toString();
+        s.datasheet = spec.value(QStringLiteral("datasheet")).toString();
+        s.throughHole = spec.value(QStringLiteral("throughHole")).toBool();
+        bool valid = entry.isObject() && device.id.startsWith(CustomDevicePrefix) && !ids.contains(device.id) &&
+                     !device.name.trimmed().isEmpty() && !device.prefix.isEmpty() && count.isDouble() &&
+                     count.toDouble() == std::floor(count.toDouble()) && count.toInt() >= 1 &&
+                     count.toInt() <= MaxGeneratedPads && readLength(spec, "pitch", s.pitch) &&
+                     readLength(spec, "rowSpacing", s.rowSpacing) && readLength(spec, "bodyWidth", s.bodyWidth) &&
+                     readLength(spec, "bodyLength", s.bodyLength) && readLength(spec, "leadWidth", s.leadWidth) &&
+                     readLength(spec, "leadLength", s.leadLength) && readLength(spec, "pinCurrent", s.pinCurrent);
+        const QJsonValue package = spec.value(QStringLiteral("package"));
+        valid = valid && (package.isUndefined() || packageStyleFromToken(package.toString(), s.package));
+        device.pinCount = count.toInt();
+        for (const QJsonValue& name : o.value(QStringLiteral("pinNames")).toArray()) {
+            valid = valid && name.isString();
+            device.pinNames << name.toString();
+        }
+        valid = valid && device.pinNames.size() <= device.pinCount;
+        const QJsonValue map = o.value(QStringLiteral("pinPadMap"));
+        valid = valid && (map.isUndefined() || map.isArray());
+        for (const QJsonValue& pad : map.toArray()) {
+            valid = valid && pad.isDouble() && pad.toDouble() == std::floor(pad.toDouble());
+            device.pinPadMap.append(pad.toInt());
+        }
+        valid = valid && validatePinPadMap(device.pinPadMap, device.pinCount).isEmpty();
+        if (valid && !device.footprint.isEmpty()) {
+            const auto* footprint = findSymbol(device.footprint);
+            valid = footprint != nullptr && footprint->workspace == Workspace::Board &&
+                    footprint->pins.size() == device.pinCount;
+        }
+        if (!valid) return tr("The library has an invalid device '%1'.").arg(device.name);
+        ids.insert(device.id);
+        library.customDevices.append(device);
+    }
+    registerProjectLibrary(library);
+    for (const QJsonValue& device : devices.toArray()) {
+        if (!device.isString() || !isPickableDevice(device.toString())) {
+            return tr("The library lists the unknown device '%1'.").arg(device.toString());
+        }
+        if (!library.devices.contains(device.toString())) library.devices.append(device.toString());
+    }
+    return {};
+}
+
 } // namespace
 
 QByteArray serializeProject(const ProjectData& project) {
@@ -259,8 +490,18 @@ QByteArray serializeProject(const ProjectData& project) {
     root[QStringLiteral("name")] = project.name;
     root[QStringLiteral("schematic")] = documentToJson(project.schematic);
     root[QStringLiteral("board")] = documentToJson(project.board);
-    root[QStringLiteral("library")] = QJsonObject{
-        {QStringLiteral("devices"), QJsonArray::fromStringList(project.library.devices)}};
+    QJsonObject library{{QStringLiteral("devices"), QJsonArray::fromStringList(project.library.devices)}};
+    if (!project.library.customFootprints.isEmpty()) {
+        QJsonArray footprints;
+        for (const auto& footprint : project.library.customFootprints) footprints.append(footprintToJson(footprint));
+        library[QStringLiteral("customFootprints")] = footprints;
+    }
+    if (!project.library.customDevices.isEmpty()) {
+        QJsonArray devices;
+        for (const auto& device : project.library.customDevices) devices.append(deviceToJson(device));
+        library[QStringLiteral("customDevices")] = devices;
+    }
+    root[QStringLiteral("library")] = library;
     return QJsonDocument(root).toJson(QJsonDocument::Indented);
 }
 
@@ -292,28 +533,14 @@ ProjectLoad parseProject(const QByteArray& bytes) {
     }
     // v1 files are silently upgraded: new v2 fields take their defaults during item parsing.
     result.project.name = root.value(QStringLiteral("name")).toString();
-    QString error = documentFromJson(root.value(QStringLiteral("schematic")), Workspace::Schematic,
-                                     tr("schematic"), result.project.schematic);
+    QString error = libraryFromJson(root.value(QStringLiteral("library")), result.project.library);
+    if (error.isEmpty()) {
+        error = documentFromJson(root.value(QStringLiteral("schematic")), Workspace::Schematic,
+                                 tr("schematic"), result.project.schematic);
+    }
     if (error.isEmpty()) {
         error = documentFromJson(root.value(QStringLiteral("board")), Workspace::Board, tr("board"),
                                  result.project.board);
-    }
-    // The library is optional: v1 files and early v2 files have none or an empty object.
-    const QJsonValue library = root.value(QStringLiteral("library"));
-    if (error.isEmpty() && !library.isUndefined()) {
-        const QJsonValue devices = library.toObject().value(QStringLiteral("devices"));
-        if (!library.isObject() || (!devices.isUndefined() && !devices.isArray())) {
-            error = tr("The library section is invalid.");
-        }
-        for (const QJsonValue& device : devices.toArray()) {
-            if (!device.isString() || !isPickableDevice(device.toString())) {
-                error = tr("The library lists the unknown device '%1'.").arg(device.toString());
-                break;
-            }
-            if (!result.project.library.devices.contains(device.toString())) {
-                result.project.library.devices.append(device.toString());
-            }
-        }
     }
     if (!error.isEmpty()) {
         result.project = {};

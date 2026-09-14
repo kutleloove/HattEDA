@@ -1,5 +1,7 @@
 #include "hatt/ui/MainWindow.hpp"
 #include "hatt/ui/CircuitWorkflow.hpp"
+#include "hatt/ui/ComponentLibrary.hpp"
+#include "hatt/ui/LibraryDialogs.hpp"
 
 #include "hatt/ui/DesignCanvas.hpp"
 #include "hatt/ui/ProjectSafety.hpp"
@@ -21,6 +23,7 @@
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QFormLayout>
+#include <QGridLayout>
 #include <QSpinBox>
 #include <QFrame>
 #include <QHBoxLayout>
@@ -495,11 +498,8 @@ void MainWindow::editItemProperties(DesignCanvas* canvas, int index) {
         footprint = new QComboBox(&dialog);
         footprint->setObjectName(QStringLiteral("ItemFootprint"));
         footprint->addItem(tr("Unassigned"), QString());
-        for (const auto& candidate : symbolLibrary()) {
-            if (candidate.workspace == Workspace::Board &&
-                candidate.pins.size() == symbol->pins.size()) {
-                footprint->addItem(symbolDisplayName(candidate), candidate.id);
-            }
+        for (const auto* candidate : footprintsWithPads(library_, static_cast<int>(symbol->pins.size()))) {
+            footprint->addItem(symbolDisplayName(*candidate), candidate->id);
         }
         footprint->setCurrentIndex(qMax(0, footprint->findData(item.footprint)));
         form->addRow(tr("Footprint"), footprint);
@@ -872,7 +872,7 @@ QWidget* MainWindow::createEditor() {
     // Proteus style device list controls, shown in schematic component mode.
     deviceBar_ = new QWidget(contextPanel);
     deviceBar_->setObjectName(QStringLiteral("DeviceBar"));
-    auto* deviceLayout = new QHBoxLayout(deviceBar_);
+    auto* deviceLayout = new QGridLayout(deviceBar_);
     deviceLayout->setContentsMargins(0, 0, 0, 0);
     deviceLayout->setSpacing(6);
     auto* pickDevices = new QPushButton(tr("Pick devices..."), deviceBar_);
@@ -885,8 +885,14 @@ QWidget* MainWindow::createEditor() {
     removeDeviceButton_->setToolTip(
         tr("Remove the selected device from the project list (only when the schematic does not use it)"));
     connect(removeDeviceButton_, &QPushButton::clicked, this, &MainWindow::removeSelectedDevice);
-    deviceLayout->addWidget(pickDevices, 1);
-    deviceLayout->addWidget(removeDeviceButton_);
+    auto* newDevice = new QPushButton(tr("New device..."), deviceBar_);
+    newDevice->setObjectName(QStringLiteral("hatteda.devices.new"));
+    newDevice->setProperty("quiet", true);
+    newDevice->setToolTip(tr("Create a device with its pins, datasheet data and footprint"));
+    connect(newDevice, &QPushButton::clicked, this, &MainWindow::newDevice);
+    deviceLayout->addWidget(pickDevices, 0, 0, 1, 2);
+    deviceLayout->addWidget(newDevice, 1, 0);
+    deviceLayout->addWidget(removeDeviceButton_, 1, 1);
     contextLayout->addWidget(deviceBar_);
     // Board component mode: place every waiting part at once (Proteus ARES auto placer).
     boardPartsBar_ = new QWidget(contextPanel);
@@ -1122,6 +1128,16 @@ void MainWindow::createMenus() {
     pick->setObjectName(QStringLiteral("hatteda.action.pick-devices"));
     connect(pick, &QAction::triggered, this, [this] {
         if (shellPages_->currentIndex() == 1) pickDevices();
+    });
+    auto* createDevice = designMenu->addAction(tr("New device..."));
+    createDevice->setObjectName(QStringLiteral("hatteda.action.new-device"));
+    connect(createDevice, &QAction::triggered, this, [this] {
+        if (shellPages_->currentIndex() == 1) newDevice();
+    });
+    auto* createFootprint = designMenu->addAction(tr("New footprint..."));
+    createFootprint->setObjectName(QStringLiteral("hatteda.action.new-footprint"));
+    connect(createFootprint, &QAction::triggered, this, [this] {
+        if (shellPages_->currentIndex() == 1) newFootprint();
     });
     designMenu->addSeparator();
     designMenu->addAction(actions_.value(QStringLiteral("hatteda.action.run-checks")));
@@ -1369,6 +1385,29 @@ void MainWindow::removeSelectedDevice() {
     }
 }
 
+void MainWindow::newDevice() {
+    DeviceEditorDialog dialog(library_, this);
+    if (dialog.exec() != QDialog::Accepted) return;
+    library_.customFootprints += dialog.createdFootprints();
+    library_.customDevices.append(dialog.device());
+    registerProjectLibrary(library_);
+    libraryModified_ = true;
+    statusBar()->showMessage(tr("Created device %1").arg(dialog.device().name), 4000);
+    // A new device is added to the pick list, ready to place.
+    addProjectDevices({dialog.device().id});
+    updateProjectState();
+}
+
+void MainWindow::newFootprint() {
+    FootprintEditorDialog dialog(std::nullopt, this);
+    if (dialog.exec() != QDialog::Accepted) return;
+    library_.customFootprints.append(dialog.footprint());
+    registerProjectLibrary(library_);
+    libraryModified_ = true;
+    statusBar()->showMessage(tr("Created footprint %1").arg(dialog.footprint().name), 4000);
+    updateProjectState();
+}
+
 void MainWindow::pickDevices() {
     QDialog dialog(this);
     dialog.setObjectName(QStringLiteral("PickDevicesDialog"));
@@ -1390,7 +1429,7 @@ void MainWindow::pickDevices() {
     details->setWordWrap(true);
     layout->addWidget(details);
     const QStringList listed = projectDevices();
-    for (const auto* symbol : symbolsFor(Workspace::Schematic, SymbolCategory::Component)) {
+    for (const auto* symbol : pickableDevices(library_)) {
         const QString name = symbolDisplayName(*symbol);
         auto* item = new QListWidgetItem(symbolIcon(symbol->id, palette()),
                                          listed.contains(symbol->id) ? tr("%1 (in project)").arg(name) : name,
@@ -1776,6 +1815,7 @@ void MainWindow::activateProject(const QString& projectPath, const ProjectData& 
     // The file name is the project name, so renaming or "Save as" is reflected everywhere.
     projectName_ = QFileInfo(projectPath).completeBaseName();
     library_ = project.library;
+    registerProjectLibrary(library_);
     libraryModified_ = false;
     const SketchDocument* documents[] = {&project.schematic, &project.board};
     for (int i = 0; i < canvases_.size() && i < 2; ++i) {

@@ -245,4 +245,131 @@ Son projeler listesinden kaldırılsın mı?</translation></message>
     <message><source>not connected</source><translation>bağlı değil</translation></message>
     <message><source>This is a connection guide for the current single copper layer, not a full ERC/DRC check.</source><translation>Bu, mevcut tek bakır katman için bir bağlantı rehberidir; tam ERC/DRC denetimi değildir.</translation></message>
   </context>
+  <context>
+    <name>hatt::ui::ComponentLibrary</name>
+    <message><source>The pad count must be between 1 and %1.</source><translation>Pad sayısı 1 ile %1 arasında olmalı.</translation></message>
+    <message><source>Choose a pad arrangement.</source><translation>Bir pad dizilimi seçin.</translation></message>
+    <message><source>A two-terminal footprint has exactly 2 pads.</source><translation>İki uçlu kılıfın tam 2 padi olur.</translation></message>
+    <message><source>A dual-row footprint needs an even number of pads.</source><translation>Çift sıralı kılıf çift sayıda pad gerektirir.</translation></message>
+    <message><source>A quad footprint needs a pad count divisible by 4.</source><translation>Dört kenarlı kılıfın pad sayısı 4'e bölünebilmeli.</translation></message>
+    <message><source>The pitch must be greater than zero.</source><translation>Pin aralığı sıfırdan büyük olmalı.</translation></message>
+    <message><source>The row spacing must be greater than zero.</source><translation>Sıra aralığı sıfırdan büyük olmalı.</translation></message>
+    <message><source>Pad sizes must be greater than zero.</source><translation>Pad boyutları sıfırdan büyük olmalı.</translation></message>
+    <message><source>Sizes cannot be negative.</source><translation>Boyutlar negatif olamaz.</translation></message>
+    <message><source>The drill must be smaller than the pad.</source><translation>Delik paddan küçük olmalı.</translation></message>
+    <message><source>Pads %1 and %2 overlap; increase the pitch or row spacing, or make the pads smaller.</source><translation>%1 ve %2 numaralı padler çakışıyor; pin veya sıra aralığını artırın ya da padleri küçültün.</translation></message>
+    <message><source>Every pad needs a position.</source><translation>Her padin bir konumu olmalı.</translation></message>
+    <message><source>Pad %1 has an invalid position.</source><translation>%1 numaralı padin konumu geçersiz.</translation></message>
+    <message><source>Pad numbers must run from 1 to %1 without repeats.</source><translation>Pad numaraları tekrar etmeden 1'den %1'e kadar gitmeli.</translation></message>
+    <message><source>Pad %1 is on no copper layer.</source><translation>%1 numaralı pad hiçbir bakır katmanda değil.</translation></message>
+    <message><source>The silkscreen has an invalid point.</source><translation>Serigrafide geçersiz bir nokta var.</translation></message>
+    <message><source>Every pin needs a pad.</source><translation>Her pine bir pad atanmalı.</translation></message>
+    <message><source>Pin %1 is mapped to a pad that does not exist.</source><translation>%1 numaralı pin var olmayan bir pade eşlenmiş.</translation></message>
+    <message><source>Pad %1 is used by more than one pin.</source><translation>%1 numaralı pad birden fazla pinde kullanılıyor.</translation></message>
+    <message><source>The datasheet package does not fit %1 pins; a single row is used.</source><translation>Datasheet'teki kılıf tipi %1 pine uymuyor; tek sıra kullanıldı.</translation></message>
+    <message><source>%1 A per pin needs copper at least %2 mm wide (IPC-2221, 1 oz, 10 °C rise); use traces at least this wide.</source><translation>Pin başına %1 A için bakır en az %2 mm genişliğinde olmalı (IPC-2221, 1 oz, 10 °C artış); yolları da en az bu genişlikte çizin.</translation></message>
+    <message><source>The %1 mm pitch limits pads to %2 mm; widen the copper outside the pad row.</source><translation>%1 mm pin aralığı padleri %2 mm ile sınırlıyor; bakırı pad sırasının dışında genişletin.</translation></message>
+  </context>
+  <context>
+    <name>hatt::ui::FootprintEditorDialog</name>
+    <message><source>Unknown</source><translation>Bilinmiyor</translation></message>
+    <message><source>Two terminals (chip)</source><translation>İki uçlu (chip)</translation></message>
+    <message><source>Single row (header, SIP)</source><translation>Tek sıra (header, SIP)</translation></message>
+    <message><source>Dual row (DIP, SOIC)</source><translation>Çift sıra (DIP, SOIC)</translation></message>
+    <message><source>Four sides (QFP)</source><translation>Dört kenar (QFP)</translation></message>
+    <message><source>Create footprint for %1</source><translation>%1 için kılıf oluştur</translation></message>
+    <message><source>New footprint</source><translation>Yeni kılıf</translation></message>
+    <message><source>%1 footprint</source><translation>%1 kılıfı</translation></message>
+    <message><source>Footprint</source><translation>Kılıf</translation></message>
+    <message><source>Name</source><translation>Ad</translation></message>
+    <message><source>Pad arrangement</source><translation>Pad dizilimi</translation></message>
+    <message><source>Pads</source><translation>Padler</translation></message>
+    <message><source>Pitch</source><translation>Pin aralığı</translation></message>
+    <message><source>Row spacing (pad centres)</source><translation>Sıra aralığı (pad merkezleri)</translation></message>
+    <message><source>Round</source><translation>Yuvarlak</translation></message>
+    <message><source>Rectangle</source><translation>Dikdörtgen</translation></message>
+    <message><source>Oval</source><translation>Oval</translation></message>
+    <message><source>Pad shape</source><translation>Pad şekli</translation></message>
+    <message><source>Pad width (across the row)</source><translation>Pad genişliği (sıraya dik)</translation></message>
+    <message><source>Pad length (along the row)</source><translation>Pad uzunluğu (sıra boyunca)</translation></message>
+    <message><source>Through-hole</source><translation>Delikli (THT)</translation></message>
+    <message><source>Drill</source><translation>Delik</translation></message>
+    <message><source>from pads</source><translation>padlerden</translation></message>
+    <message><source>Body width (silkscreen)</source><translation>Gövde genişliği (serigrafi)</translation></message>
+    <message><source>Body length (silkscreen)</source><translation>Gövde uzunluğu (serigrafi)</translation></message>
+    <message><source>Create footprint</source><translation>Kılıf oluştur</translation></message>
+    <message numerus="yes"><source>Fixed to the %n pin(s) of the device</source><translation><numerusform>Elemanın %n pinine sabitlendi</numerusform></translation></message>
+    <message><source>DEVICE</source><translation>ELEMAN</translation></message>
+    <message><source>Manufacturer</source><translation>Üretici</translation></message>
+    <message><source>Part number</source><translation>Parça numarası</translation></message>
+    <message><source>Pins</source><translation>Pinler</translation></message>
+    <message><source>Package</source><translation>Kılıf tipi</translation></message>
+    <message><source>, through-hole</source><translation>, delikli</translation></message>
+    <message><source>, surface mount</source><translation>, yüzey montaj</translation></message>
+    <message><source>Row spacing</source><translation>Sıra aralığı</translation></message>
+    <message><source>Body</source><translation>Gövde</translation></message>
+    <message><source>Leads</source><translation>Bacaklar</translation></message>
+    <message><source>Current per pin</source><translation>Pin başına akım</translation></message>
+    <message><source>Min. copper width</source><translation>En az bakır genişliği</translation></message>
+    <message><source>Open datasheet</source><translation>Datasheet'i aç</translation></message>
+    <message><source>Only the pin count is known, so the footprint gets exactly %1 pads. The starting geometry is a generic 2.54 mm through-hole part; enter the datasheet pitch and pad sizes.</source><translation>Yalnızca pin sayısı biliniyor, bu yüzden kılıf tam %1 pad alır. Başlangıç geometrisi genel bir 2.54 mm delikli parçadır; datasheet'teki pin aralığını ve pad boyutlarını girin.</translation></message>
+    <message><source>Pitch, row spacing and pad sizes were generated from the datasheet values.</source><translation>Pin aralığı, sıra aralığı ve pad boyutları datasheet değerlerinden üretildi.</translation></message>
+    <message><source>Use datasheet values</source><translation>Datasheet değerlerini kullan</translation></message>
+    <message><source>Regenerate pitch, row spacing and pads from the device data</source><translation>Pin aralığı, sıra aralığı ve padleri eleman verisinden yeniden üret</translation></message>
+    <message numerus="yes"><source>%n pad(s)</source><translation><numerusform>%n pad</numerusform></translation></message>
+    <message><source>pitch %1</source><translation>pin aralığı %1</translation></message>
+    <message><source>row spacing %1</source><translation>sıra aralığı %1</translation></message>
+    <message><source>through-hole, drill %1</source><translation>delikli, delik %1</translation></message>
+    <message><source>surface mount</source><translation>yüzey montaj</translation></message>
+  </context>
+  <context>
+    <name>hatt::ui::DeviceEditorDialog</name>
+    <message><source>unknown</source><translation>bilinmiyor</translation></message>
+    <message><source>New device</source><translation>Yeni eleman</translation></message>
+    <message><source>Device</source><translation>Eleman</translation></message>
+    <message><source>e.g. LM358 dual op-amp</source><translation>örn. LM358 çift op-amp</translation></message>
+    <message><source>Name</source><translation>Ad</translation></message>
+    <message><source>Designator prefix</source><translation>Etiket öneki</translation></message>
+    <message><source>Default value</source><translation>Varsayılan değer</translation></message>
+    <message><source>Pins</source><translation>Pinler</translation></message>
+    <message><source>optional, comma-separated: OUT1, IN1-, IN1+, GND</source><translation>isteğe bağlı, virgülle ayrılmış: OUT1, IN1-, IN1+, GND</translation></message>
+    <message><source>Pin names</source><translation>Pin adları</translation></message>
+    <message><source>Footprint</source><translation>Kılıf</translation></message>
+    <message><source>Create footprint from device...</source><translation>Elemandan kılıf oluştur...</translation></message>
+    <message><source>Pin</source><translation>Pin</translation></message>
+    <message><source>Pad</source><translation>Pad</translation></message>
+    <message><source>Pin to pad</source><translation>Pin - pad eşleme</translation></message>
+    <message><source>Datasheet data (optional)</source><translation>Datasheet bilgileri (isteğe bağlı)</translation></message>
+    <message><source>Manufacturer</source><translation>Üretici</translation></message>
+    <message><source>Part number</source><translation>Parça numarası</translation></message>
+    <message><source>Datasheet link</source><translation>Datasheet bağlantısı</translation></message>
+    <message><source>Package</source><translation>Kılıf tipi</translation></message>
+    <message><source>Through-hole leads</source><translation>Delikli bacaklar</translation></message>
+    <message><source>Pitch</source><translation>Pin aralığı</translation></message>
+    <message><source>Row spacing (pad centres)</source><translation>Sıra aralığı (pad merkezleri)</translation></message>
+    <message><source>Body width</source><translation>Gövde genişliği</translation></message>
+    <message><source>Body length</source><translation>Gövde uzunluğu</translation></message>
+    <message><source>Lead width</source><translation>Bacak genişliği</translation></message>
+    <message><source>Lead (foot) length</source><translation>Bacak (ayak) uzunluğu</translation></message>
+    <message><source>Max. current per pin</source><translation>Pin başına en fazla akım</translation></message>
+    <message><source>Create device</source><translation>Eleman oluştur</translation></message>
+    <message><source>Unassigned</source><translation>Atanmamış</translation></message>
+    <message><source>Enter a device name.</source><translation>Bir eleman adı girin.</translation></message>
+    <message><source>The designator prefix must be 1 to 8 letters, e.g. U or IC.</source><translation>Etiket öneki 1-8 harf olmalı, örn. U veya IC.</translation></message>
+    <message><source>%1 pin names were entered for %2 pins.</source><translation>%2 pin için %1 pin adı girildi.</translation></message>
+  </context>
+  <context>
+    <name>hatt::ui::MainWindow</name>
+    <message><source>New device...</source><translation>Yeni eleman...</translation></message>
+    <message><source>Create a device with its pins, datasheet data and footprint</source><translation>Pinleri, datasheet bilgileri ve kılıfıyla yeni bir eleman oluştur</translation></message>
+    <message><source>New footprint...</source><translation>Yeni kılıf...</translation></message>
+    <message><source>Created device %1</source><translation>%1 elemanı oluşturuldu</translation></message>
+    <message><source>Created footprint %1</source><translation>%1 kılıfı oluşturuldu</translation></message>
+  </context>
+  <context>
+    <name>hatt::ui::ProjectFile</name>
+    <message><source>The library has an invalid footprint '%1'.</source><translation>Kütüphanede geçersiz bir kılıf var: '%1'.</translation></message>
+    <message><source>The footprint '%1' is invalid: %2</source><translation>'%1' kılıfı geçersiz: %2</translation></message>
+    <message><source>The library has an invalid device '%1'.</source><translation>Kütüphanede geçersiz bir eleman var: '%1'.</translation></message>
+  </context>
 </TS>

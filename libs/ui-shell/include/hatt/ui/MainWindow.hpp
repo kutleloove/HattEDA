@@ -55,6 +55,10 @@ public slots:
     bool saveProjectAs();
     // Library browser that adds devices to the project (PickDevicesDialog).
     void pickDevices();
+    // DeviceEditorDialog: creates a project device (and footprints made from it) and picks it.
+    void newDevice();
+    // FootprintEditorDialog without a device: creates a project footprint.
+    void newFootprint();
 
 protected:
     void changeEvent(QEvent* event) override;

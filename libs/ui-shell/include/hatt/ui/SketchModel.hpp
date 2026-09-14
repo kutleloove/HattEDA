@@ -71,6 +71,10 @@ struct SymbolDefinition {
     // the same pin count, so pins map to pads one to one.
     QString defaultValue;
     QString defaultFootprint;
+    // Pad number of each pin on defaultFootprint; empty means pin N goes to pad N.
+    QVector<int> defaultPinPadMap;
+    // Untranslated name of project-defined symbols; built-in symbols use `name`.
+    QString displayName;
 };
 
 struct SketchItem {
@@ -102,10 +106,79 @@ inline const QString BoardOutlineVariant = QStringLiteral("board-outline");
 inline const QString CopperZoneVariant = QStringLiteral("copper-zone");
 inline constexpr double TextHeightMm = 2.0;
 
-// Project library (v2, ADR-0006). `devices` is the Proteus style pick list of built-in schematic
-// component ids offered by component mode; user-created devices and packages follow in #29.
+// Pad arrangement of a generated footprint (ComponentLibrary.hpp, ADR-0007).
+// Stable file tokens: none, two-terminal, single-row, dual-row, quad-row.
+enum class PackageStyle { None, TwoTerminal, SingleRow, DualRow, QuadRow };
+
+// Datasheet data of a device. Every field is optional: empty text or 0 means unknown.
+struct DeviceSpec {
+    QString manufacturer;
+    QString partNumber;
+    QString datasheet;
+    PackageStyle package = PackageStyle::None;
+    bool throughHole = false;
+    double pitch = 0.0;      // mm, centre distance between neighbouring pins in a row
+    double rowSpacing = 0.0; // mm, centre distance between opposite pad rows or the two terminals
+    double bodyWidth = 0.0;  // mm, X
+    double bodyLength = 0.0; // mm, Y
+    double leadWidth = 0.0;  // mm, lead or terminal width
+    double leadLength = 0.0; // mm, SMD foot length
+    double pinCurrent = 0.0; // A, maximum continuous current per pin
+};
+
+// Parameters of a generated footprint, in millimetres, origin at the footprint centre.
+struct FootprintParams {
+    PackageStyle style = PackageStyle::SingleRow;
+    int padCount = 2;
+    double pitch = 2.54;
+    double rowSpacing = 7.62;
+    PadShape shape = PadShape::Round;
+    double padWidth = 1.6;  // across the row (X for left/right rows)
+    double padLength = 1.6; // along the row
+    double drill = 0.8;     // 0 = SMD
+    double bodyWidth = 0.0; // silkscreen body outline; 0 derives it from the pads
+    double bodyLength = 0.0;
+};
+
+// A footprint created in the project; `id` starts with CustomFootprintPrefix. It is either
+// generated from `params` or, when `pads` is not empty, explicit geometry drawn by the user
+// (Make Package): silkscreen `shapes`, pad centres in `pins` and `pads` parallel to `pins`, in mm
+// relative to the footprint origin as seen from the top.
+struct FootprintDefinition {
+    QString id;
+    QString name;
+    FootprintParams params;
+    QVector<SymbolShape> shapes;
+    QVector<QPointF> pins;
+    QVector<PadDefinition> pads;
+
+    [[nodiscard]] bool isExplicit() const { return !pads.isEmpty(); }
+    [[nodiscard]] int padCount() const { return isExplicit() ? pads.size() : params.padCount; }
+};
+
+// A schematic device created in the project; `id` starts with CustomDevicePrefix. Its symbol is a
+// generated box with `pinCount` pins, and `footprint` (optional) must have the same pad count.
+struct DeviceDefinition {
+    QString id;
+    QString name;
+    QString prefix = QStringLiteral("U");
+    QString defaultValue;
+    QString footprint;
+    int pinCount = 2;
+    QStringList pinNames;
+    // Pad number (1-based) on `footprint` for each pin; empty means pin N goes to pad N. When set
+    // it has pinCount entries and uses every pad number once.
+    QVector<int> pinPadMap;
+    DeviceSpec spec;
+};
+
+// Project library (v2, ADR-0006/0007). `devices` is the Proteus style pick list of schematic
+// component ids offered by component mode; custom devices and footprints are created in the
+// project and registered with registerSymbols when the project is loaded or edited.
 struct ProjectLibrary {
     QStringList devices;
+    QVector<DeviceDefinition> customDevices;
+    QVector<FootprintDefinition> customFootprints;
 };
 
 // Schematic component symbol ids placed in `schematic`, in first-use order.
@@ -118,7 +191,11 @@ struct ProjectLibrary {
 [[nodiscard]] bool isPickableDevice(const QString& id);
 
 [[nodiscard]] const QVector<SymbolDefinition>& symbolLibrary();
+// Built-in symbols first, then symbols added with registerSymbols.
 [[nodiscard]] const SymbolDefinition* findSymbol(const QString& id);
+// Makes project-defined symbols findable. A symbol registered again with the same id replaces the
+// earlier definition; pointers returned by findSymbol before stay valid for the process lifetime.
+void registerSymbols(const QVector<SymbolDefinition>& symbols);
 [[nodiscard]] QList<const SymbolDefinition*> symbolsFor(Workspace workspace,
                                                         SymbolCategory category);
 [[nodiscard]] QString symbolDisplayName(const SymbolDefinition& symbol);
