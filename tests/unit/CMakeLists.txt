@@ -28,6 +28,10 @@ add_executable(hatt-package-from-selection-tests PackageFromSelectionTests.cpp)
 target_link_libraries(hatt-package-from-selection-tests PRIVATE HattEDA::UiShell Qt6::Test)
 hatt_add_qt_test(hatt-package-from-selection-tests)
 
+add_executable(hatt-gerber-export-tests GerberExportTests.cpp)
+target_link_libraries(hatt-gerber-export-tests PRIVATE HattEDA::UiShell Qt6::Test)
+hatt_add_qt_test(hatt-gerber-export-tests)
+
 add_executable(hatt-project-safety-tests ProjectSafetyTests.cpp)
 target_link_libraries(hatt-project-safety-tests PRIVATE HattEDA::UiShell Qt6::Test)
 add_test(NAME hatt-project-safety-tests COMMAND hatt-project-safety-tests)

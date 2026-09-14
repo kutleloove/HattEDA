@@ -30,6 +30,8 @@ add_library(hatt-ui-shell STATIC
     src/PadStyles.cpp
     include/hatt/ui/LayerColors.hpp
     src/LayerColors.cpp
+    include/hatt/ui/GerberExport.hpp
+    src/GerberExport.cpp
 )
 
 add_library(HattEDA::UiShell ALIAS hatt-ui-shell)

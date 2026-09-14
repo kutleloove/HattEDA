@@ -2,6 +2,7 @@
 #include "hatt/ui/BoardLayerPanel.hpp"
 #include "hatt/ui/CircuitWorkflow.hpp"
 #include "hatt/ui/ComponentLibrary.hpp"
+#include "hatt/ui/GerberExport.hpp"
 #include "hatt/ui/LibraryDialogs.hpp"
 
 #include "hatt/ui/DesignCanvas.hpp"
@@ -947,6 +948,13 @@ void MainWindow::createActions() {
     saveAs->setEnabled(false);
     connect(saveAs, &QAction::triggered, this, &MainWindow::saveProjectAs);
 
+    auto* fabrication =
+        makeAction(QStringLiteral("hatteda.action.export-fabrication"),
+                   tr("Export Gerber and drill files..."), QStringLiteral("package"));
+    fabrication->setEnabled(false);
+    fabrication->setToolTip(tr("Generate Gerber X2 layers and an Excellon plated drill file"));
+    connect(fabrication, &QAction::triggered, this, &MainWindow::exportFabricationFiles);
+
     auto* checks = makeAction(QStringLiteral("hatteda.action.run-checks"), tr("Run design checks"),
                               QStringLiteral("check"));
     checks->setEnabled(false);
@@ -1269,6 +1277,7 @@ void MainWindow::createMenus() {
     fileMenu->addSeparator();
     fileMenu->addAction(actions_.value(QStringLiteral("hatteda.action.save")));
     fileMenu->addAction(actions_.value(QStringLiteral("hatteda.action.save-as")));
+    fileMenu->addAction(actions_.value(QStringLiteral("hatteda.action.export-fabrication")));
     fileMenu->addSeparator();
     // Quitting closes the window, so closeEvent asks about unsaved changes.
     auto* quit = fileMenu->addAction(tr("Quit"));
@@ -2484,6 +2493,59 @@ void MainWindow::updateProjectState() {
     if (auto* saveAs = actions_.value(QStringLiteral("hatteda.action.save-as"))) {
         saveAs->setEnabled(open);
     }
+    if (auto* fabrication = actions_.value(QStringLiteral("hatteda.action.export-fabrication"))) {
+        fabrication->setEnabled(open);
+    }
+}
+
+void MainWindow::exportFabricationFiles() {
+    if (projectPath_.isEmpty()) return;
+    const QString directory = QFileDialog::getExistingDirectory(
+        this, tr("Export fabrication files"), QFileInfo(projectPath_).absolutePath());
+    if (directory.isEmpty()) return;
+
+    const CamOutput output = buildCamOutput(canvases_.value(1)->document());
+    const QString baseName = QFileInfo(projectPath_).completeBaseName();
+    const QString version = QCoreApplication::applicationVersion().isEmpty()
+                                ? QStringLiteral("development")
+                                : QCoreApplication::applicationVersion();
+    const QVector<CamFile> files = camFiles(output, baseName, version);
+    const QString error = writeCamFiles(files, directory);
+    if (!error.isEmpty()) {
+        QMessageBox::warning(this, tr("Export fabrication files"), error);
+        return;
+    }
+
+    auto* page = new QWidget;
+    auto* layout = new QHBoxLayout(page);
+    auto* list = new QListWidget(page);
+    list->setObjectName(QStringLiteral("GerberFileList"));
+    list->setMinimumWidth(210);
+    auto* preview = new QTextEdit(page);
+    preview->setObjectName(QStringLiteral("GerberTextPreview"));
+    preview->setReadOnly(true);
+    preview->setLineWrapMode(QTextEdit::NoWrap);
+    for (const CamFile& file : files) {
+        auto* item = new QListWidgetItem(file.fileName, list);
+        item->setData(Qt::UserRole, file.content);
+    }
+    connect(list, &QListWidget::currentRowChanged, preview, [list, preview](int row) {
+        if (row >= 0) {
+            preview->setPlainText(QString::fromUtf8(list->item(row)->data(Qt::UserRole).toByteArray()));
+        }
+    });
+    layout->addWidget(list);
+    layout->addWidget(preview, 1);
+    list->setCurrentRow(0);
+    openToolWorkspace(QStringLiteral("hatteda.tool.gerber-viewer"), tr("Gerber output"), page);
+
+    QString message = tr("Exported %1 fabrication files to %2")
+                          .arg(files.size())
+                          .arg(QDir::toNativeSeparators(directory));
+    if (output.skippedTexts > 0) {
+        message += tr("; skipped %1 text items").arg(output.skippedTexts);
+    }
+    statusBar()->showMessage(message, 8000);
 }
 
 void MainWindow::addRecentProject(const QString& path) {

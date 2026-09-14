@@ -41,6 +41,19 @@ Aktif çizim/yerleştirme/taşıma sırasında sağ tık taslağı iptal eder ve
 
 Komut çubuğundaki oynat düğmesi veya **Circuit → Start simulation** (F12) canlı simülasyonu başlatır. Probe modundaki **Voltage probe** bir tele veya pine konduğunda gerilimi şemada etiket olarak görünür. Simülasyon çalışırken değer değiştirmek, parça eklemek veya taşımak devreyi yeniden çözer. Durdur düğmesi (Shift+F12) etiketleri kaldırır. Hata olursa sonuç sekmesi açılır ve simülasyon durur. DC modelinde kondansatör açık devre, bobin kısa devredir.
 
+## Gerber ve delik çıktısı (CAM)
+
+**File → Export Gerber and drill files...** (`hatteda.action.export-fabrication`) Kayra belgesinden
+dokuz Gerber X2 katmanı (üst/alt bakır, serigrafi, lehim maskesi, pasta ve kart kenarı) ile bir
+Excellon PTH delik dosyası üretir. Pad, via, yol, bakır alan, kılıf serigrafisi ve kart kenarı aynı
+`itemPads`, katman ve geometri yardımcılarından okunur. Editörün aşağı-pozitif Y koordinatı CAM'de
+yukarı-pozitif olacak şekilde çevrilir. Sonuçlar atomik olarak seçilen klasöre yazılır ve
+`hatteda.tool.gerber-viewer` sekmesinde dosya listesiyle ham çıktı önizlemesi açılır.
+
+Geçici kapsamda via'lar tented kabul edilir, tüm delikler kaplamalıdır, bakır alanlarda clearance
+hesaplanmaz ve metin geometrisi CAM'e çevrilmez. Dışa aktarma durum satırında atlanan metin sayısını
+bildirir.
+
 ## Çalışan örnek
 
 1. Yeni proje açın; boş Mergen şemasında **Circuit → Load DC divider example** seçin.

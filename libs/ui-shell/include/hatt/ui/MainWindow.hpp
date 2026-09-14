@@ -60,6 +60,8 @@ public slots:
     void newDevice();
     // FootprintEditorDialog without a device: creates a project footprint.
     void newFootprint();
+    // Generates Gerber X2 and Excellon files from the Kayra board.
+    void exportFabricationFiles();
 
 protected:
     void changeEvent(QEvent* event) override;

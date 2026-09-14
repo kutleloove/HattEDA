@@ -535,4 +535,19 @@ Son projeler listesinden kaldırılsın mı?</translation></message>
     <message><source>Restore defaults</source><translation>Varsayılanlara dön</translation></message>
     <message><source>Top copper red and bottom copper blue follow the Proteus and KiCad convention.</source><translation>Üst bakırın kırmızı, alt bakırın mavi olması Proteus ve KiCad geleneğidir.</translation></message>
   </context>
+  <context>
+    <name>hatt::ui::MainWindow</name>
+    <message><source>Export Gerber and drill files...</source><translation>Gerber ve delik dosyalarını dışa aktar...</translation></message>
+    <message><source>Generate Gerber X2 layers and an Excellon plated drill file</source><translation>Gerber X2 katmanları ve Excellon kaplamalı delik dosyası üret</translation></message>
+    <message><source>Export fabrication files</source><translation>Üretim dosyalarını dışa aktar</translation></message>
+    <message><source>Gerber output</source><translation>Gerber çıktısı</translation></message>
+    <message><source>Exported %1 fabrication files to %2</source><translation>%1 üretim dosyası %2 konumuna aktarıldı</translation></message>
+    <message><source>; skipped %1 text items</source><translation>; %1 metin öğesi atlandı</translation></message>
+  </context>
+  <context>
+    <name>hatt::ui::GerberExport</name>
+    <message><source>The output folder does not exist: %1</source><translation>Çıktı klasörü mevcut değil: %1</translation></message>
+    <message><source>Invalid fabrication file name: %1</source><translation>Geçersiz üretim dosyası adı: %1</translation></message>
+    <message><source>Could not write %1: %2</source><translation>%1 yazılamadı: %2</translation></message>
+  </context>
 </TS>
