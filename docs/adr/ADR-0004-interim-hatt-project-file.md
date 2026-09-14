@@ -30,7 +30,8 @@ Projects could not be saved: New project created no file, Open only changed the 
 - HATT-003 will introduce `formatVersion: 2` with fixed-point units and a v1 converter. Until then, files carry floating-point rounding exactly as the editor does.
 - The symbol library is compiled in. A file that references a symbol removed from a later build is rejected rather than silently dropping parts. Library versioning is future work.
 - Autosave, crash recovery, the `.bak` backup and the project lock file are in ADR-0005. They do not change the format.
-- Not covered yet: embedded symbol or footprint definitions, and project-level settings (units, grid) inside the file.
+- Later additive sections: format version 2 layers/pads and the `library` object (ADR-0006), project devices and footprints in `library.customDevices|customFootprints` (ADR-0007), and design rules in `rules` (ADR-0008). They are read before the documents where documents depend on them.
+- Not covered yet: embedded schematic symbol drawings, and project-level editor settings (units, grid) inside the file.
 
 ## Validation
 

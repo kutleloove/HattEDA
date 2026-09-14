@@ -41,6 +41,35 @@ Aktif çizim/yerleştirme/taşıma sırasında sağ tık taslağı iptal eder ve
 
 Komut çubuğundaki oynat düğmesi veya **Circuit → Start simulation** (F12) canlı simülasyonu başlatır. Probe modundaki **Voltage probe** bir tele veya pine konduğunda gerilimi şemada etiket olarak görünür. Simülasyon çalışırken değer değiştirmek, parça eklemek veya taşımak devreyi yeniden çözer. Durdur düğmesi (Shift+F12) etiketleri kaldırır. Hata olursa sonuç sekmesi açılır ve simülasyon durur. DC modelinde kondansatör açık devre, bobin kısa devredir.
 
+## Tasarım denetimi: ERC ve DRC (#31)
+
+Komut çubuğundaki denetim düğmesi veya **Design › Run design checks** (`hatteda.action.run-checks`) şemaya ERC, karta DRC uygular. Sonuçlar **Design checks** sekmesinde (`hatteda.tool.design-checks`) listelenir: önce hatalar, sonra uyarılar. Satıra tıklayınca ilgili çalışma alanına geçilir, sorunlu nesneler seçilir ve görünüm oraya ortalanır. **Run again** listeyi yeniler. Kurallar ve kimlikleri ADR-0008'dedir.
+
+- **ERC (şema):**
+  - Hata:
+    - eksik veya tekrarlanan etiket
+    - adı olmayan port
+    - birbirine bağlanmış farklı net adları
+    - kılıfı olmayan ya da pin-pad eşlemesi bozuk parça (PCB'den hariç tutulanlar hariç)
+  - Uyarı:
+    - bağlanmamış pin
+    - hiçbir parçaya bağlanmayan port, ground veya prob
+    - tüm pinleri aynı nette olan parça
+    - boşta kalan tel ucu
+    - değeri boş parça
+- **DRC (kart):** Aynı bakır katmanında birbirine değen yollar, padler ve vialar tek iletken sayılır.
+  - Hata:
+    - farklı şema netlerini birleştiren bakır (kısa devre)
+    - clearance altında kalan farklı iletkenler
+    - en küçük yol genişliğinin, deliğin veya halka genişliğinin altı
+    - kart dış çizgisinin dışındaki ya da kenara çok yakın bakır
+  - Uyarı:
+    - üst üste binen kılıflar
+    - tamamlanmamış netler
+    - karta yerleştirilmemiş parçalar
+    - kapalı kart dış çizgisinin olmaması
+- **Design › Design rules...** (`DesignRulesDialog`) şu değerleri mm cinsinden düzenler: bakır aralığı (0.2), en küçük yol (0.15), en küçük delik (0.3), en küçük halka (0.13), kart kenarı mesafesi (0.3). Kurallar `.hatt` dosyasında `rules` nesnesi olarak saklanır; değiştirmek projeyi kaydedilmemiş yapar.
+
 ## Çalışan örnek
 
 1. Yeni proje açın; boş Mergen şemasında **Circuit → Load DC divider example** seçin.
@@ -53,8 +82,8 @@ Kendi devrenizde varsayılan değer ve footprint atamalarını gerekirse özelli
 ## Sınırlar
 
 - Proje `.hatt` dosyasına kaydedilir (Ctrl+S, Farklı kaydet Ctrl+Shift+S; ADR-0004). Kaydedilmemiş değişiklik varken pencere başlığında `*` görünür ve kapatma/yeni/aç işlemleri kaydetmeyi sorar. Otomatik kayıt, kurtarma, yedek ve kilit dosyaları ADR-0005'te anlatılır.
-- Netlist uygulama içinde hesaplanır; harici netlist import/export ve genel SPICE formatı yoktur.
-- Bağlantı rehberi otomatik router veya tam ERC/DRC değildir. Pad merkezi ve tel geometrisi kullanılır; bakır alanı/clearance/via/multilayer kontrolleri yoktur.
+- Netlist uygulama içinde hesaplanır ve `.net` olarak dışa aktarılabilir; netlist import ve genel SPICE formatı yoktur.
+- Bağlantı rehberi otomatik router değildir; airwire'lar pad merkezleri arasında çizilir. Clearance, genişlik, delik, kart kenarı ve katman kontrolleri DRC'dedir (ADR-0008). Bakır alanları doldurulmadığı için DRC'ye katılmaz; net sınıfı kuralları ve istisna listesi yoktur.
 - Footprint/pin eşlemesi değişen veya şemadan silinen bileşenlerin mevcut PCB bağlantıları sessizce dönüştürülmez; kullanıcı incelemesi gerekir.
 - Simülasyon direnç, bağımsız DC gerilim kaynağı, kondansatör (açık) ve bobin (kısa) ile DC çalışma noktasıdır; AC/transient, diyot/transistör/opamp modelleri desteklenmez. Desteklenmeyen eleman hata verir. Akım probu henüz değer göstermez.
 - Değerler `1k`, `4.7k`, `5`, `1meg`, `1e-3` biçiminde girilir. `M` milli, `MEG` mega; `V`/`ohm` eki eklenmez.
