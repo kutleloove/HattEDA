@@ -124,6 +124,8 @@ struct SketchItem {
     double drillDiameter = 0.0;               // For Kind::Via items (mm)
     // Board tracks: copper width; vias: outer diameter (mm). 0 = the default for the kind.
     double width = 0.0;
+    // Copper zones: name of the net the zone is poured for (ADR-0009); empty = not poured.
+    QString net;
 };
 
 using SketchDocument = QVector<SketchItem>;

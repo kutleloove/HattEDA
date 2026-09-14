@@ -148,6 +148,7 @@ QJsonObject itemToJson(const SketchItem& item) {
     if (item.kind == SketchItem::Kind::Via && item.drillDiameter != 0.0)
         object[QStringLiteral("drillDiameter")] = item.drillDiameter;
     if (item.width > 0.0) object[QStringLiteral("width")] = item.width;
+    if (!item.net.isEmpty()) object[QStringLiteral("net")] = item.net;
     return object;
 }
 
@@ -250,6 +251,12 @@ QString documentFromJson(const QJsonValue& value, Workspace workspace, const QSt
                 return tr("%1 has an invalid width.").arg(at);
             }
             item.width = widthVal.toDouble();
+        }
+        // Copper zone net (ADR-0009); absent in older files, which read as an unpoured zone.
+        const QJsonValue netVal = object.value(QStringLiteral("net"));
+        if (!netVal.isUndefined()) {
+            if (!netVal.isString()) return tr("%1 has an invalid net.").arg(at);
+            item.net = netVal.toString();
         }
         if (item.kind == SketchItem::Kind::Symbol) {
             const auto* symbol = findSymbol(item.variant);

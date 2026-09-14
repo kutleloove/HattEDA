@@ -7,6 +7,7 @@
 #include <QFileInfo>
 #include <QRectF>
 #include <QSaveFile>
+#include <QSet>
 #include <QtMath>
 
 #include <algorithm>
@@ -191,6 +192,20 @@ CamOutput buildCamOutput(const SketchDocument& board, const CamOptions& options)
         }
     };
 
+    // Poured zones first: their clear-polarity knockouts must not erase tracks and pads.
+    QSet<QString> poured;
+    for (const ZoneFillResult& fill : options.zoneFills) {
+        if (!isCopperLayer(fill.layer)) continue;
+        poured.insert(fill.zoneId);
+        for (const ZoneContour& contour : zoneContours(fill.fill)) {
+            QVector<QPointF> points(contour.polygon.begin(), contour.polygon.end());
+            if (points.size() > 3 && points.first() == points.last()) points.removeLast();
+            if (points.size() < 3) continue;
+            layer(camLayerFor(fill.layer))
+                .append({CamPrimitive::Kind::Region, {}, camPoints(points), contour.depth % 2 == 1});
+        }
+    }
+
     for (const SketchItem& item : board) {
         if (item.points.isEmpty()) continue;
         switch (item.kind) {
@@ -268,7 +283,9 @@ CamOutput buildCamOutput(const SketchDocument& board, const CamOptions& options)
             if (item.variant == BoardOutlineVariant) {
                 stroke(CamLayerKind::Outline, outline, true, CamOutlineLineWidth);
             } else if (item.variant == CopperZoneVariant) {
-                if (options.includeZones && isCopperLayer(item.layer)) {
+                if (poured.contains(item.id)) {
+                    // Written above with its clearances.
+                } else if (options.includeZones && isCopperLayer(item.layer)) {
                     region(camLayerFor(item.layer), outline);
                 } else {
                     ++output.skippedZones;
@@ -299,6 +316,12 @@ QByteArray gerberLayer(const CamLayer& layer, const QString& generator) {
     };
     QByteArray body;
     int current = -1;
+    bool clear = false;
+    auto polarity = [&](bool wanted) {
+        if (wanted == clear) return;
+        body += wanted ? "%LPC*%\n" : "%LPD*%\n";
+        clear = wanted;
+    };
     auto select = [&](const CamAperture& aperture) {
         const int code = dcode(aperture);
         if (code != current) {
@@ -307,6 +330,7 @@ QByteArray gerberLayer(const CamLayer& layer, const QString& generator) {
         }
     };
     for (const CamPrimitive& primitive : layer.primitives) {
+        polarity(primitive.kind == CamPrimitive::Kind::Region && primitive.clear);
         switch (primitive.kind) {
         case CamPrimitive::Kind::Flash:
             select(primitive.aperture);
