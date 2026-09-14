@@ -81,6 +81,11 @@ int main() {
     check(reversed.success, "arbitrary ground index");
     if (reversed.success) check(near(reversed.voltages[0], -3) &&
                                near(reversed.currents[0], -0.003), "reversed source sign");
+    const auto currentDriven = solveDc({2, 0, {{"I1", DcKind::CurrentSource, 1, 0, 0.002},
+                                               {"R1", DcKind::Resistor, 1, 0, 1000}}});
+    check(currentDriven.success && near(currentDriven.voltages[1], -2.0) &&
+              near(currentDriven.currents[0], 0.002) && near(currentDriven.currents[1], -0.002),
+          "independent current source stamps KCL and reports signed current");
     // DC models: a capacitor is open, an inductor is a short with a reported current.
     const auto open = solveDc({3, 0, {{"V1", DcKind::VoltageSource, 1, 0, 5},
                                       {"R1", DcKind::Resistor, 1, 2, 1000},

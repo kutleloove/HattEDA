@@ -1,4 +1,5 @@
 #include "hatt/ui/SketchCircuit.hpp"
+#include "hatt/ui/ComponentCatalog.hpp"
 
 #include <QCoreApplication>
 #include <QHash>
@@ -11,6 +12,11 @@
 namespace hatt::ui {
 namespace {
 QString tr(const char* text) { return QCoreApplication::translate("hatt::ui::CircuitWorkflow", text); }
+[[maybe_unused]] const char* SimulationTranslationSources[] = {
+    QT_TRANSLATE_NOOP("hatt::ui::CircuitWorkflow", "unknown simulation model '%1'"),
+    QT_TRANSLATE_NOOP("hatt::ui::CircuitWorkflow", "%1: %2"),
+    QT_TRANSLATE_NOOP("hatt::ui::CircuitWorkflow", "%1: the DC model requires exactly two pins."),
+};
 electrical::Point point(QPointF p) { return {p.x(), p.y()}; }
 bool component(const SketchItem& item) {
     const auto* s = findSymbol(item.variant);
@@ -97,6 +103,7 @@ void collectSchematicInput(const SketchDocument& document, CircuitSnapshot& resu
 }
 
 CircuitSnapshot analyzeSchematic(const SketchDocument& document) {
+    registerBuiltInCatalog();
     CircuitSnapshot result;
     collectSchematicInput(document, result);
     result.connectivity = electrical::buildConnectivity(result.input);
@@ -112,19 +119,41 @@ CircuitSnapshot analyzeSchematic(const SketchDocument& document) {
             result.probes.append({item.id, symbolToWorld(item, probe->pins.value(0)), nets.value(pinKey(item.id, 1), -1)});
         }
         if (!component(item)) continue;
-        electrical::DcElement e;
-        if (item.variant == QLatin1String("schematic.resistor")) e.kind = electrical::DcKind::Resistor;
-        else if (item.variant == QLatin1String("schematic.vdc")) e.kind = electrical::DcKind::VoltageSource;
-        else if (item.variant == QLatin1String("schematic.capacitor")) e.kind = electrical::DcKind::Capacitor;
-        else if (item.variant == QLatin1String("schematic.inductor")) e.kind = electrical::DcKind::Inductor;
-        else {
-            result.simulationErrors << tr("%1: DC simulation does not support this component.").arg(item.label);
+        const auto* symbol = findSymbol(item.variant);
+        QString model = symbol != nullptr ? symbol->simulationModel : QString();
+        // Compatibility for the original four built-in symbols, whose stable ids predate the
+        // explicit catalog contract.
+        if (model.isEmpty() && item.variant == QLatin1String("schematic.resistor")) model = QStringLiteral("dc.resistor");
+        if (model.isEmpty() && item.variant == QLatin1String("schematic.vdc")) model = QStringLiteral("dc.voltage-source");
+        if (model.isEmpty() && item.variant == QLatin1String("schematic.capacitor")) model = QStringLiteral("dc.capacitor");
+        if (model.isEmpty() && item.variant == QLatin1String("schematic.inductor")) model = QStringLiteral("dc.inductor");
+        const auto* definition = findSimulationModel(model.isEmpty() ? QStringLiteral("none") : model);
+        if (definition == nullptr || definition->support != AnalysisSupport::DcOperatingPoint) {
+            const QString reason = definition == nullptr
+                                       ? tr("unknown simulation model '%1'").arg(model)
+                                       : definition->limitation;
+            result.simulationErrors << tr("%1: %2").arg(item.label, reason);
             continue;
+        }
+        if (symbol == nullptr || symbol->pins.size() != 2) {
+            result.simulationErrors << tr("%1: the DC model requires exactly two pins.").arg(item.label);
+            continue;
+        }
+        electrical::DcElement e;
+        if (model == QLatin1String("dc.resistor")) e.kind = electrical::DcKind::Resistor;
+        else if (model == QLatin1String("dc.voltage-source")) e.kind = electrical::DcKind::VoltageSource;
+        else if (model == QLatin1String("dc.current-source")) e.kind = electrical::DcKind::CurrentSource;
+        else if (model == QLatin1String("dc.capacitor")) e.kind = electrical::DcKind::Capacitor;
+        else if (model == QLatin1String("dc.inductor")) e.kind = electrical::DcKind::Inductor;
+        else if (model == QLatin1String("dc.switch-open") || model == QLatin1String("dc.switch-closed")) {
+            e.kind = electrical::DcKind::Resistor;
+            e.value = definition->parameters.value(QStringLiteral("resistance"));
         }
         e.reference = item.label.toStdString();
         e.positive = nets.value(pinKey(item.id, 1), -1);
         e.negative = nets.value(pinKey(item.id, 2), -1);
-        if (!electrical::parseSpiceValue(item.value.toStdString(), e.value))
+        const bool fixedValue = model.startsWith(QLatin1String("dc.switch-"));
+        if (!fixedValue && !electrical::parseSpiceValue(item.value.toStdString(), e.value))
             result.simulationErrors << tr("%1: invalid value '%2'.").arg(item.label, item.value);
         result.dc.elements.push_back(e);
     }

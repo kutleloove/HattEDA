@@ -1,4 +1,5 @@
 #include "hatt/ui/SketchCircuit.hpp"
+#include "hatt/ui/ComponentCatalog.hpp"
 #include "hatt/ui/CircuitWorkflow.hpp"
 #include "hatt/ui/MainWindow.hpp"
 #include "hatt/ui/Theme.hpp"
@@ -48,6 +49,34 @@ private slots:
         QVERIFY(std::abs(result.currents[1] - 0.0025) < 1e-10);
         QVERIFY(std::abs(result.currents[2] - 0.0025) < 1e-10);
         QVERIFY(std::abs(result.currents[0] + 0.0025) < 1e-10);
+    }
+    void catalogCurrentSourceSolvesFromSnapshot() {
+        registerBuiltInCatalog();
+        SketchDocument document;
+        auto part = [&](const QString& variant, const QString& label, QPointF at, const QString& value) {
+            SketchItem item;
+            item.kind = SketchItem::Kind::Symbol;
+            item.variant = variant;
+            item.label = label;
+            item.points = {at};
+            item.value = value;
+            document << item;
+        };
+        part(QStringLiteral("catalog.device.idc"), QStringLiteral("I1"), {30, 30}, QStringLiteral("1m"));
+        part(QStringLiteral("catalog.device.resistor"), QStringLiteral("R1"), {30, 40}, QStringLiteral("1k"));
+        part(QStringLiteral("schematic.ground"), QString(), {20, 35}, QString());
+        auto wire = [&](std::initializer_list<QPointF> points) {
+            SketchItem item; item.kind = SketchItem::Kind::Wire; item.points = points; document << item;
+        };
+        wire({{20, 35}, {20, 30}, {24.92, 30}});
+        wire({{20, 35}, {20, 40}, {24.92, 40}});
+        wire({{35.08, 30}, {40, 30}, {40, 40}, {35.08, 40}});
+        const auto snapshot = analyzeSchematic(document);
+        QVERIFY2(snapshot.errors.isEmpty(), qPrintable(snapshot.errors.join("; ")));
+        QVERIFY2(snapshot.simulationErrors.isEmpty(), qPrintable(snapshot.simulationErrors.join("; ")));
+        const auto result = hatt::electrical::solveDc(snapshot.dc);
+        QVERIFY2(result.success, result.error.c_str());
+        QVERIFY(std::abs(result.voltages[1] - 1.0) < 1e-10);
     }
     void transferPreservesPlacementAndRouting() {
         auto schematic = dcDividerExample();

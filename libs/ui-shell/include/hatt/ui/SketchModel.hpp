@@ -97,6 +97,10 @@ struct SymbolDefinition {
     QString defaultFootprint;
     // Pad number of each pin on defaultFootprint; empty means pin N goes to pad N.
     QVector<int> defaultPinPadMap;
+    // Stable simulation model id. Empty means that no simulation model is assigned. The model
+    // registry and analysis support live in ComponentCatalog; snapshots copy only supported
+    // models into the Qt-free electrical domain.
+    QString simulationModel;
     // Untranslated name of project-defined symbols; built-in symbols use `name`.
     QString displayName;
 };
@@ -246,6 +250,7 @@ struct DeviceDefinition {
     // Pad number (1-based) on `footprint` for each pin; empty means pin N goes to pad N. When set
     // it has pinCount entries and uses every pad number once.
     QVector<int> pinPadMap;
+    QString simulationModel;
     DeviceSpec spec;
 };
 

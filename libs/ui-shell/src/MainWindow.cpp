@@ -3,6 +3,7 @@
 #include "hatt/ui/ChecksReport.hpp"
 #include "hatt/ui/CircuitWorkflow.hpp"
 #include "hatt/ui/ComponentLibrary.hpp"
+#include "hatt/ui/ComponentCatalog.hpp"
 #include "hatt/ui/GerberExport.hpp"
 #include "hatt/ui/LibraryDialogs.hpp"
 
@@ -1972,9 +1973,19 @@ void MainWindow::pickDevices() {
     dialog.setWindowTitle(tr("Pick devices"));
     dialog.resize(520, 460);
     auto* layout = new QVBoxLayout(&dialog);
+    auto* category = new QComboBox(&dialog);
+    category->setObjectName(QStringLiteral("DeviceCategory"));
+    category->addItem(tr("All categories"), -1);
+    for (CatalogCategory value : {CatalogCategory::Passive, CatalogCategory::Diode,
+                                  CatalogCategory::Transistor, CatalogCategory::Analog,
+                                  CatalogCategory::Digital, CatalogCategory::Source,
+                                  CatalogCategory::Electromechanical, CatalogCategory::Connector}) {
+        category->addItem(catalogCategoryName(value), static_cast<int>(value));
+    }
+    layout->addWidget(category);
     auto* search = new QLineEdit(&dialog);
     search->setObjectName(QStringLiteral("DeviceSearch"));
-    search->setPlaceholderText(tr("Search by name or designator prefix"));
+    search->setPlaceholderText(tr("Search components in English or Turkish"));
     search->setClearButtonEnabled(true);
     layout->addWidget(search);
     auto* results = new QListWidget(&dialog);
@@ -1993,14 +2004,28 @@ void MainWindow::pickDevices() {
                                          listed.contains(symbol->id) ? tr("%1 (in project)").arg(name) : name,
                                          results);
         item->setData(VariantRole, symbol->id);
-        item->setData(Qt::UserRole + 10, name + QLatin1Char(' ') + symbol->prefix);
+        QStringList terms{name, symbol->prefix, symbol->defaultValue};
+        int catalogCategory = -1;
+        if (const auto* entry = findCatalogComponent(symbol->id)) {
+            terms << entry->description << entry->keywords << entry->device.pinNames
+                  << entry->device.spec.manufacturer << entry->device.spec.partNumber;
+            catalogCategory = static_cast<int>(entry->category);
+        }
+        item->setData(Qt::UserRole + 10, terms.join(QLatin1Char(' ')));
+        item->setData(Qt::UserRole + 11, catalogCategory);
     }
-    connect(search, &QLineEdit::textChanged, results, [results](const QString& text) {
+    auto filter = [results, search, category] {
+        const QString text = search->text().trimmed();
+        const int selectedCategory = category->currentData().toInt();
         for (int row = 0; row < results->count(); ++row) {
             auto* item = results->item(row);
-            item->setHidden(!item->data(Qt::UserRole + 10).toString().contains(text.trimmed(), Qt::CaseInsensitive));
+            const bool textMatches = item->data(Qt::UserRole + 10).toString().contains(text, Qt::CaseInsensitive);
+            const bool categoryMatches = selectedCategory < 0 || item->data(Qt::UserRole + 11).toInt() == selectedCategory;
+            item->setHidden(!textMatches || !categoryMatches);
         }
-    });
+    };
+    connect(search, &QLineEdit::textChanged, results, filter);
+    connect(category, &QComboBox::currentIndexChanged, results, filter);
     connect(results, &QListWidget::currentItemChanged, details, [details](QListWidgetItem* item) {
         const auto* symbol = item ? findSymbol(item->data(VariantRole).toString()) : nullptr;
         if (symbol == nullptr) {
@@ -2008,11 +2033,35 @@ void MainWindow::pickDevices() {
             return;
         }
         const auto* footprint = findSymbol(symbol->defaultFootprint);
-        details->setText(MainWindow::tr("Prefix %1  ·  %2 pins  ·  value %3  ·  footprint %4")
-                             .arg(symbol->prefix)
-                             .arg(symbol->pins.size())
-                             .arg(symbol->defaultValue.isEmpty() ? MainWindow::tr("none") : symbol->defaultValue,
-                                  footprint ? symbolDisplayName(*footprint) : MainWindow::tr("unassigned")));
+        QStringList lines{MainWindow::tr("Prefix %1  ·  %2 pins  ·  value %3  ·  footprint %4")
+                              .arg(symbol->prefix)
+                              .arg(symbol->pins.size())
+                              .arg(symbol->defaultValue.isEmpty() ? MainWindow::tr("none") : symbol->defaultValue,
+                                   footprint ? symbolDisplayName(*footprint) : MainWindow::tr("unassigned"))};
+        if (const auto* entry = findCatalogComponent(symbol->id)) {
+            lines.prepend(catalogCategoryName(entry->category) + QStringLiteral(" — ") + entry->description);
+            QStringList pins;
+            for (int i = 0; i < entry->device.pinNames.size(); ++i) {
+                pins << QStringLiteral("%1 %2 (%3)")
+                            .arg(i + 1)
+                            .arg(entry->device.pinNames[i], pinElectricalTypeName(entry->pinTypes.value(i)));
+            }
+            lines << MainWindow::tr("Pins: %1").arg(pins.join(QStringLiteral(", ")));
+            if (!entry->device.spec.partNumber.isEmpty())
+                lines << MainWindow::tr("Part number: %1").arg(entry->device.spec.partNumber);
+            if (!entry->device.spec.manufacturer.isEmpty())
+                lines << MainWindow::tr("Manufacturer: %1").arg(entry->device.spec.manufacturer);
+            if (const auto* model = findSimulationModel(entry->device.simulationModel)) {
+                lines << MainWindow::tr("Simulation: %1").arg(model->name);
+                if (!model->limitation.isEmpty()) lines << model->limitation;
+            }
+            QStringList packages;
+            for (const auto& id : entry->footprintOptions) {
+                if (const auto* candidate = findSymbol(id)) packages << symbolDisplayName(*candidate);
+            }
+            if (!packages.isEmpty()) lines << MainWindow::tr("Suitable packages: %1").arg(packages.join(QStringLiteral(", ")));
+        }
+        details->setText(lines.join(QLatin1Char('\n')));
     });
     results->setCurrentRow(0);
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);

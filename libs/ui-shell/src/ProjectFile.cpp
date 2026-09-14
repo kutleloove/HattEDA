@@ -1,6 +1,7 @@
 #include "hatt/ui/ProjectFile.hpp"
 
 #include "hatt/ui/ComponentLibrary.hpp"
+#include "hatt/ui/ComponentCatalog.hpp"
 #include "hatt/ui/DesignChecks.hpp"
 
 #include <QCoreApplication>
@@ -322,6 +323,8 @@ QJsonObject deviceToJson(const DeviceDefinition& device) {
     if (!device.defaultValue.isEmpty()) object[QStringLiteral("value")] = device.defaultValue;
     if (!device.footprint.isEmpty()) object[QStringLiteral("footprint")] = device.footprint;
     if (!device.pinNames.isEmpty()) object[QStringLiteral("pinNames")] = QJsonArray::fromStringList(device.pinNames);
+    if (!device.simulationModel.isEmpty())
+        object[QStringLiteral("simulationModel")] = device.simulationModel;
     if (!device.pinPadMap.isEmpty()) {
         QJsonArray map;
         for (int pad : device.pinPadMap) map.append(pad);
@@ -363,6 +366,7 @@ bool readLength(const QJsonObject& object, const char* key, double& target) {
 // Reads the library before the documents: custom symbols must be registered so that document items
 // using them validate.
 QString libraryFromJson(const QJsonValue& value, ProjectLibrary& library) {
+    registerBuiltInCatalog();
     // The library is optional: v1 files and early v2 files have none or an empty object.
     if (value.isUndefined()) return {};
     if (!value.isObject()) return tr("The library section is invalid.");
@@ -443,6 +447,7 @@ QString libraryFromJson(const QJsonValue& value, ProjectLibrary& library) {
         device.prefix = o.value(QStringLiteral("prefix")).toString();
         device.defaultValue = o.value(QStringLiteral("value")).toString();
         device.footprint = o.value(QStringLiteral("footprint")).toString();
+        device.simulationModel = o.value(QStringLiteral("simulationModel")).toString();
         const QJsonValue count = o.value(QStringLiteral("pinCount"));
         const QJsonObject spec = o.value(QStringLiteral("spec")).toObject();
         DeviceSpec& s = device.spec;
@@ -472,6 +477,8 @@ QString libraryFromJson(const QJsonValue& value, ProjectLibrary& library) {
             device.pinPadMap.append(pad.toInt());
         }
         valid = valid && validatePinPadMap(device.pinPadMap, device.pinCount).isEmpty();
+        valid = valid && (device.simulationModel.isEmpty() ||
+                          findSimulationModel(device.simulationModel) != nullptr);
         if (valid && !device.footprint.isEmpty()) {
             const auto* footprint = findSymbol(device.footprint);
             valid = footprint != nullptr && footprint->workspace == Workspace::Board &&

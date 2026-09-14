@@ -8,7 +8,7 @@ Aktif çizim/yerleştirme/taşıma sırasında sağ tık taslağı iptal eder ve
 
 ## Component modu (Proteus ISIS/ARES akışı, #27)
 
-- **Şema:** Component modu (A) projenin eleman listesini gösterir; yeni proje boş başlar. **Eleman seç...** (`hatteda.devices.pick`, Design menüsünde de var) kütüphane penceresini (`PickDevicesDialog`) açar; ada veya önekle aranır, çoklu seçilip **Projeye ekle** ile listeye eklenir. **Kaldır** seçili elemanı listeden çıkarır; şemada o elemandan parça varsa önce parçaların silinmesi istenir. Liste `.hatt` dosyasında `library.devices` olarak saklanır (ADR-0006). Kütüphanede olmayan ama şemada kullanılan bir eleman (ör. silmeyi geri alınca) listeye kendiliğinden döner.
+- **Şema:** Component modu (A) projenin eleman listesini gösterir; yeni proje boş başlar. **Eleman seç...** (`hatteda.devices.pick`, Design menüsünde de var) kütüphane penceresini (`PickDevicesDialog`) açar. Hazır katalog kategorilere ayrılır; ad, açıklama, üretici/parça numarası ve Türkçe/İngilizce anahtar sözcüklerle aranır. Ayrıntıda pin ad/türleri, uygun kılıflar ve simülasyon durumu görünür. Çoklu seçim **Projeye ekle** ile yalnız kararlı katalog kimliklerini `library.devices` içine koyar; hazır tanımlar proje dosyasına kopyalanmaz. **Kaldır** seçili elemanı listeden çıkarır; şemada o elemandan parça varsa önce parçaların silinmesi istenir.
 - Yeni yerleştirilen parçaya varsayılan değer (direnç `1k`, kaynak `5`, kondansatör `100n`...) ve pin sayısı uyan kılıf (`r0603`, `header-1x2`, `c0805`, `sot23`, `soic8`) atanır; pin→pad eşlemesi 1'e 1'dir. Özelliklerden değiştirilebilir.
 - **PCB:** Kayra'da Component modu yalnızca şemaya yerleştirilmiş ve kartta henüz olmayan parçaları tasarımcı sırasıyla (R1, R2, V1) listeler. Tıklanan yere yerleştirilen kılıf şema parçasına bağlanır (`sourceId`, etiket, değer, eşleme) ve listeden düşer; geri alınınca tekrar görünür. Kılıfı atanmamış parçalar listelenmez, ipucu alanında bildirilir.
 - **PCB'den hariç tut:** Özellikler penceresindeki bu seçenek parçayı PCB listesinden, aktarımdan ve bağlantı rehberinden çıkarır; parça netlistte ve simülasyonda kalır.
@@ -18,7 +18,7 @@ Aktif çizim/yerleştirme/taşıma sırasında sağ tık taslağı iptal eder ve
 
 ## Eleman ve kılıf oluşturma (Make Device / Make Package, #29)
 
-- **Yeni eleman...** (`hatteda.devices.new`, Design › New device...) `DeviceEditorDialog` açar. Ad, etiket öneki (1-8 harf), varsayılan değer, pin sayısı ve isteğe bağlı pin adları girilir. Şema sembolü kendiliğinden üretilir: 2 pine kadar küçük kutu, fazlası solda yukarıdan aşağı, sağda aşağıdan yukarı pinli IC kutusu. Oluşan eleman projenin eleman listesine eklenir.
+- **Yeni eleman...** (`hatteda.devices.new`, Design › New device...) `DeviceEditorDialog` açar. Ad, etiket öneki (1-8 harf), varsayılan değer, pin sayısı, isteğe bağlı pin adları ve simülasyon modeli girilir. Tanınan iki pinli tür adlarında model otomatik önerilir, kullanıcı değiştirebilir. Şema sembolü kendiliğinden üretilir: 2 pine kadar küçük kutu, fazlası solda yukarıdan aşağı, sağda aşağıdan yukarı pinli IC kutusu. Oluşan eleman projenin eleman listesine eklenir.
 - **Datasheet bilgileri** isteğe bağlıdır: üretici, parça no, bağlantı, kılıf tipi, delikli/SMD, pin aralığı, sıra aralığı, gövde, bacak ölçüleri ve pin başına en fazla akım. 0 değeri "bilinmiyor" demektir.
 - **Kılıf** listesi pin sayısı aynı olan hazır ve proje kılıflarını gösterir. **Elemandan kılıf oluştur...** `FootprintEditorDialog` açar. Pad sayısı elemanın pin sayısına kilitlidir. Sağdaki `DeviceInfoBox` elemanın bilgilerini gösterir:
   - Datasheet geometrisi varsa pin aralığı, sıra aralığı ve pad ölçüleri ondan üretilir (`suggestFootprint`).
@@ -39,7 +39,7 @@ Aktif çizim/yerleştirme/taşıma sırasında sağ tık taslağı iptal eder ve
 
 ## Simülasyon başlat/durdur (#22)
 
-Komut çubuğundaki oynat düğmesi veya **Circuit → Start simulation** (F12) canlı simülasyonu başlatır. Probe modundaki **Voltage probe** bir tele veya pine konduğunda gerilimi şemada etiket olarak görünür. Simülasyon çalışırken değer değiştirmek, parça eklemek veya taşımak devreyi yeniden çözer. Durdur düğmesi (Shift+F12) etiketleri kaldırır. Hata olursa sonuç sekmesi açılır ve simülasyon durur. DC modelinde kondansatör açık devre, bobin kısa devredir.
+Komut çubuğundaki oynat düğmesi veya **Circuit → Start simulation** (F12) canlı simülasyonu başlatır. Probe modundaki **Voltage probe** bir tele veya pine konduğunda gerilimi şemada etiket olarak görünür. Simülasyon çalışırken değer değiştirmek, parça eklemek veya taşımak devreyi yeniden çözer. Durdur düğmesi (Shift+F12) etiketleri kaldırır. Hata olursa sonuç sekmesi açılır ve simülasyon durur. DC modelinde kondansatör açık devre, bobin kısa devre; bağımsız akım kaynağı KCL yön işaretiyle çalışan gerçek bir modeldir. Her katalog kaydı kararlı bir model kimliğine veya açık `none` durumuna sahiptir. Çözücünün desteklemediği nonlinear/transient model kimlikleri sessizce atlanmaz, kullanıcıya sınırlama hatası verir.
 
 ## Gerber ve delik çıktısı (CAM)
 
@@ -98,7 +98,7 @@ Kendi devrenizde varsayılan değer ve footprint atamalarını gerekirse özelli
 - Netlist uygulama içinde hesaplanır ve `.net` olarak dışa aktarılabilir; netlist import ve genel SPICE formatı yoktur.
 - Bağlantı rehberi otomatik router değildir; airwire'lar pad merkezleri arasında çizilir. Clearance, genişlik, delik, kart kenarı ve katman kontrolleri DRC'dedir (ADR-0008). Bakır alanları doldurulmadığı için DRC'ye katılmaz; net sınıfı kuralları ve istisna listesi yoktur.
 - Footprint/pin eşlemesi değişen veya şemadan silinen bileşenlerin mevcut PCB bağlantıları sessizce dönüştürülmez; kullanıcı incelemesi gerekir.
-- Simülasyon direnç, bağımsız DC gerilim kaynağı, kondansatör (açık) ve bobin (kısa) ile DC çalışma noktasıdır; AC/transient, diyot/transistör/opamp modelleri desteklenmez. Desteklenmeyen eleman hata verir. Akım probu henüz değer göstermez.
+- Simülasyon direnç, bağımsız DC gerilim ve akım kaynağı, kondansatör (açık), bobin (kısa) ve sabit açık/kapalı anahtar eşdeğerleri ile DC çalışma noktasıdır. AC/transient ve diyot/Zener/LED, BJT, MOSFET/JFET, op-amp/comparator nonlinear çözümleri desteklenmez; katalogdaki parametreli model sözleşmeleri gelecekteki çözücü için ayrılmıştır ve bugün açık hata verir. Akım probu henüz değer göstermez.
 - Değerler `1k`, `4.7k`, `5`, `1meg`, `1e-3` biçiminde girilir. `M` milli, `MEG` mega; `V`/`ohm` eki eklenmez.
 - Şema değiştiğinde sonuçlar geçersiz işaretlenir. Simülasyon iptal edilebilir; maksimum 256 bilinmeyen desteklenir.
 

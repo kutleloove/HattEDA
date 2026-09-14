@@ -1,4 +1,5 @@
 #include "hatt/ui/ComponentLibrary.hpp"
+#include "hatt/ui/ComponentCatalog.hpp"
 
 #include <QCoreApplication>
 #include <QRectF>
@@ -268,7 +269,7 @@ SymbolDefinition footprintSymbol(const FootprintDefinition& footprint) {
                             ? QRectF(-p.bodyWidth / 2, -p.bodyLength / 2, p.bodyWidth, p.bodyLength)
                             : padBounds.adjusted(-SilkMargin, -SilkMargin, SilkMargin, SilkMargin);
     symbol.shapes.append(rectangleShape(body));
-    if (!placed.isEmpty() && placed.size() > 2) {
+    if (!placed.isEmpty()) {
         const QRectF first = padRect(placed.first());
         symbol.shapes.append(circleShape(first.topLeft() - QPointF(0.45, 0.45), 0.2, true));
     }
@@ -284,6 +285,7 @@ SymbolDefinition deviceSymbol(const DeviceDefinition& device) {
     symbol.prefix = device.prefix;
     symbol.defaultValue = device.defaultValue;
     symbol.defaultFootprint = device.footprint;
+    symbol.simulationModel = device.simulationModel;
     const int n = std::clamp(device.pinCount, 1, MaxGeneratedPads);
     if (validatePinPadMap(device.pinPadMap, n).isEmpty()) symbol.defaultPinPadMap = device.pinPadMap;
     if (n <= 2) {
@@ -407,9 +409,14 @@ void registerProjectLibrary(const ProjectLibrary& library) {
 }
 
 QList<const SymbolDefinition*> footprintsWithPads(const ProjectLibrary& library, int padCount) {
+    registerBuiltInCatalog();
     QList<const SymbolDefinition*> result;
     for (const auto& symbol : symbolLibrary()) {
         if (symbol.workspace == Workspace::Board && symbol.pins.size() == padCount) result.append(&symbol);
+    }
+    for (const auto& footprint : footprintCatalog()) {
+        const auto* symbol = findSymbol(footprint.id);
+        if (symbol != nullptr && symbol->pins.size() == padCount) result.append(symbol);
     }
     for (const auto& footprint : library.customFootprints) {
         const auto* symbol = findSymbol(footprint.id);
@@ -419,7 +426,11 @@ QList<const SymbolDefinition*> footprintsWithPads(const ProjectLibrary& library,
 }
 
 QList<const SymbolDefinition*> pickableDevices(const ProjectLibrary& library) {
+    registerBuiltInCatalog();
     QList<const SymbolDefinition*> result = symbolsFor(Workspace::Schematic, SymbolCategory::Component);
+    for (const auto& entry : componentCatalog()) {
+        if (const auto* symbol = findSymbol(entry.device.id)) result.append(symbol);
+    }
     for (const auto& device : library.customDevices) {
         if (const auto* symbol = findSymbol(device.id)) result.append(symbol);
     }
