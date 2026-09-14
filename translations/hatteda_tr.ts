@@ -578,7 +578,9 @@ Son projeler listesinden kaldırılsın mı?</translation></message>
     <message><source>%1: annular ring %2 is below the minimum %3.</source><translation>%1: halka genişliği %2, en küçük değer %3'ün altında.</translation></message>
     <message><source>Copper joins different nets: %1</source><translation>Bakır farklı netleri birleştiriyor: %1</translation></message>
     <message><source>copper zone</source><translation>bakır alan</translation></message>
-    <message><source>Copper zones are not poured yet: this zone is solid copper without clearance around other nets.</source><translation>Bakır alanlar henüz dökülmüyor: bu alan diğer netlerin çevresinde boşluk bırakmayan dolu bakırdır.</translation></message>
+    <message><source>This copper zone has no net, so it is not poured: it is solid copper without clearance and is left out of the Gerber files.</source><translation>Bu bakır alanın neti yok, bu yüzden dökülmedi: boşluksuz dolu bakırdır ve Gerber dosyalarına yazılmaz.</translation></message>
+    <message><source>This copper zone pours no copper: no copper of net %1 is under it.</source><translation>Bu bakır alan hiç bakır dökmüyor: altında %1 netine ait bakır yok.</translation></message>
+    <message><source>Clearance between %1 and %2 is below %3.</source><translation>%1 ile %2 arasındaki aralık %3 değerinin altında.</translation></message>
     <message><source>A copper zone joins different nets: %1</source><translation>Bir bakır alan farklı netleri birleştiriyor: %1</translation></message>
     <message><source>Clearance %1 between %2 and %3 is below %4.</source><translation>%2 ile %3 arasındaki %1 aralık, %4 değerinin altında.</translation></message>
     <message><source>%1 is outside the board outline.</source><translation>%1 kart dış çizgisinin dışında.</translation></message>

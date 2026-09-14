@@ -270,6 +270,56 @@ private slots:
         QCOMPARE(withRule(report, "drc.unrouted").size(), before - 1);
     }
 
+    void pouredZonesAreCheckedAsTheirFill() {
+        const SketchDocument schematic = dcDividerExample();
+        const SketchDocument placed = transferToBoard(schematic, {outline(80, 60)}).document;
+        const auto r1 = *std::find_if(placed.begin(), placed.end(), [](const SketchItem& i) { return i.label == QLatin1String("R1"); });
+        const BoardCopperModel model = buildBoardCopperModel(schematic, placed);
+        const auto pad2 = std::find_if(model.conductors.begin(), model.conductors.end(), [&r1](const BoardConductor& c) {
+            return c.itemId == r1.id && c.padIndex == 1;
+        });
+        QVERIFY(pad2 != model.conductors.end() && pad2->net >= 0);
+        const QString midpoint = model.netNames.value(pad2->net);
+
+        SketchItem zone;
+        zone.kind = SketchItem::Kind::Polyline;
+        zone.variant = CopperZoneVariant;
+        zone.closed = true;
+        zone.layer = BoardLayer::TopCopper;
+        zone.points = {{1, 1}, {79, 1}, {79, 59}, {1, 59}};
+        const int before = withRule(runDesignRuleCheck(schematic, placed, DesignRules{}), "drc.unrouted").size();
+
+        // Without a net the zone stays a solid, unpoured polygon that shorts everything under it.
+        SketchDocument board = placed;
+        board.append(zone);
+        CheckReport report = runDesignRuleCheck(schematic, board, DesignRules{});
+        QCOMPARE(withRule(report, "drc.zone-unfilled").size(), 1);
+        QCOMPARE(withRule(report, "drc.zone-short").size(), 1);
+
+        // With the midpoint net the pour keeps clear of the other nets and joins R1.2 to R2.1.
+        board.last().net = midpoint;
+        report = runDesignRuleCheck(schematic, board, DesignRules{});
+        QStringList messages;
+        for (const auto& v : report.violations) messages << v.rule + QLatin1Char(':') + v.message;
+        QVERIFY2(report.count(CheckSeverity::Error) == 0, qPrintable(messages.join(QLatin1Char('\n'))));
+        QCOMPARE(withRule(report, "drc.zone-unfilled").size(), 0);
+        QCOMPARE(withRule(report, "drc.unrouted").size(), before - 1);
+
+        // A net with no copper under the zone pours nothing and says so.
+        board.last().net = QStringLiteral("NO-SUCH-NET");
+        report = runDesignRuleCheck(schematic, board, DesignRules{});
+        QCOMPARE(withRule(report, "drc.zone-empty").size(), 1);
+        QCOMPARE(report.count(CheckSeverity::Error), 0);
+        board.last().net = midpoint;
+
+        // A tight clearance rule still produces a clean pour (the fill follows the rules).
+        DesignRules wide;
+        wide.clearance = 0.5;
+        report = runDesignRuleCheck(schematic, board, wide);
+        QCOMPARE(withRule(report, "drc.clearance").size(), 0);
+        QCOMPARE(withRule(report, "drc.zone-short").size(), 0);
+    }
+
     void boardCopperModelGroupsAndShapes() {
         // Shapes: gaps and grown outlines.
         const CopperShape capsule{{0, 0}, {10, 0}, 0.5, {}};

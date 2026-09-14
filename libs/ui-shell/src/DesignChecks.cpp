@@ -3,6 +3,7 @@
 #include "hatt/ui/BoardCopper.hpp"
 #include "hatt/ui/ComponentLibrary.hpp"
 #include "hatt/ui/SketchCircuit.hpp"
+#include "hatt/ui/ZoneFill.hpp"
 
 #include <QCoreApplication>
 #include <QHash>
@@ -235,13 +236,99 @@ CheckReport runDesignRuleCheck(const SketchDocument& schematic, const SketchDocu
         add(report, W, B, "drc.no-outline", tr("The board has no closed board outline, so board edge clearance is not checked."));
     }
 
-    const BoardCopperModel model = buildBoardCopperModel(schematic, board, rules.clearance);
+    // Zones with a net are poured (ZoneFill.hpp, ADR-0009) and checked as their fill; zones without
+    // a pour stay solid polygons in the copper model.
+    const QVector<ZoneFillResult> pours = pourZones(schematic, board, rules.clearance, rules.boardEdgeClearance);
+    QSet<QString> poured;
+    for (const auto& pour : pours) poured.insert(pour.zoneId);
+    SketchDocument copperBoard;
+    for (const auto& item : board) {
+        if (!poured.contains(item.id)) copperBoard.append(item);
+    }
+    const BoardCopperModel model = buildBoardCopperModel(schematic, copperBoard, rules.clearance);
     const auto& copper = model.conductors;
     const int count = copper.size();
     if (!model.netsKnown) {
         add(report, W, B, "drc.netlist", tr("Fix the schematic errors (run the electrical check) to check shorts and unrouted nets."));
     }
     auto netName = [&model](int net) { return model.netNames.value(net); };
+
+    // Touching groups, extended by pours: a pour joins every conductor its fill touches.
+    QVector<int> group = model.groups;
+    QSet<int> shortReported; // group roots whose short was reported through a pour
+    auto joinRoots = [&group, &shortReported](const QSet<int>& roots) {
+        if (roots.isEmpty()) return -1;
+        const int target = *std::min_element(roots.begin(), roots.end());
+        for (int& root : group) {
+            if (roots.contains(root)) root = target;
+        }
+        for (int root : roots) {
+            if (shortReported.remove(root)) shortReported.insert(target);
+        }
+        return target;
+    };
+    auto groupNets = [&group, &copper](int root) {
+        QVector<int> nets;
+        for (int i = 0; i < group.size(); ++i) {
+            if (group[i] == root && copper[i].net >= 0 && !nets.contains(copper[i].net)) nets.append(copper[i].net);
+        }
+        std::sort(nets.begin(), nets.end());
+        return nets;
+    };
+    const double pourTolerance = std::max(0.02, rules.clearance * 0.1);
+    for (const auto& pour : pours) {
+        const int layer = layerBit(pour.layer);
+        const QRectF fillBounds = pour.fill.boundingRect();
+        QSet<int> touched;
+        QStringList ids{pour.zoneId};
+        for (int i = 0; i < count; ++i) {
+            if ((copper[i].layers & layer) == 0) continue;
+            const QRectF reach = copper[i].bounds.adjusted(-rules.clearance, -rules.clearance, rules.clearance, rules.clearance);
+            if (!fillBounds.intersects(reach)) continue;
+            bool touches = false;
+            bool tooClose = false;
+            for (const auto& shape : copper[i].shapes) {
+                touches = touches || pour.fill.intersects(copperShapePath(shape));
+                // The pour subtracts `clearance` from other nets; allow a tolerance for the curve
+                // flattening of grown round outlines (stroker offsets are approximate).
+                tooClose = tooClose || pour.fill.intersects(copperShapePath(shape, std::max(0.0, rules.clearance - pourTolerance)));
+            }
+            if (touches) {
+                touched.insert(group[i]);
+                if (!ids.contains(copper[i].itemId)) ids << copper[i].itemId;
+            } else if (tooClose) {
+                const QVector<int> nets = groupNets(group[i]);
+                const bool sameNet = nets.size() == 1 && netName(nets.first()) == pour.net;
+                if (!sameNet) {
+                    add(report, E, B, "drc.clearance",
+                        tr("Clearance between %1 and %2 is below %3.").arg(tr("copper zone"), copper[i].name, millimetres(rules.clearance)),
+                        copper[i].anchor, {pour.zoneId, copper[i].itemId});
+                }
+            }
+        }
+        if (pour.fill.isEmpty()) {
+            add(report, W, B, "drc.zone-empty",
+                tr("This copper zone pours no copper: no copper of net %1 is under it.").arg(pour.net),
+                std::nullopt, {pour.zoneId});
+        }
+        int root = joinRoots(touched);
+        if (root < 0) continue;
+        // A pour touching copper of another net is a short through the zone (only possible when the
+        // pour and the copper disagree, e.g. copper added after the fill or rounding).
+        if (model.netsKnown) {
+            QStringList foreign;
+            for (int net : groupNets(root)) {
+                if (netName(net) != pour.net) foreign << netName(net);
+            }
+            if (!foreign.isEmpty()) {
+                foreign.prepend(pour.net);
+                foreign.sort();
+                add(report, E, B, "drc.zone-short", tr("A copper zone joins different nets: %1").arg(foreign.join(QStringLiteral(", "))),
+                    pour.fill.boundingRect().center(), ids);
+                shortReported.insert(root);
+            }
+        }
+    }
 
     // Per conductor: widths, holes and unpoured zones.
     for (const auto& part : copper) {
@@ -272,8 +359,9 @@ CheckReport runDesignRuleCheck(const SketchDocument& schematic, const SketchDocu
             }
             break;
         case ConductorKind::Zone:
+            // Only zones without a pour remain in the model: no net assigned or not on copper.
             add(report, W, B, "drc.zone-unfilled",
-                tr("Copper zones are not poured yet: this zone is solid copper without clearance around other nets."),
+                tr("This copper zone has no net, so it is not poured: it is solid copper without clearance and is left out of the Gerber files."),
                 part.anchor, {part.itemId});
             break;
         }
@@ -283,9 +371,9 @@ CheckReport runDesignRuleCheck(const SketchDocument& schematic, const SketchDocu
     if (model.netsKnown) {
         QSet<int> reported;
         for (int i = 0; i < count; ++i) {
-            const int root = model.groups[i];
-            if (reported.contains(root)) continue;
-            const QVector<int> nets = model.groupNets(root);
+            const int root = group[i];
+            if (reported.contains(root) || shortReported.contains(root)) continue;
+            const QVector<int> nets = groupNets(root);
             if (nets.size() < 2) continue;
             reported.insert(root);
             QStringList names;
@@ -293,7 +381,7 @@ CheckReport runDesignRuleCheck(const SketchDocument& schematic, const SketchDocu
             std::optional<QPointF> at;
             bool throughZone = false;
             for (int j = 0; j < count; ++j) {
-                if (model.groups[j] != root) continue;
+                if (group[j] != root) continue;
                 if (copper[j].net >= 0 && copper[j].net != nets.first() && !at) at = copper[j].anchor;
                 if (!ids.contains(copper[j].itemId)) ids << copper[j].itemId;
                 throughZone = throughZone || copper[j].kind == ConductorKind::Zone;
@@ -314,12 +402,12 @@ CheckReport runDesignRuleCheck(const SketchDocument& schematic, const SketchDocu
     // Copper of different conductors too close together. Zones are not poured, so they are skipped.
     for (const auto& [a, b] : model.nearPairs) {
         if (copper[a].kind == ConductorKind::Zone || copper[b].kind == ConductorKind::Zone) continue;
-        const int ra = model.groups[a];
-        const int rb = model.groups[b];
+        const int ra = group[a];
+        const int rb = group[b];
         if (ra == rb) continue;
-        const QVector<int> netsA = model.groupNets(ra);
+        const QVector<int> netsA = groupNets(ra);
         // Unrouted pads of the same net may sit close together.
-        if (netsA.size() == 1 && netsA == model.groupNets(rb)) continue;
+        if (netsA.size() == 1 && netsA == groupNets(rb)) continue;
         QPointF where;
         const double d = conductorGap(copper[a], copper[b], &where);
         add(report, E, B, "drc.clearance",
@@ -390,8 +478,8 @@ CheckReport runDesignRuleCheck(const SketchDocument& schematic, const SketchDocu
             QSet<int> roots;
             std::optional<int> separate;
             for (int i : members) {
-                if (!roots.isEmpty() && !roots.contains(model.groups[i]) && !separate) separate = i;
-                roots.insert(model.groups[i]);
+                if (!roots.isEmpty() && !roots.contains(group[i]) && !separate) separate = i;
+                roots.insert(group[i]);
             }
             if (roots.size() > 1) {
                 const int shown = separate.value_or(members.first());
