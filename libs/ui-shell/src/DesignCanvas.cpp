@@ -200,12 +200,17 @@ void drawPads(QPainter& painter, const QVector<PlacedPad>& pads, const CanvasCol
         else if (!onActive) fill.setAlpha(150);
         QPolygonF outline;
         for (const QPointF& point : padOutline(pad)) outline << map(point);
-        painter.setPen(selected && !preview ? strokePen(colors.selection, 2.0) : QPen(Qt::NoPen));
+        QColor edge = fill.darker(175);
+        edge.setAlpha(fill.alpha());
+        painter.setPen(selected && !preview ? strokePen(colors.selection, 2.0)
+                                            : strokePen(edge, preview ? 1.0 : 1.25, preview));
         painter.setBrush(fill);
         painter.drawPolygon(outline);
         if (pad.drill > 0.0) {
             const double radius = std::max(1.0, pad.drill / 2.0 * scale);
-            painter.setPen(Qt::NoPen);
+            QColor plating = colors.stroke;
+            plating.setAlpha(preview ? 130 : 210);
+            painter.setPen(strokePen(plating, 1.0, preview));
             painter.setBrush(colors.background);
             painter.drawEllipse(map(pad.center), radius, radius);
         }
@@ -292,7 +297,14 @@ void drawItem(QPainter& painter, const SketchItem& item, const CanvasColors& col
             // Tracks are drawn at their copper width in the colour of their layer.
             const QColor color = sideColor(colors.layers[static_cast<int>(item.layer)],
                                            layerBit(item.layer), view);
-            painter.setPen(strokePen(pick(color), std::max(2.0, trackWidth(item) * scale), preview));
+            const double copperWidth = std::max(2.0, trackWidth(item) * scale);
+            if (!preview) {
+                QColor edge = color.darker(185);
+                edge.setAlpha(color.alpha());
+                painter.setPen(strokePen(edge, copperWidth + 2.0));
+                painter.drawPolyline(polygon);
+            }
+            painter.setPen(strokePen(pick(color), copperWidth, preview));
         } else {
             painter.setPen(strokePen(pick(colors.wire), selected ? 3.0 : 2.0, preview));
         }
@@ -513,6 +525,16 @@ bool isTwoPointTool(CanvasTool tool) {
 }
 
 bool isPathTool(CanvasTool tool) { return tool == CanvasTool::Wire || tool == CanvasTool::Polyline; }
+
+QVector<QPointF> diagonalRoute(QPointF from, QPointF to) {
+    const double dx = to.x() - from.x();
+    const double dy = to.y() - from.y();
+    const double ax = std::abs(dx);
+    const double ay = std::abs(dy);
+    if (ax < 1e-9 || ay < 1e-9 || std::abs(ax - ay) < 1e-9) return {};
+    return {ax > ay ? from + QPointF(std::copysign(ax - ay, dx), 0.0)
+                    : from + QPointF(0.0, std::copysign(ay - ax, dy))};
+}
 
 } // namespace
 
@@ -741,7 +763,7 @@ SketchItem DesignCanvas::pendingTrack(const QVector<QPointF>& points) const {
     simplifyPath(track.points);
     track.variant = variant_;
     track.layer = routeLayer();
-    track.width = trackWidth_;
+    track.width = currentTrackWidth();
     return track;
 }
 
@@ -783,6 +805,7 @@ void DesignCanvas::cancelOperation() {
     if (contextMenuTimer_) contextMenuTimer_->stop();
     pending_.clear();
     routePieces_.clear();
+    activeRouteWidth_ = 0.0;
     pressGesture_ = false;
     if (drag_ == Drag::Move || drag_ == Drag::RubberBand) {
         drag_ = Drag::None;
@@ -1158,7 +1181,8 @@ DesignCanvas::Snap DesignCanvas::snap(QPointF screen, const QPointF* origin,
     Snap result{world, SnapKind::None, world, {}};
     double best = tolerance;
     // A track being routed only connects to copper on its own layer.
-    const bool routingTrack = workspace_ == Workspace::Board && tool_ == CanvasTool::Wire;
+    const bool routingTrack = workspace_ == Workspace::Board && tool_ == CanvasTool::Wire &&
+                              !pending_.isEmpty();
     auto skipped = [&](int index) {
         const SketchItem& item = items_[index];
         return (ignoreSelection && selection_.contains(index)) || !itemVisible(item) ||
@@ -1436,9 +1460,116 @@ QVector<QPointF> DesignCanvas::routeTo(QPointF point) const {
     return orthogonalRoute(from, point, leaving, pinDirectionAt(items_, point), gridSize());
 }
 
+std::optional<QPointF> DesignCanvas::assistedRouteTarget(QPointF cursor) const {
+    if (workspace_ != Workspace::Board || tool_ != CanvasTool::Wire || pending_.isEmpty() ||
+        airwires_.isEmpty() || freeAngle_) {
+        return std::nullopt;
+    }
+    QPointF origin = pending_.first();
+    for (const auto& piece : routePieces_) {
+        if (piece.kind == SketchItem::Kind::Wire && !piece.points.isEmpty()) {
+            origin = piece.points.first();
+            break;
+        }
+    }
+    const double endpointTolerance = std::max(gridSize() * 0.51, 10.0 / scale_);
+    std::optional<QPointF> best;
+    double bestScore = std::numeric_limits<double>::max();
+    const QPointF motion = cursor - origin;
+    for (const QLineF& airwire : airwires_) {
+        QPointF target;
+        if (QLineF(origin, airwire.p1()).length() <= endpointTolerance) {
+            target = airwire.p2();
+        } else if (QLineF(origin, airwire.p2()).length() <= endpointTolerance) {
+            target = airwire.p1();
+        } else {
+            continue;
+        }
+        bool targetHasPad = false;
+        bool targetOnLayer = false;
+        for (const auto& item : items_) {
+            for (const PlacedPad& pad : itemPads(item)) {
+                if (!samePoint(pad.center, target)) continue;
+                targetHasPad = true;
+                targetOnLayer = targetOnLayer ||
+                                (pad.layers & layerBit(routeLayer())) != 0;
+            }
+        }
+        if (targetHasPad && !targetOnLayer) continue;
+        const QPointF direction = target - origin;
+        double score = QLineF(cursor, target).length();
+        const double lengths = std::hypot(motion.x(), motion.y()) *
+                               std::hypot(direction.x(), direction.y());
+        if (lengths > 1e-9) {
+            const double alignment = QPointF::dotProduct(motion, direction) / lengths;
+            score += (1.0 - alignment) * endpointTolerance * 4.0;
+        }
+        if (score < bestScore) {
+            bestScore = score;
+            best = target;
+        }
+    }
+    return best;
+}
+
+QVector<QPointF> DesignCanvas::routePreviewTo(QPointF point) const {
+    if (pending_.isEmpty()) return {};
+    QVector<QPointF> result = pending_;
+    result += routeTo(point);
+    if (result.isEmpty() || !samePoint(result.last(), point)) result.append(point);
+    const auto target = assistedRouteTarget(point);
+    if (!target || samePoint(*target, point)) return result;
+    QPointF leaving;
+    if (result.size() >= 2) {
+        const QPointF run = result.last() - result[result.size() - 2];
+        if (std::abs(run.y()) < 1e-6) leaving = QPointF(std::copysign(1.0, run.x()), 0);
+        else if (std::abs(run.x()) < 1e-6) leaving = QPointF(0, std::copysign(1.0, run.y()));
+    }
+    if (snap_.orthogonal) {
+        result += orthogonalRoute(point, *target, leaving, pinDirectionAt(items_, *target), gridSize());
+    } else if (snap_.diagonal) {
+        result += diagonalRoute(point, *target);
+    }
+    if (!samePoint(result.last(), *target)) result.append(*target);
+    simplifyPath(result);
+    return result;
+}
+
+QVector<QPointF> DesignCanvas::currentRoutePreview() const {
+    return hoverValid_ ? routePreviewTo(hover_.point) : QVector<QPointF>();
+}
+
 void DesignCanvas::appendPathPoint(const Snap& point) {
     pending_ += routeTo(point.point);
     pending_.append(point.point);
+}
+
+double DesignCanvas::currentTrackWidth() const noexcept {
+    return activeRouteWidth_ > 0.0 ? activeRouteWidth_ : trackWidth_;
+}
+
+void DesignCanvas::beginBoardRoute(QPointF at) {
+    activeRouteWidth_ = trackWidth_;
+    for (auto item = items_.crbegin(); item != items_.crend(); ++item) {
+        for (const PlacedPad& pad : itemPads(*item)) {
+            if (!samePoint(pad.center, at)) continue;
+            const int copper = pad.layers & CopperLayerMask;
+            if (copper == layerBit(BoardLayer::TopCopper)) setActiveLayer(BoardLayer::TopCopper);
+            else if (copper == layerBit(BoardLayer::BottomCopper)) setActiveLayer(BoardLayer::BottomCopper);
+            // Keep the chosen style where it fits; cap an oversized style so it cannot obscure
+            // the pad or escape through its narrow side.
+            const double padLimit = std::min(pad.width, pad.height) * 0.60;
+            if (padLimit > 0.0) activeRouteWidth_ = std::min(activeRouteWidth_, padLimit);
+            return;
+        }
+        if (item->kind != SketchItem::Kind::Wire || !isCopperLayer(item->layer)) continue;
+        for (const QLineF& segment : itemSegments(*item)) {
+            if (distanceToSegment(at, segment) > 1e-6) continue;
+            setActiveLayer(item->layer);
+            activeRouteWidth_ = std::min(activeRouteWidth_, trackWidth(*item));
+            return;
+        }
+    }
 }
 
 int DesignCanvas::hitTest(QPointF screen) const {
@@ -1675,6 +1806,7 @@ void DesignCanvas::finishPath() {
         SketchDocument pieces = routePieces_;
         routePieces_.clear();
         SketchItem track = pendingTrack(points);
+        activeRouteWidth_ = 0.0;
         if (track.points.size() >= 2) pieces.append(track);
         if (pieces.isEmpty() || (pieces.size() == 1 && pieces.first().kind == SketchItem::Kind::Via)) {
             update();
@@ -1837,6 +1969,9 @@ void DesignCanvas::mousePressEvent(QMouseEvent* event) {
         freeAngle_ = event->modifiers() & Qt::ControlModifier;
         const Snap point = snap(position, constraintOrigin());
         if (pending_.isEmpty()) {
+            if (workspace_ == Workspace::Board && tool_ == CanvasTool::Wire) {
+                beginBoardRoute(point.point);
+            }
             pending_.append(point.point);
         } else if (samePoint(point.point, pending_.last())) {
             finishPath();
@@ -2024,6 +2159,15 @@ void DesignCanvas::mouseDoubleClickEvent(QMouseEvent* event) {
         if (hit >= 0 && hit == contextMenuItem_) {
             setSelection({hit});
             deleteSelection();
+        }
+        return;
+    }
+    if (event->button() == Qt::LeftButton && tool_ == CanvasTool::Wire &&
+        workspace_ == Workspace::Board) {
+        if (!pending_.isEmpty()) {
+            const Snap point = snap(event->position(), constraintOrigin());
+            if (!samePoint(point.point, pending_.last())) appendPathPoint(point);
+            setActiveLayer(oppositeSideLayer(routeLayer()));
         }
         return;
     }
@@ -2289,14 +2433,25 @@ void DesignCanvas::paintEvent(QPaintEvent*) {
             if (!pending_.isEmpty()) {
                 preview.kind = tool_ == CanvasTool::Wire ? SketchItem::Kind::Wire
                                                          : SketchItem::Kind::Polyline;
-                preview.points = pending_ + routeTo(hover_.point);
-                preview.points.append(hover_.point);
+                preview.points = board && tool_ == CanvasTool::Wire
+                                     ? routePreviewTo(hover_.point)
+                                     : pending_ + routeTo(hover_.point);
+                if (!board || tool_ != CanvasTool::Wire) preview.points.append(hover_.point);
                 preview.variant = variant_;
                 if (board && tool_ == CanvasTool::Wire) {
-                    // Drawn in the colour of its layer so the active copper layer is obvious.
+                    // Assisted continuation to the netlist target is a dashed ghost, clearly
+                    // distinct from already committed copper.
                     preview.layer = routeLayer();
-                    preview.width = trackWidth_;
-                    drawItem(painter, preview, colors, board, false, false, scale_, map, view);
+                    preview.width = currentTrackWidth();
+                    drawItem(painter, preview, colors, board, false, true, scale_, map, view);
+                    if (const auto target = assistedRouteTarget(hover_.point)) {
+                        const QPointF centre = map(*target);
+                        painter.setPen(strokePen(colors.preview, 1.5, true));
+                        painter.setBrush(Qt::NoBrush);
+                        painter.drawEllipse(centre, 9, 9);
+                        painter.drawLine(centre - QPointF(5, 0), centre + QPointF(5, 0));
+                        painter.drawLine(centre - QPointF(0, 5), centre + QPointF(0, 5));
+                    }
                 } else {
                     hasPreview = true;
                 }
@@ -2439,7 +2594,8 @@ void DesignCanvas::paintEvent(QPaintEvent*) {
                          .arg(!board ? tr("Schematic sheet")
                               : tool_ == CanvasTool::Wire
                                   ? tr("PCB layout  ·  %1  ·  Track %2")
-                                        .arg(boardLayerName(routeLayer()), formatLength(trackWidth_, unit_))
+                                        .arg(boardLayerName(routeLayer()),
+                                             formatLength(currentTrackWidth(), unit_))
                               : tool_ == CanvasTool::Via
                                   ? tr("PCB layout  ·  %1  ·  Via %2 / %3")
                                         .arg(boardLayerName(activeLayer_), formatLength(viaDiameter_, unit_),

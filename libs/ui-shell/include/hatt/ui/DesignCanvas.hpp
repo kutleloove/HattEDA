@@ -136,6 +136,9 @@ public:
     void applyDocumentEdit(const QString& title, const SketchDocument& document);
     void setAirwires(const QVector<QLineF>& lines);
     [[nodiscard]] QVector<QLineF> airwires() const { return airwires_; }
+    // Complete ghost route currently shown by the interactive PCB router. When a route starts on
+    // an unrouted pad this includes the assisted continuation to the matching airwire endpoint.
+    [[nodiscard]] QVector<QPointF> currentRoutePreview() const;
     // Read-only overlay labels such as simulated probe voltages; not part of the document.
     void setAnnotations(const QVector<CanvasAnnotation>& annotations);
     [[nodiscard]] QVector<CanvasAnnotation> annotations() const { return annotations_; }
@@ -228,6 +231,8 @@ private:
                                                     const QVector<QPointF>& targets);
     [[nodiscard]] bool routesWire() const;
     [[nodiscard]] QVector<QPointF> routeTo(QPointF point) const;
+    [[nodiscard]] QVector<QPointF> routePreviewTo(QPointF point) const;
+    [[nodiscard]] std::optional<QPointF> assistedRouteTarget(QPointF cursor) const;
     void appendPathPoint(const Snap& point);
     [[nodiscard]] QPointF snapToGrid(QPointF world) const;
     [[nodiscard]] QPointF constrainAngle(QPointF point, QPointF origin) const;
@@ -247,6 +252,8 @@ private:
     // Copper layer used for tracks, zones and SMD pads.
     [[nodiscard]] BoardLayer routeLayer() const noexcept;
     [[nodiscard]] BoardLayer graphicsLayer() const noexcept;
+    void beginBoardRoute(QPointF at);
+    [[nodiscard]] double currentTrackWidth() const noexcept;
     [[nodiscard]] SketchItem pendingTrack(const QVector<QPointF>& points) const;
     [[nodiscard]] SketchItem pendingVia(QPointF at) const;
     // Undoes the last layer change of the route being drawn; false when there was none.
@@ -279,6 +286,7 @@ private:
     BoardLayer activeLayer_ = BoardLayer::TopCopper;
     int visibleLayers_ = AllLayersMask;
     double trackWidth_ = DefaultTrackWidth;
+    double activeRouteWidth_ = 0.0;
     double viaDiameter_ = DefaultViaDiameter;
     double viaDrill_ = DefaultViaDrill;
     bool pressGesture_ = false;
