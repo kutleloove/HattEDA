@@ -24,6 +24,8 @@ add_library(hatt-ui-shell STATIC
     src/BoardLayerPanel.cpp
     include/hatt/ui/RoutingStyles.hpp
     src/RoutingStyles.cpp
+    include/hatt/ui/PackageFromSelection.hpp
+    src/PackageFromSelection.cpp
 )
 
 add_library(HattEDA::UiShell ALIAS hatt-ui-shell)

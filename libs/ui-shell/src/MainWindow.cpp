@@ -5,6 +5,7 @@
 #include "hatt/ui/LibraryDialogs.hpp"
 
 #include "hatt/ui/DesignCanvas.hpp"
+#include "hatt/ui/PackageFromSelection.hpp"
 #include "hatt/ui/ProjectSafety.hpp"
 #include "hatt/ui/RoutingStyles.hpp"
 #include "hatt/ui/SketchCircuit.hpp"
@@ -473,6 +474,11 @@ void MainWindow::showCanvasContextMenu(DesignCanvas* canvas, QPoint position, in
         menu->addAction(actions_.value(QStringLiteral("hatteda.action.duplicate")));
         menu->addAction(actions_.value(QStringLiteral("hatteda.action.array")));
         menu->addAction(actions_.value(QStringLiteral("hatteda.action.delete")));
+        if (canvas->workspace() == Workspace::Board) {
+            menu->addSeparator();
+            menu->addAction(actions_.value(QStringLiteral("hatteda.action.make-package")));
+            menu->addAction(actions_.value(QStringLiteral("hatteda.action.decompose")));
+        }
     } else {
         menu->addAction(actions_.value(QStringLiteral("hatteda.action.undo")));
         menu->addAction(actions_.value(QStringLiteral("hatteda.action.redo")));
@@ -858,6 +864,16 @@ void MainWindow::createActions() {
     canvasAction("hatteda.action.fit", tr("Fit to design"), "fit",
                  {QKeySequence(QStringLiteral("Home")), QKeySequence(QStringLiteral("Ctrl+0"))},
                  [](DesignCanvas* canvas) { canvas->zoomToFit(); });
+
+    // Proteus ARES library commands for Kayra (PackageFromSelection.hpp).
+    auto* makePackageAction = makeAction(QStringLiteral("hatteda.action.make-package"), tr("Make package..."),
+                                         QStringLiteral("package"));
+    makePackageAction->setToolTip(tr("Store the selected pads and silkscreen as a footprint in this project"));
+    connect(makePackageAction, &QAction::triggered, this, &MainWindow::makePackage);
+    auto* decomposeAction =
+        makeAction(QStringLiteral("hatteda.action.decompose"), tr("Decompose"), QStringLiteral("pad"));
+    decomposeAction->setToolTip(tr("Break the selected footprints into editable pads and silkscreen lines"));
+    connect(decomposeAction, &QAction::triggered, this, &MainWindow::decomposeSelection);
 
     struct AlignSpec {
         const char* id;
@@ -1335,6 +1351,8 @@ void MainWindow::createMenus() {
     connect(createFootprint, &QAction::triggered, this, [this] {
         if (shellPages_->currentIndex() == 1) newFootprint();
     });
+    designMenu->addAction(actions_.value(QStringLiteral("hatteda.action.make-package")));
+    designMenu->addAction(actions_.value(QStringLiteral("hatteda.action.decompose")));
     designMenu->addSeparator();
     designMenu->addAction(actions_.value(QStringLiteral("hatteda.action.run-checks")));
 
@@ -1414,7 +1432,19 @@ void MainWindow::rebuildObjectSelector() {
             break;
         case ToolMode::Package:
             // Proteus ARES package mode: any footprint, without a schematic part.
-            if (workspace == Workspace::Board) addSymbols(SymbolCategory::Component);
+            if (workspace == Workspace::Board) {
+                addSymbols(SymbolCategory::Component);
+                // Then the project's own footprints (Make package, New footprint).
+                for (const auto& footprint : library_.customFootprints) {
+                    const auto* symbol = findSymbol(footprint.id);
+                    if (symbol == nullptr) continue;
+                    auto* item = new QListWidgetItem(symbolIcon(symbol->id, palette()), symbolDisplayName(*symbol),
+                                                     objectSelector_);
+                    item->setData(ToolRole, static_cast<int>(CanvasTool::Symbol));
+                    item->setData(VariantRole, symbol->id);
+                    item->setToolTip(tr("Project footprint"));
+                }
+            }
             break;
         case ToolMode::Connect:
             if (workspace == Workspace::Board) {
@@ -1751,6 +1781,112 @@ void MainWindow::newFootprint() {
     updateProjectState();
 }
 
+void MainWindow::makePackage() {
+    auto* canvas = editingCanvas();
+    if (canvas == nullptr || canvas->workspace() != Workspace::Board) return;
+    const QList<int> selection = canvas->selection();
+    if (extractPackage(canvas->document(), selection, PackageOrigin::FirstPad).footprint.pads.isEmpty()) {
+        QMessageBox::information(this, tr("Make package"),
+                                 tr("Select at least one pad. Place pads with Pad mode and draw the outline "
+                                    "on Top silk, then select them together."));
+        return;
+    }
+
+    QDialog dialog(this);
+    dialog.setObjectName(QStringLiteral("MakePackageDialog"));
+    dialog.setWindowTitle(tr("Make package"));
+    auto* form = new QFormLayout(&dialog);
+    auto* name = new QLineEdit(&dialog);
+    name->setObjectName(QStringLiteral("PackageName"));
+    name->setPlaceholderText(tr("e.g. SOT23-5 or TERMINAL-2P"));
+    form->addRow(tr("Package name"), name);
+    auto* origin = new QComboBox(&dialog);
+    origin->setObjectName(QStringLiteral("PackageOrigin"));
+    origin->addItem(tr("Pad 1"), static_cast<int>(PackageOrigin::FirstPad));
+    origin->addItem(tr("Centre of the pads"), static_cast<int>(PackageOrigin::PadCentre));
+    form->addRow(tr("Origin"), origin);
+    auto* replace = new QCheckBox(tr("Replace the selection with the new package"), &dialog);
+    replace->setObjectName(QStringLiteral("PackageReplace"));
+    replace->setChecked(true);
+    form->addRow(replace);
+    auto* summary = new QLabel(&dialog);
+    summary->setObjectName(QStringLiteral("PackageSummary"));
+    summary->setWordWrap(true);
+    form->addRow(summary);
+    auto* validation = new QLabel(&dialog);
+    validation->setObjectName(QStringLiteral("PackageValidation"));
+    validation->setWordWrap(true);
+    form->addRow(validation);
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+    form->addRow(buttons);
+
+    auto extraction = [&] {
+        return extractPackage(canvas->document(), selection,
+                              static_cast<PackageOrigin>(origin->currentData().toInt()));
+    };
+    auto refresh = [&] {
+        const PackageExtraction result = extraction();
+        QStringList notes{tr("%n pad(s)", nullptr, static_cast<int>(result.footprint.pads.size())),
+                          tr("%n silkscreen shape(s)", nullptr, static_cast<int>(result.footprint.shapes.size()))};
+        if (result.renumbered) notes << tr("pads renumbered 1..%1").arg(result.footprint.pads.size());
+        if (result.mirrored) notes << tr("drawn on the bottom side, stored as seen from the top");
+        if (result.ignoredItems > 0) {
+            notes << tr("%n selected item(s) ignored (only pads, vias and silkscreen graphics are used)", nullptr,
+                        result.ignoredItems);
+        }
+        summary->setText(notes.join(QStringLiteral(" · ")));
+
+        QString problem;
+        const QString trimmed = name->text().trimmed();
+        if (trimmed.isEmpty()) {
+            problem = tr("Enter a package name.");
+        } else {
+            for (const auto& footprint : library_.customFootprints) {
+                if (footprint.name.compare(trimmed, Qt::CaseInsensitive) == 0) {
+                    problem = tr("The project already has a footprint named %1.").arg(footprint.name);
+                }
+            }
+        }
+        if (problem.isEmpty()) problem = validateExplicitFootprint(result.footprint);
+        validation->setText(problem);
+        buttons->button(QDialogButtonBox::Ok)->setEnabled(problem.isEmpty());
+    };
+    connect(name, &QLineEdit::textChanged, &dialog, refresh);
+    connect(origin, &QComboBox::currentIndexChanged, &dialog, refresh);
+    connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    refresh();
+    if (dialog.exec() != QDialog::Accepted) return;
+
+    const PackageExtraction result = extraction();
+    FootprintDefinition footprint = result.footprint;
+    footprint.id = newCustomFootprintId();
+    footprint.name = name->text().trimmed();
+    library_.customFootprints.append(footprint);
+    registerProjectLibrary(library_);
+    libraryModified_ = true;
+    if (replace->isChecked()) {
+        canvas->applyDocumentEdit(tr("Make package %1").arg(footprint.name),
+                                  replaceWithPackage(canvas->document(), result, footprint.id));
+    }
+    statusBar()->showMessage(tr("Created package %1; place it from Package mode").arg(footprint.name), 5000);
+    if (toolMode_ == ToolMode::Package) rebuildObjectSelector();
+    updateProjectState();
+}
+
+void MainWindow::decomposeSelection() {
+    auto* canvas = editingCanvas();
+    if (canvas == nullptr || canvas->workspace() != Workspace::Board) return;
+    SketchDocument document = canvas->document();
+    const int count = decomposePackages(document, canvas->selection());
+    if (count == 0) {
+        statusBar()->showMessage(tr("Select a footprint to decompose"), 4000);
+        return;
+    }
+    canvas->applyDocumentEdit(tr("Decompose"), document);
+    statusBar()->showMessage(tr("Decomposed %n footprint(s) into pads and silkscreen", nullptr, count), 4000);
+}
+
 void MainWindow::pickDevices() {
     QDialog dialog(this);
     dialog.setObjectName(QStringLiteral("PickDevicesDialog"));
@@ -1942,6 +2078,9 @@ void MainWindow::updateEditActions() {
                            "hatteda.align.top", "hatteda.align.vcenter", "hatteda.align.bottom"}) {
         enable(id, selected >= 2);
     }
+    const bool board = canvas != nullptr && canvas->workspace() == Workspace::Board;
+    enable("hatteda.action.make-package", board && selected > 0);
+    enable("hatteda.action.decompose", board && selected > 0);
     enable("hatteda.align.distribute-h", selected >= 3);
     enable("hatteda.align.distribute-v", selected >= 3);
 }

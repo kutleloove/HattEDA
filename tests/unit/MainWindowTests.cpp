@@ -78,6 +78,7 @@ private slots:
     void probeModeIsUnavailableInKayra();
     void kayraPadViaPackageModesAndLayerSelector();
     void userTrackStylesAreListedEditedAndDeleted();
+    void makePackageStoresFootprintAndDecomposeUndoes();
     void undoFollowsActiveWorkspaceAndKeepsTool();
 
     // Automated regression coverage supporting issue #2; not manual verification.
@@ -834,6 +835,77 @@ void MainWindowTests::userTrackStylesAreListedEditedAndDeleted() {
     action(window, "hatteda.tool.select")->trigger();
     QVERIFY(bar->isHidden());
     QSettings().remove(QStringLiteral("editor/board"));
+}
+
+void MainWindowTests::makePackageStoresFootprintAndDecomposeUndoes() {
+    using hatt::ui::SketchItem;
+    hatt::ui::MainWindow window;
+    QVERIFY(showActive(window));
+    activateEditor(window);
+    window.showKayraWorkspace();
+    auto* board = window.activeCanvas();
+
+    hatt::ui::SketchDocument drawn;
+    for (int i = 0; i < 2; ++i) {
+        SketchItem pad;
+        pad.kind = SketchItem::Kind::Pad;
+        pad.points = {QPointF(10.0 + 2.54 * i, 10.0)};
+        pad.pad.number = i + 1;
+        pad.pad.shape = hatt::ui::PadShape::Round;
+        pad.pad.width = pad.pad.height = 1.6;
+        pad.pad.drillDiameter = 0.8;
+        pad.pad.layers = hatt::ui::CopperLayerMask;
+        drawn.append(pad);
+    }
+    SketchItem outline;
+    outline.kind = SketchItem::Kind::Rectangle;
+    outline.points = {QPointF(8.5, 8.5), QPointF(14.5, 11.5)};
+    outline.layer = hatt::ui::BoardLayer::TopSilk;
+    drawn.append(outline);
+    board->applyDocumentEdit(QStringLiteral("Draw"), drawn);
+    board->selectAll();
+    QVERIFY(action(window, "hatteda.action.make-package")->isEnabled());
+
+    bool dialogChecked = false;
+    QTimer::singleShot(0, [&] {
+        auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+        QVERIFY(dialog);
+        QCOMPARE(dialog->objectName(), QStringLiteral("MakePackageDialog"));
+        auto* ok = dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Ok);
+        QVERIFY(!ok->isEnabled()); // no name yet
+        QVERIFY(dialog->findChild<QLabel*>(QStringLiteral("PackageSummary"))->text().contains(QStringLiteral("2")));
+        dialog->findChild<QLineEdit*>(QStringLiteral("PackageName"))->setText(QStringLiteral("CONN-2"));
+        QVERIFY(ok->isEnabled());
+        dialogChecked = true;
+        ok->click();
+    });
+    action(window, "hatteda.action.make-package")->trigger();
+    QVERIFY(dialogChecked);
+    QCOMPARE(board->document().size(), 1);
+    const SketchItem package = board->document().first();
+    QCOMPARE(package.kind, SketchItem::Kind::Symbol);
+    const auto* symbol = hatt::ui::findSymbol(package.variant);
+    QVERIFY(symbol != nullptr);
+    QCOMPARE(hatt::ui::symbolDisplayName(*symbol), QStringLiteral("CONN-2"));
+    QCOMPARE(hatt::ui::itemPads(package).size(), 2);
+    QVERIFY(window.isWindowModified());
+
+    // Package mode offers the new footprint.
+    action(window, "hatteda.tool.package")->trigger();
+    auto* selector = window.findChild<QListWidget*>(QStringLiteral("ObjectSelector"));
+    bool listed = false;
+    for (int row = 0; row < selector->count(); ++row) {
+        listed = listed || selector->item(row)->data(Qt::UserRole + 1).toString() == package.variant;
+    }
+    QVERIFY(listed);
+
+    action(window, "hatteda.tool.select")->trigger();
+    board->selectItem(0);
+    action(window, "hatteda.action.decompose")->trigger();
+    QCOMPARE(board->document().size(), 3);
+    QCOMPARE(board->document().first().kind, SketchItem::Kind::Pad);
+    action(window, "hatteda.action.undo")->trigger();
+    QCOMPARE(board->document().size(), 1);
 }
 
 void MainWindowTests::undoFollowsActiveWorkspaceAndKeepsTool() {

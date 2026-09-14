@@ -474,4 +474,31 @@ Son projeler listesinden kaldırılsın mı?</translation></message>
     <message><source>PCB layout  ·  %1  ·  Track %2</source><translation>PCB yerleşimi  ·  %1  ·  Yol %2</translation></message>
     <message><source>PCB layout  ·  %1  ·  Via %2 / %3</source><translation>PCB yerleşimi  ·  %1  ·  Via %2 / %3</translation></message>
   </context>
+  <context>
+    <name>hatt::ui::MainWindow</name>
+    <message><source>Make package...</source><translation>Kılıf oluştur (Make Package)...</translation></message>
+    <message><source>Store the selected pads and silkscreen as a footprint in this project</source><translation>Seçili pad ve serigrafiyi bu projede bir kılıf olarak kaydet</translation></message>
+    <message><source>Decompose</source><translation>Parçala (Decompose)</translation></message>
+    <message><source>Break the selected footprints into editable pads and silkscreen lines</source><translation>Seçili kılıfları düzenlenebilir pad ve serigrafi çizgilerine ayır</translation></message>
+    <message><source>Make package</source><translation>Kılıf oluştur</translation></message>
+    <message><source>Select at least one pad. Place pads with Pad mode and draw the outline on Top silk, then select them together.</source><translation>En az bir pad seçin. Padleri Pad modu ile yerleştirin, dış çizgiyi Üst serigrafi katmanına çizin, sonra hepsini birlikte seçin.</translation></message>
+    <message><source>e.g. SOT23-5 or TERMINAL-2P</source><translation>örn. SOT23-5 veya KLEMENS-2P</translation></message>
+    <message><source>Package name</source><translation>Kılıf adı</translation></message>
+    <message><source>Pad 1</source><translation>Pad 1</translation></message>
+    <message><source>Centre of the pads</source><translation>Padlerin merkezi</translation></message>
+    <message><source>Origin</source><translation>Orijin</translation></message>
+    <message><source>Replace the selection with the new package</source><translation>Seçimi yeni kılıfla değiştir</translation></message>
+    <message numerus="yes"><source>%n pad(s)</source><translation><numerusform>%n pad</numerusform></translation></message>
+    <message numerus="yes"><source>%n silkscreen shape(s)</source><translation><numerusform>%n serigrafi şekli</numerusform></translation></message>
+    <message><source>pads renumbered 1..%1</source><translation>padler 1..%1 olarak yeniden numaralandı</translation></message>
+    <message><source>drawn on the bottom side, stored as seen from the top</source><translation>alt yüzde çizildi, üstten görünüşüyle kaydedildi</translation></message>
+    <message numerus="yes"><source>%n selected item(s) ignored (only pads, vias and silkscreen graphics are used)</source><translation><numerusform>seçili %n öğe yok sayıldı (yalnız pad, via ve serigrafi çizimleri kullanılır)</numerusform></translation></message>
+    <message><source>Enter a package name.</source><translation>Bir kılıf adı girin.</translation></message>
+    <message><source>The project already has a footprint named %1.</source><translation>Projede %1 adında bir kılıf zaten var.</translation></message>
+    <message><source>Make package %1</source><translation>%1 kılıfını oluştur</translation></message>
+    <message><source>Created package %1; place it from Package mode</source><translation>%1 kılıfı oluşturuldu; Kılıf modundan yerleştirebilirsiniz</translation></message>
+    <message><source>Select a footprint to decompose</source><translation>Parçalamak için bir kılıf seçin</translation></message>
+    <message numerus="yes"><source>Decomposed %n footprint(s) into pads and silkscreen</source><translation><numerusform>%n kılıf pad ve serigrafiye ayrıldı</numerusform></translation></message>
+    <message><source>Project footprint</source><translation>Proje kılıfı</translation></message>
+  </context>
 </TS>

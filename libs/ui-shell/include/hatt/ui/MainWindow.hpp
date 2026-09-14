@@ -97,6 +97,9 @@ private:
     // Kayra connect / via modes: the user's own track and via styles (RoutingStyles.hpp).
     void editRoutingStyle(bool create);
     void deleteRoutingStyle();
+    // Kayra: Proteus ARES Make Package / Decompose on the board selection (PackageFromSelection.hpp).
+    void makePackage();
+    void decomposeSelection();
     void workspaceChanged();
     void applySnapSettings();
     void setGridLevel(int level);
