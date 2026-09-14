@@ -47,6 +47,16 @@ void add(CheckReport& report, CheckSeverity severity, Workspace workspace, const
     report.violations.append(violation);
 }
 
+ClearanceObject clearanceObject(ConductorKind kind) {
+    switch (kind) {
+    case ConductorKind::Track: return ClearanceObject::Trace;
+    case ConductorKind::Pad:
+    case ConductorKind::Via: return ClearanceObject::Pad;
+    case ConductorKind::Zone: return ClearanceObject::Graphic;
+    }
+    return ClearanceObject::Trace;
+}
+
 double pointSegmentDistance(QPointF p, QPointF a, QPointF b) {
     const QPointF ab = b - a;
     const double length2 = QPointF::dotProduct(ab, ab);
@@ -227,14 +237,20 @@ CheckReport runDesignRuleCheck(const SketchDocument& schematic, const SketchDocu
 
     // Zones with a net are poured (ZoneFill.hpp, ADR-0009) and checked as their fill; zones without
     // a pour stay solid polygons in the copper model.
-    const QVector<ZoneFillResult> pours = pourZones(schematic, board, rules.clearance, rules.boardEdgeClearance);
+    ZonePourOptions pourOptions;
+    pourOptions.clearance = clearanceBetween(rules, CopperLayerMask, ClearanceObject::Graphic, ClearanceObject::Pad);
+    pourOptions.boardEdgeClearance = edgeClearance(rules, CopperLayerMask);
+    pourOptions.thermalReliefs = rules.defaults.thermalRelief;
+    pourOptions.thermalGap = std::max(rules.defaults.thermalGap, pourOptions.clearance);
+    pourOptions.spokeWidth = rules.defaults.spokeWidth;
+    const QVector<ZoneFillResult> pours = pourZones(schematic, board, pourOptions);
     QSet<QString> poured;
     for (const auto& pour : pours) poured.insert(pour.zoneId);
     SketchDocument copperBoard;
     for (const auto& item : board) {
         if (!poured.contains(item.id)) copperBoard.append(item);
     }
-    const BoardCopperModel model = buildBoardCopperModel(schematic, copperBoard, rules.clearance);
+    const BoardCopperModel model = buildBoardCopperModel(schematic, copperBoard, largestClearance(rules));
     const auto& copper = model.conductors;
     const int count = copper.size();
     if (!model.netsKnown) {
@@ -264,7 +280,6 @@ CheckReport runDesignRuleCheck(const SketchDocument& schematic, const SketchDocu
         std::sort(nets.begin(), nets.end());
         return nets;
     };
-    const double pourTolerance = std::max(0.02, rules.clearance * 0.1);
     for (const auto& pour : pours) {
         const int layer = layerBit(pour.layer);
         const QRectF fillBounds = pour.fill.boundingRect();
@@ -272,15 +287,17 @@ CheckReport runDesignRuleCheck(const SketchDocument& schematic, const SketchDocu
         QStringList ids{pour.zoneId};
         for (int i = 0; i < count; ++i) {
             if ((copper[i].layers & layer) == 0) continue;
-            const QRectF reach = copper[i].bounds.adjusted(-rules.clearance, -rules.clearance, rules.clearance, rules.clearance);
+            const double required = clearanceBetween(rules, layer, ClearanceObject::Graphic, clearanceObject(copper[i].kind));
+            const double pourTolerance = std::max(0.02, required * 0.1);
+            const QRectF reach = copper[i].bounds.adjusted(-required, -required, required, required);
             if (!fillBounds.intersects(reach)) continue;
             bool touches = false;
             bool tooClose = false;
             for (const auto& shape : copper[i].shapes) {
                 touches = touches || pour.fill.intersects(copperShapePath(shape));
-                // The pour subtracts `clearance` from other nets; allow a tolerance for the curve
+                // The pour subtracts the clearance from other nets; allow a tolerance for the curve
                 // flattening of grown round outlines (stroker offsets are approximate).
-                tooClose = tooClose || pour.fill.intersects(copperShapePath(shape, std::max(0.0, rules.clearance - pourTolerance)));
+                tooClose = tooClose || pour.fill.intersects(copperShapePath(shape, std::max(0.0, required - pourTolerance)));
             }
             if (touches) {
                 touched.insert(group[i]);
@@ -290,7 +307,7 @@ CheckReport runDesignRuleCheck(const SketchDocument& schematic, const SketchDocu
                 const bool sameNet = nets.size() == 1 && netName(nets.first()) == pour.net;
                 if (!sameNet) {
                     add(report, E, B, "drc.clearance",
-                        tr("Clearance between %1 and %2 is below %3.").arg(tr("copper zone"), copper[i].name, millimetres(rules.clearance)),
+                        tr("Clearance between %1 and %2 is below %3.").arg(tr("copper zone"), copper[i].name, millimetres(required)),
                         copper[i].anchor, {pour.zoneId, copper[i].itemId});
                 }
             }
@@ -319,17 +336,49 @@ CheckReport runDesignRuleCheck(const SketchDocument& schematic, const SketchDocu
         }
     }
 
-    // Per conductor: widths, holes and unpoured zones.
-    for (const auto& part : copper) {
+    // Net classes of schematic nets (explicit, else POWER/SIGNAL).
+    const QVector<NetClass> netClasses = effectiveNetClasses(rules);
+    const QHash<QString, QString> classOfNet = model.netsKnown ? netClassAssignments(rules, schematic) : QHash<QString, QString>{};
+    auto classFor = [&](int index) -> const NetClass* {
+        const QVector<int> nets = groupNets(group[index]);
+        if (nets.size() != 1) return nullptr;
+        const QString name = classOfNet.value(netName(nets.first()));
+        for (const auto& netClass : netClasses) {
+            if (netClass.name == name) return &netClass;
+        }
+        return nullptr;
+    };
+
+    // Per conductor: widths, holes, net classes and unpoured zones.
+    for (int index = 0; index < count; ++index) {
+        const BoardConductor& part = copper[index];
         switch (part.kind) {
-        case ConductorKind::Track:
+        case ConductorKind::Track: {
+            const CopperShape& first = part.shapes.first();
+            const QPointF middle = (first.a + first.b) / 2.0;
             if (part.width + 1e-9 < rules.minTrackWidth) {
-                const CopperShape& first = part.shapes.first();
                 add(report, E, B, "drc.track-width",
                     tr("Track width %1 is below the minimum %2.").arg(millimetres(part.width), millimetres(rules.minTrackWidth)),
-                    (first.a + first.b) / 2.0, {part.itemId});
+                    middle, {part.itemId});
+            }
+            if (const NetClass* netClass = classFor(index)) {
+                // A neck may narrow the class trace near pads, but never below the neck width.
+                const double required = netClass->neckWidth > 0 ? netClass->neckWidth : netClass->traceWidth;
+                const QString net = netName(groupNets(group[index]).first());
+                if (part.width + 1e-9 < required) {
+                    add(report, W, B, "drc.net-class-width",
+                        tr("Track on net %1 is %2 wide; the %3 net class needs %4.")
+                            .arg(net, millimetres(part.width), netClass->name, millimetres(required)),
+                        middle, {part.itemId});
+                }
+                if ((part.layers & ~netClass->layers) != 0) {
+                    add(report, W, B, "drc.net-class-layer",
+                        tr("Track on net %1 uses a copper layer the %2 net class does not allow.").arg(net, netClass->name),
+                        middle, {part.itemId});
+                }
             }
             break;
+        }
         case ConductorKind::Pad:
         case ConductorKind::Via:
             if (part.pad.drill > 0) {
@@ -397,10 +446,13 @@ CheckReport runDesignRuleCheck(const SketchDocument& schematic, const SketchDocu
         const QVector<int> netsA = groupNets(ra);
         // Unrouted pads of the same net may sit close together.
         if (netsA.size() == 1 && netsA == groupNets(rb)) continue;
+        const double required = clearanceBetween(rules, copper[a].layers & copper[b].layers, clearanceObject(copper[a].kind),
+                                                 clearanceObject(copper[b].kind));
         QPointF where;
         const double d = conductorGap(copper[a], copper[b], &where);
+        if (d + 1e-9 >= required) continue;
         add(report, E, B, "drc.clearance",
-            tr("Clearance %1 between %2 and %3 is below %4.").arg(millimetres(d), copper[a].name, copper[b].name, millimetres(rules.clearance)),
+            tr("Clearance %1 between %2 and %3 is below %4.").arg(millimetres(d), copper[a].name, copper[b].name, millimetres(required)),
             where, {copper[a].itemId, copper[b].itemId});
     }
 
@@ -417,9 +469,9 @@ CheckReport runDesignRuleCheck(const SketchDocument& schematic, const SketchDocu
             }
             if (!inside) {
                 add(report, E, B, "drc.board-edge", tr("%1 is outside the board outline.").arg(part.name), part.anchor, {part.itemId});
-            } else if (nearest + 1e-9 < rules.boardEdgeClearance) {
+            } else if (const double required = edgeClearance(rules, part.layers); nearest + 1e-9 < required) {
                 add(report, E, B, "drc.board-edge",
-                    tr("%1 is %2 from the board edge; the minimum is %3.").arg(part.name, millimetres(nearest), millimetres(rules.boardEdgeClearance)),
+                    tr("%1 is %2 from the board edge; the minimum is %3.").arg(part.name, millimetres(nearest), millimetres(required)),
                     part.anchor, {part.itemId});
             }
         }

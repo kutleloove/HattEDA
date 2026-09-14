@@ -24,11 +24,11 @@ SketchItem outline(double w, double h) {
     return item;
 }
 
-SketchItem track(QVector<QPointF> points) {
+SketchItem track(QVector<QPointF> points, double width) {
     SketchItem item;
     item.kind = SketchItem::Kind::Wire;
     item.layer = BoardLayer::TopCopper;
-    item.width = 0.25;
+    item.width = width;
     item.points = std::move(points);
     return item;
 }
@@ -91,9 +91,14 @@ private slots:
             bottom = std::max(bottom, p.y());
         }
         // V1+ to R1.1 below the row, R1.2 to R2.1 just above it, R2.2 to V1- further above.
-        board.append(track({r1a, {r1a.x(), bottom + 3}, {v1a.x(), bottom + 3}, v1a}));
-        board.append(track({r1b, {r1b.x(), top - 2}, {r2a.x(), top - 2}, r2a}));
-        board.append(track({r2b, {r2b.x(), top - 4}, {v1b.x(), top - 4}, v1b}));
+        // Widths follow the default net classes: SIGNAL 0.3048 mm, POWER (ground) 0.635 mm.
+        const DesignRules defaults;
+        const double signal = netClassForNet(defaults, schematic, QStringLiteral("N1")).traceWidth;
+        const double power = netClassForNet(defaults, schematic, QStringLiteral("0")).traceWidth;
+        QVERIFY(power > signal);
+        board.append(track({r1a, {r1a.x(), bottom + 3}, {v1a.x(), bottom + 3}, v1a}, signal));
+        board.append(track({r1b, {r1b.x(), top - 2}, {r2a.x(), top - 2}, r2a}, signal));
+        board.append(track({r2b, {r2b.x(), top - 4}, {v1b.x(), top - 4}, v1b}, power));
         drc = runDesignRuleCheck(schematic, board, DesignRules{});
         QVERIFY2(drc.violations.isEmpty(), qPrintable(describe(drc).join(QLatin1Char('\n'))));
         const BoardGuidance guidance = boardGuidance(schematic, board);

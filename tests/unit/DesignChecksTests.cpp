@@ -168,6 +168,50 @@ private slots:
         QVERIFY(!validateDesignRules(rules).isEmpty());
     }
 
+    void drcUsesRegionRulesAndNetClasses() {
+        DesignRules rules;
+        ClearanceRule board;
+        board.traceTrace = 0.2;
+        ClearanceRule bottom = board;
+        bottom.name = QStringLiteral("BOTTOM");
+        bottom.region = RuleRegion::BottomCopper;
+        bottom.traceTrace = 0.5;
+        rules.clearanceRules = {board, bottom};
+        // Two tracks 0.3 mm apart (edge to edge): fine on top, too close on bottom.
+        const SketchDocument topPair{outline(50, 30), track({{5, 5}, {20, 5}}, 0.3), track({{5, 5.6}, {20, 5.6}}, 0.3)};
+        QCOMPARE(withRule(runDesignRuleCheck({}, topPair, rules), "drc.clearance").size(), 0);
+        SketchDocument bottomPair = topPair;
+        bottomPair[1].layer = bottomPair[2].layer = BoardLayer::BottomCopper;
+        const auto violations = withRule(runDesignRuleCheck({}, bottomPair, rules), "drc.clearance");
+        QCOMPARE(violations.size(), 1);
+        QVERIFY(violations.first().message.contains(QStringLiteral("0.500")));
+
+        // Net classes: the divider's ground track narrower than POWER, a signal track on a layer
+        // its class forbids.
+        const SketchDocument schematic = dcDividerExample();
+        SketchDocument placed = transferToBoard(schematic, {outline(80, 60)}).document;
+        const auto r2 = *std::find_if(placed.begin(), placed.end(), [](const SketchItem& i) { return i.label == QLatin1String("R2"); });
+        const auto r1 = *std::find_if(placed.begin(), placed.end(), [](const SketchItem& i) { return i.label == QLatin1String("R1"); });
+        const QPointF ground = itemPads(r2)[1].center;
+        const QPointF midpoint = itemPads(r1)[1].center;
+        placed.append(track({ground, ground + QPointF(0, 6)}, 0.3048));
+        placed.append(track({midpoint, midpoint + QPointF(0, 6)}, 0.3048));
+        CheckReport report = runDesignRuleCheck(schematic, placed, DesignRules{});
+        const auto width = withRule(report, "drc.net-class-width");
+        QCOMPARE(width.size(), 1);
+        QVERIFY(width.first().message.contains(PowerNetClass));
+
+        DesignRules topOnly;
+        NetClass signal = effectiveNetClasses(topOnly).last();
+        signal.layers = layerBit(BoardLayer::BottomCopper);
+        NetClass power = effectiveNetClasses(topOnly).first();
+        power.traceWidth = 0.2;
+        topOnly.netClasses = {power, signal};
+        report = runDesignRuleCheck(schematic, placed, topOnly);
+        QCOMPARE(withRule(report, "drc.net-class-width").size(), 0);
+        QCOMPARE(withRule(report, "drc.net-class-layer").size(), 1);
+    }
+
     void designRulesJsonRoundTrip() {
         DesignRules rules;
         QJsonObject plain = designRulesToJson(rules);

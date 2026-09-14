@@ -48,7 +48,10 @@ struct CheckReport {
 //  drc.track-width       Error    a track narrower than minTrackWidth
 //  drc.drill             Error    a pad or via hole smaller than minDrill
 //  drc.annular-ring      Error    copper around a hole narrower than minAnnularRing
-//  drc.clearance         Error    copper of different nets closer than `clearance` on a shared layer
+//  drc.clearance         Error    copper of different nets closer than the clearance rule for the
+//                                 shared layers and object kinds (pad-pad, pad-trace, trace-trace, graphic)
+//  drc.net-class-width   Warning  a track narrower than its net class trace (or neck) width
+//  drc.net-class-layer   Warning  a track on a copper layer its net class does not allow
 //  drc.short             Error    copper joining different schematic nets
 //  drc.zone-short        Error    a copper zone (solid, not poured) joining different schematic nets
 //  drc.zone-unfilled     Warning  every copper zone: it is solid copper without clearance
