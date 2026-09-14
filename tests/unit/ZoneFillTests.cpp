@@ -41,6 +41,8 @@ class ZoneFillTests final : public QObject {
 private slots:
     void otherNetsAreKeptClear();
     void ownNetStaysConnected();
+    void ownPadsGetThermalReliefs();
+    void islandsWithoutOwnCopperAreRemoved();
     void zonesWithoutNetAreNotPoured();
     void boardEdgeClearanceShrinksThePour();
     void contoursCarryHoleDepth();
@@ -67,6 +69,43 @@ void ZoneFillTests::ownNetStaysConnected() {
     const auto fills = fillZones(board, obstacles, 0.2, 0.3);
     QVERIFY(fills.first().fill.contains(QPointF(10, 10)));
     QVERIFY(fills.first().fill.contains(QPointF(11.15, 10)));
+}
+
+void ZoneFillTests::ownPadsGetThermalReliefs() {
+    const SketchDocument board{zoneItem(QStringLiteral("GND"), {0, 0, 20, 20}), smdPad({10, 10}, 2.0)};
+    auto obstacles = boardCopperObstacles(board);
+    for (auto& obstacle : obstacles) obstacle.net = QStringLiteral("GND");
+    ZonePourOptions options;
+    options.clearance = 0.2;
+    options.thermalGap = 0.5;
+    options.spokeWidth = 0.4;
+    const QPainterPath fill = fillZones(board, obstacles, options).first().fill;
+    QVERIFY(fill.contains(QPointF(11.25, 10)));     // spoke across the gap on the pad axis
+    QVERIFY(fill.contains(QPointF(10, 8.75)));
+    QVERIFY(!fill.contains(QPointF(11.25, 11.25))); // gap corner, off the spokes
+    QVERIFY(!fill.contains(QPointF(11.25, 10.5)));
+    QVERIFY(fill.contains(QPointF(12.0, 12.0)));    // pour beyond the gap
+}
+
+void ZoneFillTests::islandsWithoutOwnCopperAreRemoved() {
+    // A track of another net splits the zone; only the left half holds a GND pad.
+    SketchItem wall;
+    wall.kind = SketchItem::Kind::Wire;
+    wall.layer = BoardLayer::TopCopper;
+    wall.width = 1.0;
+    wall.points = {{10, -5}, {10, 25}};
+    const SketchDocument board{zoneItem(QStringLiteral("GND"), {0, 0, 20, 20}), smdPad({4, 10}, 1.5), wall};
+    auto obstacles = boardCopperObstacles(board);
+    for (auto& obstacle : obstacles) {
+        if (obstacle.itemId == board[1].id) obstacle.net = QStringLiteral("GND");
+    }
+    ZonePourOptions options;
+    const QPainterPath kept = fillZones(board, obstacles, options).first().fill;
+    QVERIFY(kept.contains(QPointF(2, 2)));
+    QVERIFY(!kept.contains(QPointF(15, 15)));
+
+    options.removeIslands = false;
+    QVERIFY(fillZones(board, obstacles, options).first().fill.contains(QPointF(15, 15)));
 }
 
 void ZoneFillTests::zonesWithoutNetAreNotPoured() {
