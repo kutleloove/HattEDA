@@ -40,7 +40,7 @@ Aktif çizim/yerleştirme/taşıma sırasında sağ tık taslağı iptal eder ve
 
 ## Simülasyon başlat/durdur (#22)
 
-Komut çubuğundaki oynat düğmesi veya **Circuit → Start simulation** (F12) canlı simülasyonu başlatır. Probe modundaki **Voltage probe** bir tele veya pine konduğunda gerilimi şemada etiket olarak görünür. Simülasyon çalışırken değer değiştirmek, parça eklemek veya taşımak devreyi yeniden çözer. Durdur düğmesi (Shift+F12) etiketleri kaldırır. Hata olursa sonuç sekmesi açılır ve simülasyon durur. DC modelinde kondansatör açık devre, bobin kısa devre; bağımsız akım kaynağı KCL yön işaretiyle çalışan gerçek bir modeldir. Her katalog kaydı kararlı bir model kimliğine veya açık `none` durumuna sahiptir. Çözücünün desteklemediği nonlinear/transient model kimlikleri sessizce atlanmaz, kullanıcıya sınırlama hatası verir.
+Komut çubuğundaki oynat düğmesi veya **Circuit → Start simulation** (F12) canlı simülasyonu başlatır. Probe modundaki **Voltage probe** bir tele veya pine konduğunda gerilimi şemada etiket olarak görünür. Simülasyon çalışırken değer değiştirmek, parça eklemek veya taşımak devreyi yeniden çözer. Durdur düğmesi (Shift+F12) etiketleri kaldırır. Hata olursa sonuç sekmesi açılır ve simülasyon durur. Ground terminali varsa 0 V referansıdır; yoksa Proteus'taki gibi ilk bağımsız gerilim kaynağının negatif neti otomatik referans seçilir. DC modelinde kondansatör açık devre, bobin kısa devre; bağımsız akım kaynağı KCL yön işaretiyle çalışan gerçek bir modeldir. Her katalog kaydı kararlı bir model kimliğine veya açık `none` durumuna sahiptir. Çözücünün desteklemediği nonlinear/transient model kimlikleri sessizce atlanmaz, kullanıcıya sınırlama hatası verir.
 
 ## Gerber ve delik çıktısı (CAM)
 

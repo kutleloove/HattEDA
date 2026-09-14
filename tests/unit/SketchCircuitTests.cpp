@@ -78,7 +78,7 @@ private slots:
         QVERIFY2(result.success, result.error.c_str());
         QVERIFY(std::abs(result.voltages[1] - 1.0) < 1e-10);
     }
-    void parallelResistorsWithGroundAndProbeSolve() {
+    void parallelResistorsWithoutGroundAndProbeSolve() {
         registerBuiltInCatalog();
         SketchDocument document;
         auto part = [&](const QString& variant, const QString& label, QPointF at, const QString& value = {}) {
@@ -101,10 +101,10 @@ private slots:
         part(QStringLiteral("catalog.device.resistor"), QStringLiteral("R1"), {45, 20}, QStringLiteral("1k"));
         part(QStringLiteral("catalog.device.resistor"), QStringLiteral("R2"), {45, 30}, QStringLiteral("1k"));
         part(QStringLiteral("catalog.device.resistor"), QStringLiteral("R3"), {45, 40}, QStringLiteral("1k"));
-        part(QStringLiteral("schematic.ground"), QString(), {30, 50});
         part(QStringLiteral("schematic.voltage-probe"), QStringLiteral("VP1"), {30, 20});
 
-        // V1 pin 1 feeds the three left pins; all right pins and V1 pin 2 share ground.
+        // V1 pin 1 feeds the three left pins; all right pins return to V1 pin 2. As in
+        // Proteus, this closed circuit does not require a separate Ground symbol.
         wire({{20, 24.92}, {30, 24.92}, {30, 20}, {39.92, 20}});
         wire({{30, 24.92}, {30, 30}, {39.92, 30}});
         wire({{30, 30}, {30, 40}, {39.92, 40}});
@@ -127,13 +127,22 @@ private slots:
         QVERIFY(probeNet >= 0);
         QVERIFY(std::abs(result.voltages[probeNet] - 5.0) < 1e-10);
     }
-    void dcPreflightExplainsGroundAndOpenReturn() {
+    void dcUsesSourceNegativeAsImplicitReferenceAndExplainsOpenReturn() {
         auto document = dcDividerExample();
         document.erase(std::remove_if(document.begin(), document.end(), [](const SketchItem& item) {
             return item.variant == QLatin1String("schematic.ground");
         }), document.end());
         auto snapshot = analyzeSchematic(document);
-        QVERIFY(snapshot.simulationErrors.join(' ').contains("Ground"));
+        QVERIFY2(snapshot.simulationErrors.isEmpty(), qPrintable(snapshot.simulationErrors.join("; ")));
+        const auto result = hatt::electrical::solveDc(snapshot.dc);
+        QVERIFY2(result.success, result.error.c_str());
+        QVERIFY(std::abs(result.voltages[snapshot.dc.ground]) < 1e-12);
+        const auto source = std::find_if(snapshot.dc.elements.begin(), snapshot.dc.elements.end(),
+                                         [](const hatt::electrical::DcElement& element) {
+                                             return element.reference == "V1";
+                                         });
+        QVERIFY(source != snapshot.dc.elements.end());
+        QVERIFY(std::abs(result.voltages[source->positive] - 5.0) < 1e-10);
 
         document = dcDividerExample();
         // Remove the wire that joins V1 pin 2 to the grounded return bus.

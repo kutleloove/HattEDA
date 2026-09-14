@@ -16,7 +16,6 @@ QString tr(const char* text) { return QCoreApplication::translate("hatt::ui::Cir
     QT_TRANSLATE_NOOP("hatt::ui::CircuitWorkflow", "unknown simulation model '%1'"),
     QT_TRANSLATE_NOOP("hatt::ui::CircuitWorkflow", "%1: %2"),
     QT_TRANSLATE_NOOP("hatt::ui::CircuitWorkflow", "%1: the DC model requires exactly two pins."),
-    QT_TRANSLATE_NOOP("hatt::ui::CircuitWorkflow", "Add a Ground terminal and wire its pin to the circuit return net (normally the voltage source negative pin)."),
     QT_TRANSLATE_NOOP("hatt::ui::CircuitWorkflow", "%1 pin %2 is not connected to another component or terminal."),
     QT_TRANSLATE_NOOP("hatt::ui::CircuitWorkflow", "The DC section at %1 pin %2 has no path to Ground."),
 };
@@ -161,9 +160,21 @@ CircuitSnapshot analyzeSchematic(const SketchDocument& document) {
         result.dc.elements.push_back(e);
     }
     if (!result.dc.elements.empty()) {
+        // Proteus-style convenience: a closed circuit does not need an explicit Ground symbol.
+        // Prefer the negative terminal of the first independent voltage source as the 0 V
+        // reference; for source-less networks any element's negative terminal is deterministic.
+        // This changes only the reported absolute node voltages, never voltage differences or
+        // currents. An explicit Ground terminal always wins.
         if (result.dc.ground < 0) {
-            result.simulationErrors << tr("Add a Ground terminal and wire its pin to the circuit return net (normally the voltage source negative pin).");
-        } else {
+            const auto source = std::find_if(result.dc.elements.begin(), result.dc.elements.end(),
+                                             [](const electrical::DcElement& element) {
+                                                 return element.kind == electrical::DcKind::VoltageSource;
+                                             });
+            result.dc.ground = source != result.dc.elements.end()
+                                   ? source->negative
+                                   : result.dc.elements.front().negative;
+        }
+        if (result.dc.ground >= 0) {
             QVector<QVector<int>> adjacent(result.dc.netCount);
             for (const auto& e : result.dc.elements) {
                 if (e.positive < 0 || e.negative < 0 || e.positive >= result.dc.netCount ||

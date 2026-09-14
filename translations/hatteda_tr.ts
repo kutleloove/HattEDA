@@ -113,7 +113,6 @@
     <message><source>The example requires an empty schematic. Existing objects were preserved.</source><translation>Örnek için boş şema gerekir. Mevcut nesneler korundu.</translation></message>
     <message><source>Load DC divider example</source><translation>DC gerilim bölücü örneğini yükle</translation></message>
     <message><source>DC operating point</source><translation>DC çalışma noktası</translation></message>
-    <message><source>Add a Ground terminal and wire its pin to the circuit return net (normally the voltage source negative pin).</source><translation>Bir Ground terminali ekleyin ve elektriksel ucunu devrenin dönüş hattına (normalde gerilim kaynağının negatif ucuna) bağlayın.</translation></message>
     <message><source>%1 pin %2 is not connected to another component or terminal.</source><translation>%1 pin %2 başka bir elemana veya terminale bağlı değil.</translation></message>
     <message><source>The DC section at %1 pin %2 has no path to Ground.</source><translation>%1 pin %2 üzerindeki DC bölümünün Ground'a bağlantı yolu yok.</translation></message>
     <message><source>Supported: resistors and independent DC voltage sources. Values use SI/SPICE suffixes (1k, 5, 1meg); unit labels are omitted.</source><translation>Desteklenenler: dirençler ve bağımsız DC gerilim kaynakları. Değerlerde SI/SPICE ekleri kullanın (1k, 5, 1meg); birim adı eklemeyin.</translation></message>
