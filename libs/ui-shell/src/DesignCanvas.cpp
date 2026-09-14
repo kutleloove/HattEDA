@@ -1,6 +1,7 @@
 #include "hatt/ui/DesignCanvas.hpp"
 #include "hatt/ui/LayerColors.hpp"
 #include "hatt/ui/PadStyles.hpp"
+#include "hatt/ui/StrokeFont.hpp"
 #include "hatt/ui/SketchCircuit.hpp"
 
 #include <QFont>
@@ -265,16 +266,26 @@ void drawItem(QPainter& painter, const SketchItem& item, const CanvasColors& col
             drawPads(painter, itemPads(item), colors, view, selected, preview, scale, map);
         }
         if (!item.label.isEmpty() && !preview && silkVisible) {
-            const QRectF bounds = itemBounds(item);
-            const QPointF topCenter = map(QPointF(bounds.center().x(), bounds.top()));
             QFont font = painter.font();
             font.setPixelSize(std::clamp(static_cast<int>(1.6 * scale), 9, 26));
             painter.setFont(font);
             painter.setPen(selected ? colors.selection : colors.label);
-            painter.drawText(QRectF(topCenter.x() - 80, topCenter.y() - font.pixelSize() - 6, 160,
-                                    font.pixelSize() + 4),
-                             Qt::AlignHCenter | Qt::AlignBottom,
-                             item.value.isEmpty() ? item.label : item.label + QStringLiteral("  ") + item.value);
+            const QString text = item.value.isEmpty() ? item.label : item.label + QStringLiteral("  ") + item.value;
+            // Board labels follow the footprint's turn like the silkscreen designator; the schematic
+            // keeps its label above the symbol.
+            DesignatorPlacement placement;
+            if (board) {
+                placement = designatorPlacement(item, font.pixelSize() / scale, 6.0 / scale);
+            } else {
+                const QRectF bounds = itemBounds(item);
+                placement.centre = QPointF(bounds.center().x(), bounds.top() - (font.pixelSize() / 2.0 + 6.0) / scale);
+            }
+            painter.save();
+            painter.translate(map(placement.centre));
+            if (placement.vertical) painter.rotate(-90.0);
+            painter.drawText(QRectF(-160, -font.pixelSize() / 2.0 - 2, 320, font.pixelSize() + 4), Qt::AlignCenter,
+                             text);
+            painter.restore();
         }
         if (selected && !preview && !board) {
             QFont font = painter.font();

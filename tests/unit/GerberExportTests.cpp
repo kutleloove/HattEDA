@@ -18,6 +18,7 @@ private slots:
     void zonesAreLeftOutUnlessRequested();
     void designatorsAndTextGoToSilkscreen();
     void strokeFontCoversDesignators();
+    void designatorsFollowFootprintRotation();
     void previewDrawsLayersInBoardColours();
 };
 
@@ -131,6 +132,64 @@ void GerberExportTests::designatorsAndTextGoToSilkscreen() {
         }
     }
     QVERIFY2(lowest >= -bounds.top() + CamDesignatorGap - 1e-6, qPrintable(QString::number(lowest)));
+}
+
+void GerberExportTests::designatorsFollowFootprintRotation() {
+    SketchItem footprint;
+    footprint.kind = SketchItem::Kind::Symbol;
+    footprint.variant = QStringLiteral("board.soic8");
+    footprint.points = {{20.0, 20.0}};
+    footprint.label = QStringLiteral("U12");
+
+    auto extent = [](const QVector<QVector<QPointF>>& lines) {
+        QRectF box;
+        for (const auto& line : lines) {
+            for (const QPointF& point : line) {
+                const QRectF dot(point, QSizeF(1e-9, 1e-9));
+                box = box.isNull() ? dot : box.united(dot);
+            }
+        }
+        return box;
+    };
+    for (int turns : {0, 1, 2, 3}) {
+        footprint.quarterTurns = turns;
+        const QRectF bounds = itemBounds(footprint);
+        const DesignatorPlacement placement = designatorPlacement(footprint, 1.0, 0.3);
+        const QRectF text = extent(placedStrokeText(footprint.label, placement, 1.0, false));
+        if (turns % 2 == 1) {
+            QVERIFY(placement.vertical);
+            QVERIFY2(text.height() > text.width(), qPrintable(QString::number(turns)));
+            QVERIFY(text.right() <= bounds.left() - 0.3 + 1e-6);
+            QVERIFY(std::abs(text.center().y() - bounds.center().y()) < 1e-6);
+        } else {
+            QVERIFY(!placement.vertical);
+            QVERIFY(text.width() > text.height());
+            QVERIFY(text.bottom() <= bounds.top() - 0.3 + 1e-6);
+            QVERIFY(std::abs(text.center().x() - bounds.center().x()) < 1e-6);
+        }
+    }
+
+    // Vertical text reads upwards: the first glyph ("U") sits lowest on the board.
+    footprint.quarterTurns = 1;
+    const auto lines = placedStrokeText(QStringLiteral("U1"), designatorPlacement(footprint, 1.0, 0.3), 1.0, false);
+    const auto glyphU = strokeText(QStringLiteral("U"), {0, 0}, 1.0).size();
+    double firstGlyphY = 0.0;
+    double lastGlyphY = 0.0;
+    for (qsizetype i = 0; i < lines.size(); ++i) {
+        (i < glyphU ? firstGlyphY : lastGlyphY) = lines[i].first().y();
+    }
+    QVERIFY(firstGlyphY > lastGlyphY); // editor Y down: larger Y is lower
+
+    // CAM designator strokes for the turned footprint lie left of it.
+    const CamOutput cam = buildCamOutput({footprint});
+    const auto& silk = cam.layers[static_cast<int>(CamLayerKind::TopSilk)].primitives;
+    QVERIFY(!silk.isEmpty());
+    const QRectF bounds = itemBounds(footprint);
+    bool anyLeft = false;
+    for (const auto& primitive : silk) {
+        for (const QPointF& point : primitive.points) anyLeft = anyLeft || point.x() < bounds.left() - 0.3;
+    }
+    QVERIFY(anyLeft);
 }
 
 void GerberExportTests::previewDrawsLayersInBoardColours() {

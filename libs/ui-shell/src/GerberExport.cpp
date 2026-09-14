@@ -225,18 +225,13 @@ CamOutput buildCamOutput(const SketchDocument& board, const CamOptions& options)
             }
             addPads(item, false);
             if (options.designators && !item.label.trimmed().isEmpty()) {
-                // Centred above the footprint, like the canvas label; bottom-side text is mirrored so
-                // it reads correctly when the board is turned over.
+                // Same place as the canvas label (designatorPlacement); bottom-side text is mirrored
+                // so it reads correctly when the board is turned over.
                 const QString label = item.label.trimmed();
-                const QRectF bounds = itemBounds(item);
-                const double width = strokeTextWidth(label, CamDesignatorHeight);
-                const QPointF topLeft(bounds.center().x() - width / 2.0,
-                                      bounds.top() - CamDesignatorGap - CamDesignatorHeight);
-                const double axis = bounds.center().x();
-                for (QVector<QPointF> line : strokeText(label, topLeft, CamDesignatorHeight)) {
-                    if (item.onBottom) {
-                        for (QPointF& point : line) point.setX(2.0 * axis - point.x());
-                    }
+                const DesignatorPlacement placement =
+                    designatorPlacement(item, CamDesignatorHeight, CamDesignatorGap);
+                for (const QVector<QPointF>& line :
+                     placedStrokeText(label, placement, CamDesignatorHeight, item.onBottom)) {
                     stroke(silk, line, false, CamSilkLineWidth);
                 }
             }

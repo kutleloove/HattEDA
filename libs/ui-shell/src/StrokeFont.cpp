@@ -61,4 +61,26 @@ QVector<QVector<QPointF>> strokeText(const QString& text, QPointF topLeft, doubl
     return result;
 }
 
+DesignatorPlacement designatorPlacement(const SketchItem& footprint, double textHeight, double gap) {
+    const QRectF bounds = itemBounds(footprint);
+    const bool vertical = ((footprint.quarterTurns % 4) + 4) % 2 == 1;
+    if (vertical) return {QPointF(bounds.left() - gap - textHeight / 2.0, bounds.center().y()), true};
+    return {QPointF(bounds.center().x(), bounds.top() - gap - textHeight / 2.0), false};
+}
+
+QVector<QVector<QPointF>> placedStrokeText(const QString& text, const DesignatorPlacement& placement, double height,
+                                           bool mirrored) {
+    const double width = strokeTextWidth(text, height);
+    QVector<QVector<QPointF>> lines = strokeText(text, QPointF(-width / 2.0, -height / 2.0), height);
+    for (QVector<QPointF>& line : lines) {
+        for (QPointF& point : line) {
+            // Y points down: a 90° counter-clockwise turn maps the reading direction +X to -Y.
+            if (placement.vertical) point = QPointF(point.y(), -point.x());
+            if (mirrored) point.setX(-point.x());
+            point += placement.centre;
+        }
+    }
+    return lines;
+}
+
 } // namespace hatt::ui

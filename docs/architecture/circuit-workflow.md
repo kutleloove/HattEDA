@@ -68,8 +68,10 @@ olarak çıkar. Netsiz alan dökülmez ve Gerber'e **yazılmaz**, çünkü katı
 kısa devre ederdi; Gerber sekmesinin üstünde `FabricationZonesNotice` uyarısı ve durum satırında sayısı
 görünür (`CamOptions::includeZones` yalnız bilinçli kullanım içindir).
 
-Kılıf etiketleri (R1, U1) kılıfın üstüne, kılıfın serigrafi katmanına 1 mm yüksekliğinde tek çizgili
-fontla (`StrokeFont.hpp`) yazılır; alt yüzdekiler aynalanır. Kartta yerleştirilen metinler kendi
+Kılıf etiketleri (R1, U1) kılıfın serigrafi katmanına 1 mm yüksekliğinde tek çizgili fontla
+(`StrokeFont.hpp`) yazılır; alt yüzdekiler aynalanır. Yerleşim kılıfın dönüşünü izler
+(`designatorPlacement`): 0° ve 180°'de kılıfın üstünde yatay, 90° ve 270°'de kılıfın solunda aşağıdan
+yukarı okunacak şekilde dikey. Kanvastaki etiket de aynı yerde çizilir. Kartta yerleştirilen metinler kendi
 katmanına aynı fontla çıkar; kart kenarındaki metin atlanır ve sayısı bildirilir. Via'lar tented kabul
 edilir ve tüm delikler kaplamalıdır.
 
