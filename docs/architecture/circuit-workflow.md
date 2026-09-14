@@ -67,6 +67,17 @@ fontla (`StrokeFont.hpp`) yazılır; alt yüzdekiler aynalanır. Kartta yerleşt
 katmanına aynı fontla çıkar; kart kenarındaki metin atlanır ve sayısı bildirilir. Via'lar tented kabul
 edilir ve tüm delikler kaplamalıdır.
 
+### Montaj dosyaları: BOM ve pick and place
+
+- **File → Export bill of materials...** (`hatteda.action.export-bom`, `ManufacturingExport.hpp`):
+  - Şemadaki parçaları eleman, değer ve kılıf aynıysa tek satırda toplar.
+  - Satırlar ilk etikete göre sıralanır; etiketler de kendi içinde doğal sırada yazılır (R2, R10).
+  - PCB'den hariç tutulan parçalar listeye girmez.
+  - Proje elemanlarının üretici ve parça numarası da yazılır.
+- **File → Export pick and place...** (`hatteda.action.export-pick-place`):
+  - Karttaki her kılıf için şunları yazar: etiket, değer, kılıf, pad sınırlarının merkezi (mm, Y yukarı), üstten bakışla saat yönünün tersine dönüş ve yüz (Top/Bottom).
+- İki dosya da UTF-8 CSV'dir (RFC 4180 tırnaklama, CRLF). Montaj servisleri sütunları adıyla okuduğu için başlıklar İngilizcedir.
+
 ## Tasarım denetimi: ERC ve DRC (#31)
 
 Komut çubuğundaki denetim düğmesi veya **Design › Run design checks** (`hatteda.action.run-checks`) şemaya ERC, karta DRC uygular. Sonuçlar **Design checks** sekmesinde (`hatteda.tool.design-checks`) listelenir: önce hatalar, sonra uyarılar. Satıra tıklayınca ilgili çalışma alanına geçilir, sorunlu nesneler seçilir ve görünüm oraya ortalanır. **Run again** listeyi yeniler. Kurallar ve kimlikleri ADR-0008'dedir.

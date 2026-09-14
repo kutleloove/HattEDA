@@ -617,6 +617,14 @@ Son projeler listesinden kaldırılsın mı?</translation></message>
     <message><source>Design rules...</source><translation>Tasarım kuralları...</translation></message>
     <message><source>Design checks</source><translation>Tasarım denetimi</translation></message>
     <message><source>Design checks: %1 error(s), %2 warning(s)</source><translation>Tasarım denetimi: %1 hata, %2 uyarı</translation></message>
+    <message><source>Export bill of materials...</source><translation>Malzeme listesini (BOM) dışa aktar...</translation></message>
+    <message><source>Write the schematic parts grouped by value and footprint as CSV</source><translation>Şema parçalarını değer ve kılıfa göre gruplayıp CSV olarak yaz</translation></message>
+    <message><source>Export pick and place...</source><translation>Dizgi (pick and place) dosyasını dışa aktar...</translation></message>
+    <message><source>Write footprint centres, rotations and sides as CSV for assembly</source><translation>Montaj için kılıf merkezlerini, dönüşlerini ve yüzlerini CSV olarak yaz</translation></message>
+    <message><source>CSV files (*.csv);;All files (*.*)</source><translation>CSV dosyaları (*.csv);;Tüm dosyalar (*.*)</translation></message>
+    <message><source>Export bill of materials</source><translation>Malzeme listesini dışa aktar</translation></message>
+    <message><source>Export pick and place</source><translation>Dizgi dosyasını dışa aktar</translation></message>
+    <message><source>Cannot write %1: %2</source><translation>%1 yazılamıyor: %2</translation></message>
   </context>
   <context>
     <name>hatt::ui::ProjectFile</name>

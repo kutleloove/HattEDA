@@ -6,6 +6,7 @@
 #include "hatt/ui/CamPreview.hpp"
 #include "hatt/ui/GerberExport.hpp"
 #include "hatt/ui/LibraryDialogs.hpp"
+#include "hatt/ui/ManufacturingExport.hpp"
 
 #include "hatt/ui/DesignCanvas.hpp"
 #include "hatt/ui/LayerColors.hpp"
@@ -29,6 +30,7 @@
 #include <QDir>
 #include <QEvent>
 #include <QFileDialog>
+#include <QSaveFile>
 #include <QFileInfo>
 #include <QFormLayout>
 #include <QGridLayout>
@@ -956,6 +958,15 @@ void MainWindow::createActions() {
     fabrication->setEnabled(false);
     fabrication->setToolTip(tr("Generate Gerber X2 layers and an Excellon plated drill file"));
     connect(fabrication, &QAction::triggered, this, &MainWindow::exportFabricationFiles);
+    auto* bom = makeAction(QStringLiteral("hatteda.action.export-bom"), tr("Export bill of materials..."), QString());
+    bom->setEnabled(false);
+    bom->setToolTip(tr("Write the schematic parts grouped by value and footprint as CSV"));
+    connect(bom, &QAction::triggered, this, [this] { exportBom(); });
+    auto* placement =
+        makeAction(QStringLiteral("hatteda.action.export-pick-place"), tr("Export pick and place..."), QString());
+    placement->setEnabled(false);
+    placement->setToolTip(tr("Write footprint centres, rotations and sides as CSV for assembly"));
+    connect(placement, &QAction::triggered, this, [this] { exportPlacement(); });
 
     auto* checks = makeAction(QStringLiteral("hatteda.action.run-checks"), tr("Run design checks"),
                               QStringLiteral("check"));
@@ -1288,6 +1299,8 @@ void MainWindow::createMenus() {
     fileMenu->addAction(actions_.value(QStringLiteral("hatteda.action.save")));
     fileMenu->addAction(actions_.value(QStringLiteral("hatteda.action.save-as")));
     fileMenu->addAction(actions_.value(QStringLiteral("hatteda.action.export-fabrication")));
+    fileMenu->addAction(actions_.value(QStringLiteral("hatteda.action.export-bom")));
+    fileMenu->addAction(actions_.value(QStringLiteral("hatteda.action.export-pick-place")));
     fileMenu->addSeparator();
     // Quitting closes the window, so closeEvent asks about unsaved changes.
     auto* quit = fileMenu->addAction(tr("Quit"));
@@ -2511,7 +2524,8 @@ void MainWindow::updateProjectState() {
     if (auto* fabrication = actions_.value(QStringLiteral("hatteda.action.export-fabrication"))) {
         fabrication->setEnabled(open);
     }
-    for (const auto* name : {"hatteda.action.run-checks", "hatteda.action.design-rules"}) {
+    for (const auto* name : {"hatteda.action.run-checks", "hatteda.action.design-rules", "hatteda.action.export-bom",
+                             "hatteda.action.export-pick-place"}) {
         if (auto* action = actions_.value(QString::fromLatin1(name))) action->setEnabled(open);
     }
 }
@@ -2751,6 +2765,35 @@ void MainWindow::editDesignRules() {
     rules_ = dialog.rules();
     rulesModified_ = true;
     updateProjectState();
+}
+
+bool MainWindow::writeAssemblyFile(QString path, const QString& title, const QString& suffix, const QByteArray& content) {
+    if (path.isEmpty()) {
+        const QFileInfo project(projectPath_);
+        path = QFileDialog::getSaveFileName(this, title,
+                                            project.absoluteDir().filePath(project.completeBaseName() + suffix),
+                                            tr("CSV files (*.csv);;All files (*.*)"));
+        if (path.isEmpty()) return false;
+    }
+    QSaveFile file(path);
+    if (!file.open(QIODevice::WriteOnly) || file.write(content) != content.size() || !file.commit()) {
+        QMessageBox::warning(this, title, tr("Cannot write %1: %2").arg(QDir::toNativeSeparators(path), file.errorString()));
+        return false;
+    }
+    statusBar()->showMessage(tr("Saved %1").arg(QDir::toNativeSeparators(path)), 4000);
+    return true;
+}
+
+bool MainWindow::exportBom(const QString& path) {
+    if (projectPath_.isEmpty()) return false;
+    const QVector<BomLine> lines = buildBom(canvases_.value(0)->document(), library_);
+    return writeAssemblyFile(path, tr("Export bill of materials"), QStringLiteral("-bom.csv"), bomCsv(lines));
+}
+
+bool MainWindow::exportPlacement(const QString& path) {
+    if (projectPath_.isEmpty()) return false;
+    const QVector<PlacementLine> lines = buildPlacement(canvases_.value(1)->document());
+    return writeAssemblyFile(path, tr("Export pick and place"), QStringLiteral("-pick-place.csv"), placementCsv(lines));
 }
 
 } // namespace hatt::ui

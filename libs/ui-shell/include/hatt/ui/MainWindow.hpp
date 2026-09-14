@@ -70,6 +70,10 @@ public slots:
     void runDesignChecks();
     // DesignRulesDialog for the project's rules.
     void editDesignRules();
+    // Assembly CSV files (ManufacturingExport.hpp). An empty path asks for one; false when cancelled
+    // or writing failed (the error is shown).
+    bool exportBom(const QString& path = {});
+    bool exportPlacement(const QString& path = {});
 
 protected:
     void changeEvent(QEvent* event) override;
@@ -122,6 +126,7 @@ private:
     void editItemProperties(DesignCanvas* canvas, int index);
     void showArrayDialog(DesignCanvas* canvas);
     QAction* makeAction(const QString& objectName, const QString& text, const QString& iconKind);
+    bool writeAssemblyFile(QString path, const QString& title, const QString& suffix, const QByteArray& content);
 
     QStackedWidget* shellPages_ = nullptr;
     QStackedWidget* editorSurfaces_ = nullptr;

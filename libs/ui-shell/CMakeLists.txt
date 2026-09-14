@@ -24,6 +24,8 @@ add_library(hatt-ui-shell STATIC
     src/DesignChecks.cpp
     include/hatt/ui/ChecksReport.hpp
     src/ChecksReport.cpp
+    include/hatt/ui/ManufacturingExport.hpp
+    src/ManufacturingExport.cpp
     src/Theme.cpp
     src/Units.cpp
     include/hatt/ui/BoardLayerPanel.hpp

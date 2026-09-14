@@ -100,6 +100,7 @@ private slots:
     void newDeviceCreatesFootprintAndPinMap();
     void designChecksReportAndRules();
     void fabricationExportAsksAboutRuleErrors();
+    void assemblyExportsWriteCsv();
     void selectionStatesFollowTheme_data();
     void selectionStatesFollowTheme();
 
@@ -1091,6 +1092,42 @@ void MainWindowTests::selectionStatesFollowTheme() {
 
     application->setStyleSheet(QString());
     QApplication::setPalette(originalPalette);
+}
+
+void MainWindowTests::assemblyExportsWriteCsv() {
+    hatt::ui::MainWindow window;
+    QVERIFY(showActive(window));
+    QVERIFY(!action(window, "hatteda.action.export-bom")->isEnabled());
+    activateEditor(window);
+    QVERIFY(action(window, "hatteda.action.export-bom")->isEnabled());
+    QVERIFY(action(window, "hatteda.action.export-pick-place")->isEnabled());
+    auto* schematic = window.activeCanvas();
+    schematic->setTool(CanvasTool::Symbol, QStringLiteral("schematic.resistor"));
+    clickCanvas(schematic, {20.32, 20.32});
+    schematic->setTool(CanvasTool::Select);
+    window.showKayraWorkspace();
+    auto* board = window.activeCanvas();
+    board->setTool(CanvasTool::Symbol, QStringLiteral("board.r0603"));
+    clickCanvas(board, {10.0, 10.0});
+    board->setTool(CanvasTool::Select);
+
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString bomPath = directory.filePath(QStringLiteral("bom.csv"));
+    QVERIFY(window.exportBom(bomPath));
+    QFile bom(bomPath);
+    QVERIFY(bom.open(QIODevice::ReadOnly));
+    const QByteArray bomText = bom.readAll();
+    QVERIFY(bomText.startsWith("Item,Quantity,References"));
+    QVERIFY(bomText.contains(",1,R1,1k,"));
+
+    const QString placementPath = directory.filePath(QStringLiteral("placement.csv"));
+    QVERIFY(window.exportPlacement(placementPath));
+    QFile placement(placementPath);
+    QVERIFY(placement.open(QIODevice::ReadOnly));
+    const QByteArray placementText = placement.readAll();
+    QVERIFY(placementText.startsWith("Designator,Value,Package"));
+    QCOMPARE(placementText.count('\n'), 2);
 }
 
 void MainWindowTests::fabricationExportAsksAboutRuleErrors() {
