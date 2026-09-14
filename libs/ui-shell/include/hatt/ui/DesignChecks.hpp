@@ -1,5 +1,6 @@
 #pragma once
 
+#include "hatt/ui/DesignRules.hpp"
 #include "hatt/ui/SketchModel.hpp"
 
 #include <QPointF>
@@ -11,21 +12,6 @@ namespace hatt::ui {
 
 // Electrical rule check (schematic) and design rule check (board), ADR-0008. Both work on editor
 // snapshots and never change the documents.
-
-// Board design rules in millimetres, stored in the project (`.hatt` "rules").
-struct DesignRules {
-    double clearance = 0.2;          // copper to copper of different nets, same layer
-    double minTrackWidth = 0.15;
-    double minDrill = 0.3;           // pad and via holes
-    double minAnnularRing = 0.13;    // (smallest pad size - drill) / 2
-    double boardEdgeClearance = 0.3; // copper to the board outline
-
-    friend bool operator==(const DesignRules&, const DesignRules&) = default;
-};
-
-// Translated reason why the rules are unusable (negative or non-finite values, zero clearance or
-// track width), or an empty string.
-[[nodiscard]] QString validateDesignRules(const DesignRules& rules);
 
 enum class CheckSeverity { Error, Warning };
 

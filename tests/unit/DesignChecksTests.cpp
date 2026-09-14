@@ -2,6 +2,8 @@
 #include "hatt/ui/DesignChecks.hpp"
 #include "hatt/ui/SketchCircuit.hpp"
 
+#include <QJsonArray>
+#include <QJsonObject>
 #include <QtTest>
 
 #include <algorithm>
@@ -87,6 +89,120 @@ private slots:
         rules = {};
         rules.boardEdgeClearance = std::numeric_limits<double>::quiet_NaN();
         QVERIFY(!validateDesignRules(rules).isEmpty());
+    }
+
+    void clearanceRulesByRegionAndObject() {
+        DesignRules rules;
+        rules.clearance = 0.25;
+        rules.boardEdgeClearance = 0.4;
+        const int top = layerBit(BoardLayer::TopCopper);
+        const int bottom = layerBit(BoardLayer::BottomCopper);
+        // Without explicit rules the global values form the DEFAULT rule.
+        QCOMPARE(effectiveClearanceRules(rules).size(), 1);
+        QCOMPARE(clearanceBetween(rules, top, ClearanceObject::Pad, ClearanceObject::Trace), 0.25);
+        QCOMPARE(edgeClearance(rules, bottom), 0.4);
+
+        ClearanceRule board;
+        board.padPad = 0.3;
+        board.padTrace = 0.25;
+        board.traceTrace = 0.2;
+        board.graphic = 0.5;
+        board.edge = 0.3;
+        ClearanceRule topRule = board;
+        topRule.name = QStringLiteral("TOP");
+        topRule.region = RuleRegion::TopCopper;
+        topRule.traceTrace = 0.15;
+        topRule.edge = 0.6;
+        rules.clearanceRules = {board, topRule};
+        QVERIFY(validateDesignRules(rules).isEmpty());
+        QCOMPARE(clearanceBetween(rules, bottom, ClearanceObject::Pad, ClearanceObject::Pad), 0.3);
+        QCOMPARE(clearanceBetween(rules, bottom, ClearanceObject::Trace, ClearanceObject::Pad), 0.25);
+        QCOMPARE(clearanceBetween(rules, bottom, ClearanceObject::Trace, ClearanceObject::Trace), 0.2);
+        QCOMPARE(clearanceBetween(rules, top, ClearanceObject::Trace, ClearanceObject::Trace), 0.15);
+        QCOMPARE(clearanceBetween(rules, top | bottom, ClearanceObject::Trace, ClearanceObject::Trace), 0.2);
+        QCOMPARE(clearanceBetween(rules, bottom, ClearanceObject::Graphic, ClearanceObject::Trace), 0.5);
+        QCOMPARE(edgeClearance(rules, top), 0.6);
+        QCOMPARE(edgeClearance(rules, bottom), 0.3);
+        QCOMPARE(largestClearance(rules), 0.5);
+
+        rules.clearanceRules[1].name = board.name;
+        QVERIFY(!validateDesignRules(rules).isEmpty());
+        rules.clearanceRules[1].name = QStringLiteral("TOP");
+        rules.clearanceRules[1].padPad = 0;
+        QVERIFY(!validateDesignRules(rules).isEmpty());
+    }
+
+    void netClassesAssignPowerSignalAndExplicitNets() {
+        const SketchDocument schematic = dcDividerExample();
+        DesignRules rules;
+        const QHash<QString, QString> assignments = netClassAssignments(rules, schematic);
+        QCOMPARE(assignments.value(QStringLiteral("0")), PowerNetClass);
+        const auto signal = std::count_if(assignments.cbegin(), assignments.cend(),
+                                          [](const QString& c) { return c == SignalNetClass; });
+        QCOMPARE(signal, 2);
+        QCOMPARE(netClassForNet(rules, schematic, QStringLiteral("0")).traceWidth, 0.635);
+
+        NetClass power = effectiveNetClasses(rules).first();
+        NetClass signalClass = effectiveNetClasses(rules).last();
+        NetClass fast;
+        fast.name = QStringLiteral("FAST");
+        fast.traceWidth = 0.2;
+        fast.neckWidth = 0.15;
+        fast.layers = layerBit(BoardLayer::TopCopper);
+        fast.ratsnestColor = QStringLiteral("#ff8800");
+        const QString someSignal = std::find_if(assignments.cbegin(), assignments.cend(),
+                                                [](const QString& c) { return c == SignalNetClass; }).key();
+        fast.nets = {someSignal};
+        rules.netClasses = {power, signalClass, fast};
+        QVERIFY2(validateDesignRules(rules).isEmpty(), qPrintable(validateDesignRules(rules)));
+        QCOMPARE(netClassForNet(rules, schematic, someSignal).name, QStringLiteral("FAST"));
+        QCOMPARE(netClassForNet(rules, schematic, QStringLiteral("unknown")).name, SignalNetClass);
+
+        rules.netClasses[1].nets = {someSignal};
+        QVERIFY(!validateDesignRules(rules).isEmpty()); // one net in two classes
+        rules.netClasses[1].nets.clear();
+        rules.netClasses[2].viaDrill = 1.0;
+        QVERIFY(!validateDesignRules(rules).isEmpty()); // drill wider than the via
+        rules.netClasses[2].viaDrill = 0.4;
+        rules.netClasses[2].ratsnestColor = QStringLiteral("not a colour");
+        QVERIFY(!validateDesignRules(rules).isEmpty());
+    }
+
+    void designRulesJsonRoundTrip() {
+        DesignRules rules;
+        QJsonObject plain = designRulesToJson(rules);
+        QCOMPARE(plain.keys().size(), 5); // optional parts are not written
+        ClearanceRule rule;
+        rule.name = QStringLiteral("BOTTOM");
+        rule.region = RuleRegion::BottomCopper;
+        rule.edge = 0.0;
+        NetClass netClass;
+        netClass.name = QStringLiteral("POWER");
+        netClass.traceWidth = 1.0;
+        netClass.viaDiameter = 1.2;
+        netClass.viaDrill = 0.6;
+        netClass.neckWidth = 0.5;
+        netClass.layers = layerBit(BoardLayer::BottomCopper);
+        netClass.ratsnestHidden = true;
+        netClass.nets = {QStringLiteral("VCC"), QStringLiteral("0")};
+        DifferentialPair pair{QStringLiteral("USB"), QStringLiteral("D+"), QStringLiteral("D-"), 0.25, 0.15};
+        rules.clearanceRules = {ClearanceRule{}, rule};
+        rules.netClasses = {netClass};
+        rules.differentialPairs = {pair};
+        rules.defaults.thermalRelief = false;
+        rules.defaults.solderResistGuard = 0.1;
+        DesignRules read;
+        QVERIFY(designRulesFromJson(designRulesToJson(rules), read).isEmpty());
+        QVERIFY(read == rules);
+
+        QJsonObject broken = designRulesToJson(rules);
+        QJsonArray list = broken.value(QStringLiteral("clearanceRules")).toArray();
+        QJsonObject first = list.first().toObject();
+        first[QStringLiteral("region")] = QStringLiteral("inner-1");
+        list[0] = first;
+        broken[QStringLiteral("clearanceRules")] = list;
+        DesignRules ignored;
+        QVERIFY(!designRulesFromJson(broken, ignored).isEmpty());
     }
 
     void unconnectedPinsAreWarnings() {

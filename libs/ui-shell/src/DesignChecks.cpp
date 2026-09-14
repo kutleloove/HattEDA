@@ -56,17 +56,6 @@ double pointSegmentDistance(QPointF p, QPointF a, QPointF b) {
 
 } // namespace
 
-QString validateDesignRules(const DesignRules& rules) {
-    for (double value : {rules.clearance, rules.minTrackWidth, rules.minDrill, rules.minAnnularRing,
-                         rules.boardEdgeClearance}) {
-        if (!std::isfinite(value) || value < 0) return tr("Design rules cannot be negative.");
-        if (value > 100.0) return tr("Design rules must be at most 100 mm.");
-    }
-    if (rules.clearance <= 0) return tr("The clearance must be greater than zero.");
-    if (rules.minTrackWidth <= 0) return tr("The minimum track width must be greater than zero.");
-    return {};
-}
-
 int CheckReport::count(CheckSeverity severity) const {
     return static_cast<int>(std::count_if(violations.begin(), violations.end(),
                                           [severity](const CheckViolation& v) { return v.severity == severity; }));

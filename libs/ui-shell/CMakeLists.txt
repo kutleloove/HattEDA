@@ -20,6 +20,8 @@ add_library(hatt-ui-shell STATIC
     src/LibraryDialogs.cpp
     include/hatt/ui/BoardCopper.hpp
     src/BoardCopper.cpp
+    include/hatt/ui/DesignRules.hpp
+    src/DesignRules.cpp
     include/hatt/ui/DesignChecks.hpp
     src/DesignChecks.cpp
     include/hatt/ui/ChecksReport.hpp

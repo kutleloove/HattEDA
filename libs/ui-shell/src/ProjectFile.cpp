@@ -499,18 +499,8 @@ QString libraryFromJson(const QJsonValue& value, ProjectLibrary& library) {
 }
 
 // Design rules (ADR-0008) are optional; a missing object or key keeps the default value.
-QString rulesFromJson(const QJsonValue& value, DesignRules& rules) {
-    if (value.isUndefined()) return {};
-    const QJsonObject object = value.toObject();
-    const bool valid = value.isObject() && readLength(object, "clearance", rules.clearance) &&
-                       readLength(object, "minTrackWidth", rules.minTrackWidth) &&
-                       readLength(object, "minDrill", rules.minDrill) &&
-                       readLength(object, "minAnnularRing", rules.minAnnularRing) &&
-                       readLength(object, "boardEdgeClearance", rules.boardEdgeClearance);
-    if (!valid) return tr("The design rules section is invalid.");
-    const QString problem = validateDesignRules(rules);
-    return problem.isEmpty() ? QString() : tr("The design rules are invalid: %1").arg(problem);
-}
+// The Design Rule Manager parts (ADR-0010) live in DesignRules.cpp.
+QString rulesFromJson(const QJsonValue& value, DesignRules& rules) { return designRulesFromJson(value, rules); }
 
 } // namespace
 
@@ -533,12 +523,7 @@ QByteArray serializeProject(const ProjectData& project) {
         library[QStringLiteral("customDevices")] = devices;
     }
     root[QStringLiteral("library")] = library;
-    const DesignRules& rules = project.rules;
-    root[QStringLiteral("rules")] = QJsonObject{{QStringLiteral("clearance"), rules.clearance},
-                                                {QStringLiteral("minTrackWidth"), rules.minTrackWidth},
-                                                {QStringLiteral("minDrill"), rules.minDrill},
-                                                {QStringLiteral("minAnnularRing"), rules.minAnnularRing},
-                                                {QStringLiteral("boardEdgeClearance"), rules.boardEdgeClearance}};
+    root[QStringLiteral("rules")] = designRulesToJson(project.rules);
     return QJsonDocument(root).toJson(QJsonDocument::Indented);
 }
 
