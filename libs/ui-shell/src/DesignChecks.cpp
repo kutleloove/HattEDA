@@ -126,7 +126,7 @@ QRectF primitiveBounds(const Primitive& primitive) {
 
 // ---- board copper ----------------------------------------------------------------------------
 
-enum class CopperKind { Track, Pad, Via };
+enum class CopperKind { Track, Pad, Via, Zone };
 
 struct Copper {
     CopperKind kind = CopperKind::Track;
@@ -425,6 +425,26 @@ CheckReport runDesignRuleCheck(const SketchDocument& schematic, const SketchDocu
             }
             break;
         }
+        case SketchItem::Kind::Polyline: {
+            // Copper zones are not poured: the whole polygon is solid copper with no clearance.
+            if (item.variant != CopperZoneVariant || item.points.size() < 3) break;
+            Copper zone;
+            zone.kind = CopperKind::Zone;
+            zone.itemId = item.id;
+            zone.name = tr("copper zone");
+            zone.layers = itemCopperLayers(item);
+            zone.anchor = item.points.first();
+            Primitive area;
+            area.polygon = QPolygonF(item.points);
+            area.a = area.b = area.polygon.boundingRect().center();
+            zone.primitives = {area};
+            if (zone.layers == 0) break;
+            copper.append(zone);
+            add(report, W, B, "drc.zone-unfilled",
+                tr("Copper zones are not poured yet: this zone is solid copper without clearance around other nets."),
+                item.points.first(), {item.id});
+            break;
+        }
         default:
             break;
         }
@@ -445,8 +465,9 @@ CheckReport runDesignRuleCheck(const SketchDocument& schematic, const SketchDocu
             if ((copper[a].layers & copper[b].layers) == 0) continue;
             if (!copper[a].bounds.adjusted(-reach, -reach, reach, reach).intersects(copper[b].bounds)) continue;
             const double d = copperGap(copper[a], copper[b]);
+            const bool zone = copper[a].kind == CopperKind::Zone || copper[b].kind == CopperKind::Zone;
             if (d <= Touch) groups.join(a, b);
-            else if (d < rules.clearance) nearPairs.append({a, b});
+            else if (d < rules.clearance && !zone) nearPairs.append({a, b});
         }
     }
     QHash<int, QSet<int>> groupNets;
@@ -469,15 +490,23 @@ CheckReport runDesignRuleCheck(const SketchDocument& schematic, const SketchDocu
             QStringList names;
             QStringList ids;
             std::optional<QPointF> at;
+            bool throughZone = false;
             for (int j = 0; j < count; ++j) {
                 if (groups.root(j) != root) continue;
                 if (copper[j].net >= 0 && copper[j].net != copper[i].net && !at) at = copper[j].anchor;
                 if (!ids.contains(copper[j].itemId)) ids << copper[j].itemId;
+                throughZone = throughZone || copper[j].kind == CopperKind::Zone;
             }
             for (int net : nets) names << netName(net);
             names.sort();
-            add(report, E, B, "drc.short", tr("Copper joins different nets: %1").arg(names.join(QStringLiteral(", "))),
-                at.value_or(copper[i].anchor), ids);
+            if (throughZone) {
+                add(report, E, B, "drc.zone-short",
+                    tr("A copper zone joins different nets: %1").arg(names.join(QStringLiteral(", "))),
+                    at.value_or(copper[i].anchor), ids);
+            } else {
+                add(report, E, B, "drc.short", tr("Copper joins different nets: %1").arg(names.join(QStringLiteral(", "))),
+                    at.value_or(copper[i].anchor), ids);
+            }
         }
     }
 
@@ -498,6 +527,8 @@ CheckReport runDesignRuleCheck(const SketchDocument& schematic, const SketchDocu
 
     if (outline != nullptr && outlinePolygon.size() >= 3) {
         for (const auto& part : copper) {
+            // Zones are usually drawn up to the outline; pouring will apply the edge clearance.
+            if (part.kind == CopperKind::Zone) continue;
             const bool inside = outlinePolygon.containsPoint(part.anchor, Qt::OddEvenFill);
             double nearest = std::numeric_limits<double>::infinity();
             for (const auto& primitive : part.primitives) {

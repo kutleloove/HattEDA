@@ -220,6 +220,55 @@ private slots:
         QCOMPARE(missing.first().workspace, Workspace::Schematic);
     }
 
+    void copperZonesJoinAndShortNets() {
+        const SketchDocument schematic = dcDividerExample();
+        const SketchDocument placed = transferToBoard(schematic, {outline(80, 60)}).document;
+        const auto find = [&placed](const char* label) {
+            return *std::find_if(placed.begin(), placed.end(), [label](const SketchItem& i) { return i.label == QLatin1String(label); });
+        };
+        auto zoneAround = [](const QVector<QPointF>& centres, BoardLayer layer) {
+            // Zero-sized QRectFs are null and ignored by united(), so grow a 1.2 mm square per centre.
+            QRectF area;
+            for (const QPointF& centre : centres) area = area.united(QRectF(centre - QPointF(0.6, 0.6), QSizeF(1.2, 1.2)));
+            SketchItem zone;
+            zone.kind = SketchItem::Kind::Polyline;
+            zone.variant = CopperZoneVariant;
+            zone.closed = true;
+            zone.layer = layer;
+            zone.points = {area.topLeft(), area.topRight(), area.bottomRight(), area.bottomLeft()};
+            return zone;
+        };
+        const auto r1 = itemPads(find("R1"));
+
+        // Over both pads of R1 (different nets): a zone short, not a plain short or clearance error.
+        SketchDocument board = placed;
+        board.append(zoneAround({r1[0].center, r1[1].center}, BoardLayer::TopCopper));
+        CheckReport report = runDesignRuleCheck(schematic, board, DesignRules{});
+        QVERIFY2(withRule(report, "drc.zone-short").size() == 1, qPrintable(rules(report).join(QLatin1Char(' '))));
+        QCOMPARE(withRule(report, "drc.short").size(), 0);
+        QCOMPARE(withRule(report, "drc.zone-unfilled").size(), 1);
+        QCOMPARE(withRule(report, "drc.clearance").size(), 0);
+
+        // The same zone on the bottom layer does not touch the top side SMD pads.
+        board = placed;
+        board.append(zoneAround({r1[0].center, r1[1].center}, BoardLayer::BottomCopper));
+        report = runDesignRuleCheck(schematic, board, DesignRules{});
+        QCOMPARE(withRule(report, "drc.zone-short").size(), 0);
+        QCOMPARE(withRule(report, "drc.zone-unfilled").size(), 1);
+
+        // A zone joining the two pads of the divider midpoint net routes that net.
+        const int before = withRule(runDesignRuleCheck(schematic, placed, DesignRules{}), "drc.unrouted").size();
+        const QPointF from = r1[1].center;
+        const QPointF to = itemPads(find("R2"))[0].center;
+        board = placed;
+        SketchItem strip = zoneAround({from}, BoardLayer::TopCopper);
+        strip.points = {from + QPointF(-0.1, -0.1), to + QPointF(0.1, -0.1), to + QPointF(0.1, 0.1), from + QPointF(-0.1, 0.1)};
+        board.append(strip);
+        report = runDesignRuleCheck(schematic, board, DesignRules{});
+        QCOMPARE(withRule(report, "drc.zone-short").size(), 0);
+        QCOMPARE(withRule(report, "drc.unrouted").size(), before - 1);
+    }
+
     void routingANetRemovesItsUnroutedWarning() {
         const SketchDocument schematic = dcDividerExample();
         SketchDocument board = transferToBoard(schematic, {outline(80, 60)}).document;

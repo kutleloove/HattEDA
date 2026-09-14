@@ -42,7 +42,12 @@ for the board, rules stored with the project and a click on a problem that shows
   - `drc.board-edge`: copper outside the closed outline or nearer than `boardEdgeClearance`;
   - `drc.overlap`: footprint bodies (silkscreen + pads) on the same side overlapping;
   - `drc.not-placed`, `drc.no-outline`, and `drc.netlist` when schematic errors hide net data.
-- Copper zones are not filled yet, so they take no part in the DRC.
+- Copper zones are not poured yet (no clearance is cut around other nets), and the CAM export
+  would otherwise make them solid copper. The DRC therefore treats a zone as a solid polygon
+  conductor on its layer: it joins the copper it touches (so a ground zone routes its net), a
+  group that joins several nets through a zone is `drc.zone-short` (Error) instead of
+  `drc.short`, and every zone gets `drc.zone-unfilled` (Warning). Zones are left out of
+  clearance and board edge checks, which a future pour will apply.
 
 ### 2. Report workspace
 
