@@ -43,6 +43,7 @@ private slots:
     void ownNetStaysConnected();
     void ownPadsGetThermalReliefs();
     void islandsWithoutOwnCopperAreRemoved();
+    void sliversNarrowerThanMinimumWidthAreRemoved();
     void zonesWithoutNetAreNotPoured();
     void boardEdgeClearanceShrinksThePour();
     void contoursCarryHoleDepth();
@@ -106,6 +107,26 @@ void ZoneFillTests::islandsWithoutOwnCopperAreRemoved() {
 
     options.removeIslands = false;
     QVERIFY(fillZones(board, obstacles, options).first().fill.contains(QPointF(15, 15)));
+}
+
+void ZoneFillTests::sliversNarrowerThanMinimumWidthAreRemoved() {
+    // Two pads of another net 0.6 mm apart leave a 0.2 mm sliver after 0.2 mm clearance each side.
+    const SketchDocument board{zoneItem(QStringLiteral("GND"), {0, 0, 20, 20}), smdPad({10, 10}, 1.0),
+                               smdPad({11.6, 10}, 1.0), smdPad({3, 3}, 1.0)};
+    auto obstacles = boardCopperObstacles(board);
+    obstacles.last().net = QStringLiteral("GND"); // keeps the main pour from being an island
+    ZonePourOptions options;
+    options.clearance = 0.2;
+    options.thermalReliefs = false;
+    options.minimumWidth = 0.0;
+    QVERIFY(fillZones(board, obstacles, options).first().fill.contains(QPointF(10.8, 10)));
+
+    options.minimumWidth = 0.25;
+    const QPainterPath fill = fillZones(board, obstacles, options).first().fill;
+    QVERIFY(!fill.contains(QPointF(10.8, 10)));
+    QVERIFY(fill.contains(QPointF(10.8, 5)));  // wide pour stays
+    QVERIFY(fill.contains(QPointF(1.0, 1.0)));
+    QVERIFY(!fill.contains(QPointF(10.6, 10))); // never grows into the clearance
 }
 
 void ZoneFillTests::zonesWithoutNetAreNotPoured() {

@@ -32,6 +32,9 @@ on a copper layer:
 - pads of the zone's own net connect through thermal reliefs: a gap ring of
   `max(clearance, thermalGap)` (default 0.3 mm) crossed by four spokes (`spokeWidth`, default
   0.4 mm) that stay inside the pour; own-net tracks and vias join solidly;
+- parts narrower than `minimumWidth` (default 0.25 mm, a fixed default like the thermal settings) are
+  removed by a morphological opening (shrink by half the width, grow back, intersect with the pour so
+  it never grows into a clearance);
 - pour regions (an outline minus the holes directly inside it) that touch no copper of the zone's
   net are removed as islands, so a zone whose net has no copper on the board pours nothing
   (`ZonePourOptions`).
@@ -56,8 +59,8 @@ document or the design rules change and are never stored.
 
 - Overlapping zones of different nets can clear each other's copper where their knockouts overlap;
   the DRC reports such shorts (`drc.zone-short`).
-- No minimum-width check yet: a pour may leave thin slivers between close obstacles. Spokes are axis
+- The opening also rounds inside corners of the pour by half the minimum width. Spokes are axis
   aligned and can be cut by other nets' clearance, leaving a pad with fewer spokes; island removal
-  still only drops regions that nothing of the net touches. Evaluating pours in the DRC instead of
-  the solid zone is a follow-up.
+  still only drops regions that nothing of the net touches. The DRC evaluates the pour
+  (`pourZones`) rather than the solid zone polygon.
 - Pouring cost grows with the copper near a zone; boards of MVP size pour in milliseconds.

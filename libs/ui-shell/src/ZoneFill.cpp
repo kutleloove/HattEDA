@@ -153,6 +153,15 @@ QVector<ZoneFillResult> fillZones(const SketchDocument& board, const QVector<Zon
         fill = fill.simplified();
         fill.setFillRule(Qt::OddEvenFill);
 
+        if (options.minimumWidth > 0.0 && !fill.isEmpty()) {
+            // Morphological opening; intersecting with the pour keeps stroker approximations from
+            // growing copper back into a clearance.
+            const double half = options.minimumWidth / 2.0;
+            QPainterPath opened = grown(shrunk(fill, half), half).intersected(fill).simplified();
+            opened.setFillRule(Qt::OddEvenFill);
+            fill = opened;
+        }
+
         if (options.removeIslands) {
             // Rebuild the pour from its regions (an even-depth contour minus the holes right inside it),
             // keeping only regions that touch copper of the zone's net.
@@ -187,6 +196,7 @@ QVector<ZoneFillResult> fillZones(const SketchDocument& board, const QVector<Zon
     options.boardEdgeClearance = boardEdgeClearance;
     options.thermalReliefs = false;
     options.removeIslands = false;
+    options.minimumWidth = 0.0;
     return fillZones(board, obstacles, options);
 }
 

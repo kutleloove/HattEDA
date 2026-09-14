@@ -12,8 +12,9 @@ namespace hatt::ui {
 // Copper pour for Kayra copper zones (ADR-0009). A zone with a net is filled on its copper layer:
 // the zone outline, kept `boardEdgeClearance` inside the board outline when one exists, minus the
 // copper of every other net grown by `clearance`. Pads of the zone's own net connect through thermal
-// reliefs (a gap ring crossed by four spokes); tracks and vias of the net join solidly. Pour islands
-// that touch no copper of the net are removed. A zone without a net is not filled.
+// reliefs (a gap ring crossed by four spokes); tracks and vias of the net join solidly. Slivers
+// narrower than the minimum width and pour islands that touch no copper of the net are removed.
+// A zone without a net is not filled.
 // Coordinates are editor millimetres (Y down).
 
 struct ZoneObstacle {
@@ -31,6 +32,9 @@ struct ZonePourOptions {
     double thermalGap = 0.3;   // mm between a pad and the pour, at least the clearance
     double spokeWidth = 0.4;   // mm
     bool removeIslands = true; // drop pour regions without copper of the zone's net
+    // Pour parts narrower than this are removed (shrink by half, grow back, never beyond the pour),
+    // so fabrication never gets copper slivers; 0 keeps them. Spokes must be at least this wide.
+    double minimumWidth = 0.25;
 };
 
 struct ZoneFillResult {
