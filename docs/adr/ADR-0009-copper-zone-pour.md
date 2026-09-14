@@ -29,7 +29,12 @@ on a copper layer:
   when an outline exists;
 - subtract the copper of every other net on the zone's layer grown by `clearance`
   (`QPainterPath` boolean operations with rounded `QPainterPathStroker` offsets);
-- copper of the zone's own net stays inside the pour and connects solidly (no thermal reliefs yet).
+- pads of the zone's own net connect through thermal reliefs: a gap ring of
+  `max(clearance, thermalGap)` (default 0.3 mm) crossed by four spokes (`spokeWidth`, default
+  0.4 mm) that stay inside the pour; own-net tracks and vias join solidly;
+- pour regions (an outline minus the holes directly inside it) that touch no copper of the zone's
+  net are removed as islands, so a zone whose net has no copper on the board pours nothing
+  (`ZonePourOptions`).
 
 Nets come from the shared board copper model (`BoardCopper.hpp`, ADR-0008), built without zones so a
 zone never merges the groups it covers. A copper group takes its single schematic net; a group
@@ -51,6 +56,8 @@ document or the design rules change and are never stored.
 
 - Overlapping zones of different nets can clear each other's copper where their knockouts overlap;
   the DRC reports such shorts (`drc.zone-short`).
-- No thermal reliefs, minimum-width or island removal yet: a pour may leave thin slivers or isolated
-  copper islands. These are follow-ups, as is evaluating pours in the DRC instead of the solid zone.
+- No minimum-width check yet: a pour may leave thin slivers between close obstacles. Spokes are axis
+  aligned and can be cut by other nets' clearance, leaving a pad with fewer spokes; island removal
+  still only drops regions that nothing of the net touches. Evaluating pours in the DRC instead of
+  the solid zone is a follow-up.
 - Pouring cost grows with the copper near a zone; boards of MVP size pour in milliseconds.

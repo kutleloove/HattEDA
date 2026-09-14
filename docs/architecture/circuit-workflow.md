@@ -60,8 +60,9 @@ sayıları durum satırında bildirilir.
 **Bakır alan dolgusu (ADR-0009):** Bir bakır alanın (copper zone) özelliklerinden **Net** seçilir
 (`ItemZoneNet`; şemadaki netler listelenir, ad elle de yazılabilir). Netli alan kendi katmanında
 dökülür: alan poligonu, kart dış çizgisi varsa kenar boşluğu kadar içeride kalır ve başka netlerin
-bakırından tasarım kurallarındaki clearance kadar oyulur. Aynı netin padleri ve yolları dolguya
-bağlanır (henüz termal yok). Dolgu kanvasta katman renginde çizilir; belge, şema veya kurallar
+bakırından tasarım kurallarındaki clearance kadar oyulur. Aynı netin padleri dolguya termal bağlantıyla
+(0.3 mm boşluk halkası ve dört 0.4 mm kol), yolları ve via'ları doğrudan bağlanır; netin hiçbir
+bakırına değmeyen dolgu adacıkları silinir (netin kartta bakırı yoksa alan boş kalır). Dolgu kanvasta katman renginde çizilir; belge, şema veya kurallar
 değişince yeniden hesaplanır. Gerber'de dolgu katmanın en başına yazılır, oyuklar LPC (clear) bölge
 olarak çıkar. Netsiz alan dökülmez ve Gerber'e **yazılmaz**, çünkü katı bakır kapsadığı bütün netleri
 kısa devre ederdi; Gerber sekmesinin üstünde `FabricationZonesNotice` uyarısı ve durum satırında sayısı
