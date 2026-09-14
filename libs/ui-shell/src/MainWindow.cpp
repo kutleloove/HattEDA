@@ -601,6 +601,7 @@ void MainWindow::editItemProperties(DesignCanvas* canvas, int index) {
     QDoubleSpinBox* viaDiameterField = nullptr;
     QDoubleSpinBox* viaDrillField = nullptr;
     QComboBox* zoneNet = nullptr;
+    QDoubleSpinBox* textHeightField = nullptr;
     auto size = [&](const QString& name, double millimetres, double minimum) {
         auto* field = new QDoubleSpinBox(&dialog);
         field->setObjectName(name);
@@ -685,6 +686,10 @@ void MainWindow::editItemProperties(DesignCanvas* canvas, int index) {
             } else if (item.variant != BoardOutlineVariant) {
                 layerChoice(AllLayersMask);
             }
+            if (item.kind == SketchItem::Kind::Text) {
+                textHeightField = size(QStringLiteral("ItemTextHeight"), item.width > 0.0 ? item.width : TextHeightMm, 0.5);
+                form->addRow(tr("Text height"), textHeightField);
+            }
             break;
         }
     }
@@ -759,6 +764,7 @@ void MainWindow::editItemProperties(DesignCanvas* canvas, int index) {
         if (layer) properties.layer = static_cast<BoardLayer>(layer->currentData().toInt());
         if (bottomSide) properties.onBottom = bottomSide->isChecked();
         if (trackWidthField) properties.width = fromDisplayUnit(trackWidthField->value(), unit);
+        if (textHeightField) properties.width = fromDisplayUnit(textHeightField->value(), unit);
         if (padNumber) {
             properties.pad.number = padNumber->value();
             properties.pad.shape = static_cast<PadShape>(padShape->currentData().toInt());

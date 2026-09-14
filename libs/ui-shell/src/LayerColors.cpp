@@ -51,6 +51,14 @@ QColor boardLayerColor(BoardLayer layer, bool dark) {
     return stored.isValid() ? stored : defaultLayerColor(layer, dark);
 }
 
+QColor throughHoleColor(bool dark) {
+    const QColor stored(QSettings()
+                            .value(QStringLiteral("appearance/layerColors/%1/through-hole")
+                                       .arg(dark ? QStringLiteral("dark") : QStringLiteral("light")))
+                            .toString());
+    return stored.isValid() ? stored : QColor(dark ? "#b45cff" : "#7b2fbf");
+}
+
 void setLayerColorOverride(BoardLayer layer, bool dark, const QColor& color) {
     if (color.isValid() && color != defaultLayerColor(layer, dark)) {
         QSettings().setValue(key(layer, dark), color.name());

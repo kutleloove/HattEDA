@@ -377,8 +377,12 @@ void appendPolyline(QVector<QLineF>& segments, const QVector<QPointF>& points, b
     }
 }
 
-double textWidth(const QString& text) {
-    return std::max<qsizetype>(1, text.size()) * TextHeightMm * 0.55;
+// Box of a Text item: `width` is the text height (0 = TextHeightMm). Wide enough for both the
+// schematic's proportional font and the board's single-stroke font (StrokeFont: 1 unit per 6).
+QSizeF textBox(const SketchItem& item) {
+    const double height = item.width > 0.0 ? item.width : TextHeightMm;
+    const auto glyphs = static_cast<double>(std::max<qsizetype>(1, item.label.size()));
+    return {std::max(glyphs * height * 0.55, (6.0 * glyphs - 2.0) / 6.0 * height), height};
 }
 
 } // namespace
@@ -732,7 +736,7 @@ QVector<QLineF> itemSegments(const SketchItem& item) {
                        false);
         break;
     case SketchItem::Kind::Text: {
-        const QRectF rect(item.points.first(), QSizeF(textWidth(item.label), TextHeightMm));
+        const QRectF rect(item.points.first(), textBox(item));
         appendPolyline(segments, {rect.topLeft(), rect.topRight(), rect.bottomRight(), rect.bottomLeft()},
                        true);
         break;

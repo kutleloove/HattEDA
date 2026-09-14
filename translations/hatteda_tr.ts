@@ -654,4 +654,15 @@ Son projeler listesinden kaldırılsın mı?</translation></message>
     <name>hatt::ui::CamPreview</name>
     <message><source>Nothing to fabricate on this board yet</source><translation>Bu kartta henüz üretilecek bir şey yok</translation></message>
   </context>
+  <context>
+    <name>hatt::ui::DesignCanvas</name>
+    <message><source>Place text</source><translation>Metin yerleştir</translation></message>
+    <message><source>Text</source><translation>Metin</translation></message>
+    <message><source>Height</source><translation>Yükseklik</translation></message>
+    <message><source>Goes on %1</source><translation>%1 katmanına yerleşir</translation></message>
+  </context>
+  <context>
+    <name>hatt::ui::MainWindow</name>
+    <message><source>Text height</source><translation>Metin yüksekliği</translation></message>
+  </context>
 </TS>

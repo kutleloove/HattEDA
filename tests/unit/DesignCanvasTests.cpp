@@ -4,6 +4,12 @@
 
 #include <QApplication>
 #include <QContextMenuEvent>
+#include <QDialog>
+#include <QDialogButtonBox>
+#include <QDoubleSpinBox>
+#include <QLineEdit>
+#include <QPushButton>
+#include <QTimer>
 #include <QMouseEvent>
 #include <QSignalSpy>
 #include <QUndoStack>
@@ -128,6 +134,7 @@ private slots:
     void spacingShownWhileMovingAndPlacing();
     void equalSpacingSnapsWhileMovingAndPlacing();
     void createArrayCopiesInRowOrder();
+    void textToolPlacesBoardTextWithHeight();
 
 private:
     DesignCanvas* canvas_ = nullptr;
@@ -945,6 +952,40 @@ void DesignCanvasTests::gridLevelChangesSnapStep() {
     placeResistor(*canvas_, {10.9, 10.0});
     QVERIFY(samePoint(canvas_->document().first().points.first(), {11.43, 10.16}));
     QCOMPARE(DesignCanvas::gridStep(Workspace::Board, 2), 0.635);
+}
+
+void DesignCanvasTests::textToolPlacesBoardTextWithHeight() {
+    DesignCanvas board(Workspace::Board);
+    board.resize(800, 600);
+    board.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&board));
+    board.setActiveLayer(hatt::ui::BoardLayer::BottomSilk);
+    board.setTool(CanvasTool::Text);
+
+    bool answered = false;
+    QTimer::singleShot(50, [&answered] {
+        auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+        QVERIFY(dialog);
+        QCOMPARE(dialog->objectName(), QStringLiteral("PlaceTextDialog"));
+        auto* ok = dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Ok);
+        QVERIFY(!ok->isEnabled()); // empty text
+        dialog->findChild<QLineEdit*>(QStringLiteral("TextContent"))->setText(QStringLiteral("REV B"));
+        dialog->findChild<QDoubleSpinBox*>(QStringLiteral("TextHeight"))->setValue(3.5);
+        answered = true;
+        ok->click();
+    });
+    click(board, {10.0, 10.0});
+    QTRY_VERIFY(answered);
+    QTRY_COMPARE(board.document().size(), 1);
+    const SketchItem text = board.document().first();
+    QCOMPARE(text.kind, SketchItem::Kind::Text);
+    QCOMPARE(text.label, QStringLiteral("REV B"));
+    QCOMPARE(text.layer, hatt::ui::BoardLayer::BottomSilk);
+    QCOMPARE(text.width, 3.5);
+    QCOMPARE(hatt::ui::itemBounds(text).height(), 3.5);
+    QVERIFY(board.tool() == CanvasTool::Text); // ready for the next label
+    board.undoStack()->undo();
+    QVERIFY(board.document().isEmpty());
 }
 
 QTEST_MAIN(DesignCanvasTests)

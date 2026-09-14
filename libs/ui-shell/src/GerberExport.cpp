@@ -254,10 +254,11 @@ CamOutput buildCamOutput(const SketchDocument& board, const CamOptions& options)
                 if (!item.label.trimmed().isEmpty()) ++output.skippedTexts;
                 break;
             }
-            // Same box as the canvas: top-left anchor, TextHeightMm tall, vertically centred.
-            const double height = TextHeightMm * 0.7;
-            const QPointF topLeft = item.points.first() + QPointF(0.0, (TextHeightMm - height) / 2.0);
-            const double lineWidth = isCopperLayer(item.layer) ? CamCopperLineWidth : CamSilkLineWidth;
+            // Same strokes as the board canvas: top-left anchor, item.width tall (0 = TextHeightMm).
+            const double height = item.width > 0.0 ? item.width : TextHeightMm;
+            const QPointF topLeft = item.points.first();
+            const double lineWidth =
+                std::max(isCopperLayer(item.layer) ? CamCopperLineWidth : CamSilkLineWidth, height * 0.12);
             const bool mirror = isBottomLayer(item.layer);
             const double axis = topLeft.x() + strokeTextWidth(item.label, height) / 2.0;
             for (QVector<QPointF> line : strokeText(item.label, topLeft, height)) {

@@ -13,6 +13,9 @@ namespace hatt::ui {
 // `appearance/layerColors/<dark|light>/<layer index>`.
 [[nodiscard]] QColor defaultLayerColor(BoardLayer layer, bool dark);
 [[nodiscard]] QColor boardLayerColor(BoardLayer layer, bool dark);
+// Plated through-hole pads and vias (both copper layers), purple as in Proteus ARES; overridable
+// under `appearance/layerColors/<dark|light>/through-hole`.
+[[nodiscard]] QColor throughHoleColor(bool dark);
 void setLayerColorOverride(BoardLayer layer, bool dark, const QColor& color);
 void clearLayerColorOverrides(bool dark);
 
