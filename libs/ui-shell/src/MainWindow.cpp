@@ -2586,8 +2586,8 @@ void MainWindow::updateProjectState() {
 void MainWindow::showPrintLayout() {
     if (projectPath_.isEmpty()) return;
     CamOptions options;
-    options.zoneFills = pourZones(canvases_.value(0)->document(), canvases_.value(1)->document(), rules_.clearance,
-                                  rules_.boardEdgeClearance);
+    options.zoneFills = pourZones(canvases_.value(0)->document(), canvases_.value(1)->document(), pourOptionsFor(rules_));
+    options.maskExpansion = rules_.defaults.solderResistGuard;
     const CamOutput output = buildCamOutput(canvases_.value(1)->document(), options);
     PrintLayoutDialog dialog(output, QFileInfo(projectPath_).completeBaseName(), this);
     dialog.resize(1100, 720);
@@ -2628,8 +2628,8 @@ void MainWindow::exportFabricationFiles() {
     if (directory.isEmpty()) return;
 
     CamOptions options;
-    options.zoneFills = pourZones(canvases_.value(0)->document(), canvases_.value(1)->document(), rules_.clearance,
-                                  rules_.boardEdgeClearance);
+    options.zoneFills = pourZones(canvases_.value(0)->document(), canvases_.value(1)->document(), pourOptionsFor(rules_));
+    options.maskExpansion = rules_.defaults.solderResistGuard;
     const CamOutput output = buildCamOutput(canvases_.value(1)->document(), options);
     const QString baseName = QFileInfo(projectPath_).completeBaseName();
     const QString version = QCoreApplication::applicationVersion().isEmpty()
@@ -2868,8 +2868,7 @@ void MainWindow::refreshZoneFills() {
     auto* board = canvases_.value(1, nullptr);
     if (board == nullptr) return;
     QHash<QString, QPainterPath> fills;
-    for (const ZoneFillResult& fill : pourZones(canvases_.value(0)->document(), board->document(), rules_.clearance,
-                                                rules_.boardEdgeClearance)) {
+    for (const ZoneFillResult& fill : pourZones(canvases_.value(0)->document(), board->document(), pourOptionsFor(rules_))) {
         fills.insert(fill.zoneId, fill.fill);
     }
     board->setZoneFills(fills);
