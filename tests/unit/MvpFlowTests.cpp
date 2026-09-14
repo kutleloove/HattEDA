@@ -1,5 +1,6 @@
 #include "hatt/ui/DesignChecks.hpp"
 #include "hatt/ui/GerberExport.hpp"
+#include "hatt/ui/ManufacturingExport.hpp"
 #include "hatt/ui/ProjectFile.hpp"
 #include "hatt/ui/SketchCircuit.hpp"
 
@@ -118,7 +119,17 @@ private slots:
             QVERIFY(file.fileName.startsWith(QStringLiteral("divider")));
         }
 
-        // 6. The whole design survives the project file.
+        // 6. Assembly files: two BOM lines (R1+R2 share value and footprint) and three placements.
+        const QVector<BomLine> bom = buildBom(schematic, {});
+        QCOMPARE(bom.size(), 2);
+        QCOMPARE(bom.first().references, QStringList({QStringLiteral("R1"), QStringLiteral("R2")}));
+        const QVector<PlacementLine> placement = buildPlacement(board);
+        QCOMPARE(placement.size(), 3);
+        for (const auto& line : placement) QVERIFY(line.centre.y() < 0); // CAM coordinates, Y up
+        QCOMPARE(bomCsv(bom).count('\n'), 3);
+        QCOMPARE(placementCsv(placement).count('\n'), 4);
+
+        // 7. The whole design survives the project file.
         ProjectData project;
         project.name = QStringLiteral("Divider");
         project.schematic = schematic;
