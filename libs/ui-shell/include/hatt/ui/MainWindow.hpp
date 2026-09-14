@@ -36,6 +36,12 @@ public:
     [[nodiscard]] QString projectPath() const { return projectPath_; }
     // Autosave, recovery, backup and lock handling of the open project (ProjectSafety.hpp).
     [[nodiscard]] ProjectGuard* projectGuard() const { return projectGuard_; }
+    // Devices offered by schematic component mode (Proteus style pick list, projectDeviceList).
+    [[nodiscard]] QStringList projectDevices() const;
+    // Adds built-in schematic component ids to the pick list; unknown and listed ids are ignored.
+    void addProjectDevices(const QStringList& ids);
+    // Removes a device from the pick list; false while the schematic still uses it.
+    bool removeProjectDevice(const QString& id);
 
 public slots:
     void showMergenWorkspace();
@@ -47,6 +53,12 @@ public slots:
     bool openProjectFile(const QString& path);
     bool saveProject();
     bool saveProjectAs();
+    // Library browser that adds devices to the project (PickDevicesDialog).
+    void pickDevices();
+    // DeviceEditorDialog: creates a project device (and footprints made from it) and picks it.
+    void newDevice();
+    // FootprintEditorDialog without a device: creates a project footprint.
+    void newFootprint();
 
 protected:
     void changeEvent(QEvent* event) override;
@@ -75,6 +87,10 @@ private:
 
     void activateToolMode(ToolMode mode);
     void rebuildObjectSelector();
+    // Rebuilds component mode's list when placing, deleting or undoing changed its contents.
+    void refreshComponentList();
+    [[nodiscard]] QStringList componentListKeys() const;
+    void removeSelectedDevice();
     void applyObjectSelection();
     void workspaceChanged();
     void applySnapSettings();
@@ -108,6 +124,15 @@ private:
     QLabel* contextHint_ = nullptr;
     QWidget* objectPreview_ = nullptr;
     QListWidget* objectSelector_ = nullptr;
+    QWidget* deviceBar_ = nullptr;
+    QWidget* boardPartsBar_ = nullptr;
+    QPushButton* removeDeviceButton_ = nullptr;
+    QStringList componentKeys_;
+    // Board component mode: footprints waiting for placement, indexed by the selector rows.
+    SketchDocument boardParts_;
+    QStringList boardPartProblems_;
+    ProjectLibrary library_;
+    bool libraryModified_ = false;
     QListWidget* recentProjects_ = nullptr;
     QList<QPushButton*> snapToggles_;
     QActionGroup* gridActions_ = nullptr;

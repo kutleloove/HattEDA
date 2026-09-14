@@ -539,6 +539,7 @@ void DesignCanvas::setTool(CanvasTool tool, const QString& variant) {
     cancelOperation();
     tool_ = tool;
     variant_ = variant;
+    placementTemplate_.reset();
     placementTurns_ = 0;
     hasMeasurement_ = false;
     if (tool_ != CanvasTool::Select) {
@@ -547,6 +548,10 @@ void DesignCanvas::setTool(CanvasTool tool, const QString& variant) {
     setCursor(tool_ == CanvasTool::Select ? Qt::ArrowCursor : Qt::CrossCursor);
     emit statusMessage(toolHint());
     update();
+}
+
+void DesignCanvas::setPlacementTemplate(const SketchItem& item) {
+    if (tool_ == CanvasTool::Symbol && item.variant == variant_) placementTemplate_ = item;
 }
 
 void DesignCanvas::setSnapSettings(const SnapSettings& settings) {
@@ -648,6 +653,11 @@ void DesignCanvas::applyDocumentEdit(const QString& title, const SketchDocument&
 
 void DesignCanvas::setAirwires(const QVector<QLineF>& lines) {
     airwires_ = lines;
+    update();
+}
+
+void DesignCanvas::setAnnotations(const QVector<CanvasAnnotation>& annotations) {
+    annotations_ = annotations;
     update();
 }
 
@@ -1260,14 +1270,28 @@ void DesignCanvas::placeSymbol(QPointF world) {
         return;
     }
     SketchItem item;
+    if (placementTemplate_ && placementTemplate_->variant == variant_) {
+        const QString id = item.id;
+        item = *placementTemplate_;
+        item.id = id;
+    } else {
+        item.label = symbol->prefix.isEmpty() ? symbol->defaultLabel
+                                              : nextDesignator(items_, symbol->prefix);
+        item.value = symbol->defaultValue;
+        const auto* footprint = findSymbol(symbol->defaultFootprint);
+        if (footprint != nullptr && footprint->pins.size() == symbol->pins.size()) {
+            item.footprint = footprint->id;
+            if (symbol->defaultPinPadMap.size() == symbol->pins.size()) {
+                item.pinPadMap = symbol->defaultPinPadMap;
+            } else {
+                for (int pad = 1; pad <= symbol->pins.size(); ++pad) item.pinPadMap.append(pad);
+            }
+        }
+    }
     item.kind = SketchItem::Kind::Symbol;
     item.points = {world};
     item.variant = variant_;
     item.quarterTurns = placementTurns_;
-    item.label = symbol->prefix.isEmpty() ? symbol->defaultLabel
-                                          : nextDesignator(items_, symbol->prefix);
-    if (variant_ == QLatin1String("schematic.resistor")) item.value = QStringLiteral("1k");
-    if (variant_ == QLatin1String("schematic.vdc")) item.value = QStringLiteral("5");
     SketchDocument document = items_;
     document.append(item);
     pushEdit(tr("Place %1").arg(item.label.isEmpty() ? symbolDisplayName(*symbol) : item.label),
@@ -1829,6 +1853,27 @@ void DesignCanvas::paintEvent(QPaintEvent*) {
     // Board tracks share one copper layer, so only schematic joins need a visible dot.
     const QVector<QPointF> junctions = board ? QVector<QPointF>{} : schematicJunctions(shown);
     drawJunctionDots(painter, junctions, colors.wire, scale_, map);
+
+    // Simulation readouts (e.g. probe voltages): a filled tag next to the point.
+    if (!annotations_.isEmpty()) {
+        QFont font = painter.font();
+        font.setPixelSize(12);
+        font.setBold(true);
+        painter.setFont(font);
+        const QFontMetricsF metrics(font);
+        for (const auto& annotation : annotations_) {
+            const QPointF anchor = map(annotation.position);
+            const QRectF tag(anchor + QPointF(10, -26),
+                             QSizeF(metrics.horizontalAdvance(annotation.text) + 12, metrics.height() + 6));
+            painter.setPen(QPen(colors.guide, 1.2));
+            painter.drawLine(anchor, QPointF(tag.left(), tag.bottom()));
+            painter.setBrush(colors.background);
+            painter.drawRoundedRect(tag, 3, 3);
+            painter.setBrush(Qt::NoBrush);
+            painter.setPen(colors.guide);
+            painter.drawText(tag, Qt::AlignCenter, annotation.text);
+        }
+    }
 
     auto drawMeasurement = [&](const QLineF& line) {
         const QPointF a = map(line.p1());

@@ -1,5 +1,6 @@
 #include "hatt/ui/DesignCanvas.hpp"
 #include "hatt/ui/MainWindow.hpp"
+#include "hatt/ui/ProjectFile.hpp"
 #include "hatt/ui/Theme.hpp"
 
 #include <QAction>
@@ -8,6 +9,7 @@
 #include <QDialogButtonBox>
 #include <QComboBox>
 #include <QDoubleSpinBox>
+#include <QLabel>
 #include <QLineEdit>
 #include <QMenu>
 #include <QDockWidget>
@@ -24,6 +26,7 @@
 #include <QTemporaryDir>
 #include <QTimer>
 #include <QTabWidget>
+#include <QTableWidget>
 #include <QToolButton>
 #include <QUndoStack>
 #include <QtTest>
@@ -84,12 +87,177 @@ private slots:
     void arrayDialogCreatesGrid();
     void projectSaveOpenAndUnsavedChanges();
     void contextPropertiesAcceptAndCancel();
+    void componentModeUsesProjectDevicesAndSchematicParts();
+    void newDeviceCreatesFootprintAndPinMap();
     void selectionStatesFollowTheme_data();
     void selectionStatesFollowTheme();
 
 private:
     QTemporaryDir settingsDir_;
 };
+
+void MainWindowTests::componentModeUsesProjectDevicesAndSchematicParts() {
+    hatt::ui::MainWindow window;
+    QVERIFY(showActive(window));
+    activateEditor(window);
+    auto* schematic = window.activeCanvas();
+    auto* selector = window.findChild<QListWidget*>(QStringLiteral("ObjectSelector"));
+    auto* deviceBar = window.findChild<QWidget*>(QStringLiteral("DeviceBar"));
+    QVERIFY(selector && deviceBar);
+
+    // A new project starts with an empty device list, as in Proteus ISIS.
+    action(window, "hatteda.tool.component")->trigger();
+    QVERIFY(deviceBar->isVisible());
+    QCOMPARE(selector->count(), 0);
+    QCOMPARE(schematic->tool(), CanvasTool::Select);
+
+    QTimer::singleShot(0, [] {
+        auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+        QVERIFY(dialog);
+        QCOMPARE(dialog->objectName(), QStringLiteral("PickDevicesDialog"));
+        auto* results = dialog->findChild<QListWidget*>(QStringLiteral("DeviceResults"));
+        dialog->findChild<QLineEdit*>(QStringLiteral("DeviceSearch"))->setText(QStringLiteral("resis"));
+        int visible = 0;
+        for (int row = 0; row < results->count(); ++row) {
+            if (!results->item(row)->isHidden()) {
+                ++visible;
+                results->item(row)->setSelected(true);
+            }
+        }
+        QCOMPARE(visible, 1);
+        dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Ok)->click();
+    });
+    window.findChild<QPushButton*>(QStringLiteral("hatteda.devices.pick"))->click();
+    window.addProjectDevices({QStringLiteral("schematic.capacitor"), QStringLiteral("board.r0603")});
+    QCOMPARE(window.projectDevices(),
+             QStringList({QStringLiteral("schematic.resistor"), QStringLiteral("schematic.capacitor")}));
+    QCOMPARE(selector->count(), 2);
+    QVERIFY(window.isWindowModified());
+
+    selector->setCurrentRow(0);
+    QCOMPARE(schematic->toolVariant(), QStringLiteral("schematic.resistor"));
+    clickCanvas(schematic, {20.32, 20.32});
+    clickCanvas(schematic, {40.64, 20.32});
+    QCOMPARE(schematic->document().size(), 2);
+    QCOMPARE(schematic->document().first().footprint, QStringLiteral("board.r0603"));
+    QCOMPARE(schematic->document().first().pinPadMap, QVector<int>({1, 2}));
+    QVERIFY(!window.removeProjectDevice(QStringLiteral("schematic.resistor")));
+    QVERIFY(window.removeProjectDevice(QStringLiteral("schematic.capacitor")));
+    QCOMPARE(selector->count(), 1);
+
+    QVERIFY(window.saveProject());
+    const auto saved = hatt::ui::loadProjectFile(window.projectPath());
+    QVERIFY2(saved.ok(), qPrintable(saved.error));
+    QCOMPARE(saved.project.library.devices, QStringList({QStringLiteral("schematic.resistor")}));
+
+    // The PCB lists only schematic parts that are not placed yet.
+    window.showKayraWorkspace();
+    auto* board = window.activeCanvas();
+    QVERIFY(!deviceBar->isVisible());
+    QCOMPARE(selector->count(), 2);
+    QVERIFY(selector->item(0)->text().startsWith(QStringLiteral("R1")));
+    QCOMPARE(board->tool(), CanvasTool::Symbol);
+    QCOMPARE(board->toolVariant(), QStringLiteral("board.r0603"));
+    clickCanvas(board, {10.0, 10.0});
+    QCOMPARE(board->document().size(), 1);
+    QCOMPARE(board->document().first().sourceId, schematic->document().first().id);
+    QCOMPARE(board->document().first().label, QStringLiteral("R1"));
+    QTRY_COMPARE(selector->count(), 1);
+    QVERIFY(selector->item(0)->text().startsWith(QStringLiteral("R2")));
+
+    // Undoing the placement offers the part again.
+    action(window, "hatteda.action.undo")->trigger();
+    QTRY_COMPARE(selector->count(), 2);
+}
+
+void MainWindowTests::newDeviceCreatesFootprintAndPinMap() {
+    hatt::ui::MainWindow window;
+    QVERIFY(showActive(window));
+    activateEditor(window);
+    auto* schematic = window.activeCanvas();
+    auto* selector = window.findChild<QListWidget*>(QStringLiteral("ObjectSelector"));
+    action(window, "hatteda.tool.component")->trigger();
+
+    bool footprintDialogChecked = false;
+    bool deviceDialogChecked = false;
+    QTimer::singleShot(0, [&] {
+        auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+        QVERIFY(dialog);
+        QCOMPARE(dialog->objectName(), QStringLiteral("DeviceEditorDialog"));
+        auto* ok = dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Ok);
+        QVERIFY(!ok->isEnabled()); // no name yet
+        dialog->findChild<QLineEdit*>(QStringLiteral("DeviceName"))->setText(QStringLiteral("Regulator"));
+        dialog->findChild<QSpinBox*>(QStringLiteral("DevicePinCount"))->setValue(3);
+        dialog->findChild<QLineEdit*>(QStringLiteral("DevicePinNames"))->setText(QStringLiteral("IN, GND, OUT"));
+        dialog->findChild<QLineEdit*>(QStringLiteral("DeviceManufacturer"))->setText(QStringLiteral("ST"));
+        dialog->findChild<QDoubleSpinBox*>(QStringLiteral("DevicePinCurrent"))->setValue(1.5);
+        QVERIFY(ok->isEnabled());
+
+        // Creating the footprint from the device: pad count follows the pins, info box on the right.
+        QTimer::singleShot(0, [&] {
+            auto* editor = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+            QVERIFY(editor);
+            QCOMPARE(editor->objectName(), QStringLiteral("FootprintEditorDialog"));
+            auto* pads = editor->findChild<QSpinBox*>(QStringLiteral("FootprintPadCount"));
+            QVERIFY(!pads->isEnabled());
+            QCOMPARE(pads->value(), 3);
+            auto* info = editor->findChild<QWidget*>(QStringLiteral("DeviceInfoBox"));
+            QVERIFY(info);
+            const QString details = info->findChild<QLabel*>(QStringLiteral("DeviceInfoDetails"))->text();
+            QVERIFY(details.contains(QStringLiteral("ST")));
+            QVERIFY(details.contains(QStringLiteral("1.5 A")));
+            footprintDialogChecked = true;
+            editor->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Ok)->click();
+        });
+        dialog->findChild<QPushButton*>(QStringLiteral("DeviceCreateFootprint"))->click();
+        QVERIFY(footprintDialogChecked);
+        auto* footprint = dialog->findChild<QComboBox*>(QStringLiteral("DeviceFootprint"));
+        QVERIFY(footprint->currentData().toString().startsWith(QStringLiteral("project.footprint.")));
+
+        // Pin to pad table: a repeated pad blocks the dialog until every pad is used once.
+        auto* map = dialog->findChild<QTableWidget*>(QStringLiteral("DevicePinMap"));
+        QCOMPARE(map->rowCount(), 3);
+        QCOMPARE(map->item(2, 1)->text(), QStringLiteral("OUT"));
+        dialog->findChild<QSpinBox*>(QStringLiteral("DevicePinPad1"))->setValue(3);
+        QVERIFY(!ok->isEnabled());
+        dialog->findChild<QSpinBox*>(QStringLiteral("DevicePinPad3"))->setValue(1);
+        QVERIFY(ok->isEnabled());
+        deviceDialogChecked = true;
+        ok->click();
+    });
+    window.findChild<QPushButton*>(QStringLiteral("hatteda.devices.new"))->click();
+    QVERIFY(deviceDialogChecked);
+
+    const QStringList devices = window.projectDevices();
+    QCOMPARE(devices.size(), 1);
+    QVERIFY(devices.first().startsWith(QStringLiteral("project.device.")));
+    QCOMPARE(selector->count(), 1);
+    selector->setCurrentRow(0);
+    QCOMPARE(schematic->toolVariant(), devices.first());
+    clickCanvas(schematic, {20.32, 20.32});
+    QCOMPARE(schematic->document().size(), 1);
+    const auto part = schematic->document().first();
+    QCOMPARE(part.label, QStringLiteral("U1"));
+    QVERIFY(part.footprint.startsWith(QStringLiteral("project.footprint.")));
+    QCOMPARE(part.pinPadMap, QVector<int>({3, 2, 1}));
+
+    QVERIFY(window.saveProject());
+    const auto saved = hatt::ui::loadProjectFile(window.projectPath());
+    QVERIFY2(saved.ok(), qPrintable(saved.error));
+    QCOMPARE(saved.project.library.customDevices.size(), 1);
+    QCOMPARE(saved.project.library.customFootprints.size(), 1);
+    QCOMPARE(saved.project.library.customDevices.first().pinPadMap, QVector<int>({3, 2, 1}));
+    QCOMPARE(saved.project.library.customFootprints.first().params.padCount, 3);
+
+    // The PCB offers the part with its project footprint.
+    window.showKayraWorkspace();
+    auto* board = window.activeCanvas();
+    QCOMPARE(selector->count(), 1);
+    QCOMPARE(board->toolVariant(), part.footprint);
+    clickCanvas(board, {10.0, 10.0});
+    QCOMPARE(board->document().size(), 1);
+    QCOMPARE(board->document().first().variant, part.footprint);
+}
 
 void MainWindowTests::contextPropertiesAcceptAndCancel() {
     hatt::ui::MainWindow window;
@@ -283,6 +451,7 @@ void MainWindowTests::keyboardShortcutsDriveToolsAndUndo() {
     QTest::keySequence(&window, QKeySequence(QStringLiteral("M")));
     QCOMPARE(canvas->tool(), CanvasTool::Measure);
 
+    window.addProjectDevices({QStringLiteral("schematic.resistor")});
     QTest::keySequence(&window, QKeySequence(QStringLiteral("A")));
     QCOMPARE(canvas->tool(), CanvasTool::Symbol);
     QTest::keySequence(&window, QKeySequence(QStringLiteral("Ctrl+R")));
@@ -547,6 +716,7 @@ void MainWindowTests::toolActionsDriveCanvasAndObjectSelector() {
     selector->setCurrentRow(rectangleRow);
     QCOMPARE(window.activeCanvas()->tool(), CanvasTool::Rectangle);
 
+    window.addProjectDevices({QStringLiteral("schematic.resistor")});
     action(window, "hatteda.tool.component")->trigger();
     QCOMPARE(window.activeCanvas()->tool(), CanvasTool::Symbol);
     QVERIFY(!window.activeCanvas()->toolVariant().isEmpty());
@@ -574,6 +744,7 @@ void MainWindowTests::probeModeIsUnavailableInKayra() {
 void MainWindowTests::undoFollowsActiveWorkspaceAndKeepsTool() {
     hatt::ui::MainWindow window;
     window.resize(1440, 900);
+    window.addProjectDevices({QStringLiteral("schematic.resistor")});
     action(window, "hatteda.tool.component")->trigger();
     auto* mergen = window.activeCanvas();
     clickCanvas(mergen, {20.32, 20.32});

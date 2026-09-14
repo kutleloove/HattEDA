@@ -68,7 +68,9 @@ DcResult solveDc(const DcCircuit& circuit, const std::atomic_bool* cancelled) {
         return failure("Circuit has no valid ground net (0).");
     if (circuit.netCount > 257) return failure("DC analysis supports at most 256 unknowns.");
     int sources = 0;
+    // Conducting adjacency, and adjacency that also crosses capacitors.
     std::vector<std::vector<int>> adjacent(static_cast<std::size_t>(circuit.netCount));
+    std::vector<std::vector<int>> coupled(static_cast<std::size_t>(circuit.netCount));
     for (const auto& element : circuit.elements) {
         if (stopped()) return failure("DC analysis cancelled.");
         if (element.positive < 0 || element.positive >= circuit.netCount ||
@@ -78,25 +80,33 @@ DcResult solveDc(const DcCircuit& circuit, const std::atomic_bool* cancelled) {
         if (element.kind == DcKind::Resistor) {
             if (element.value <= 0 || !std::isfinite(1 / element.value))
                 return failure("Resistance must be finite and strictly positive: " + element.reference + ".");
-        } else if (element.kind == DcKind::VoltageSource) {
+        } else if (element.kind == DcKind::VoltageSource || element.kind == DcKind::Inductor) {
             if (++sources + circuit.netCount - 1 > 256)
                 return failure("DC analysis supports at most 256 unknowns.");
-        } else {
+        } else if (element.kind != DcKind::Capacitor) {
             return failure("Unsupported DC element: " + element.reference + ".");
         }
+        coupled[element.positive].push_back(element.negative);
+        coupled[element.negative].push_back(element.positive);
+        if (element.kind == DcKind::Capacitor) continue;
         adjacent[element.positive].push_back(element.negative);
         adjacent[element.negative].push_back(element.positive);
     }
-    std::vector<bool> reachable(static_cast<std::size_t>(circuit.netCount), false);
-    std::vector<int> pending{circuit.ground};
-    reachable[circuit.ground] = true;
-    for (std::size_t i = 0; i < pending.size(); ++i) {
-        if (stopped()) return failure("DC analysis cancelled.");
-        for (int net : adjacent[pending[i]]) if (!reachable[net]) {
-            reachable[net] = true;
-            pending.push_back(net);
+    const auto reach = [&](const std::vector<std::vector<int>>& graph) {
+        std::vector<bool> reachable(static_cast<std::size_t>(circuit.netCount), false);
+        std::vector<int> pending{circuit.ground};
+        reachable[circuit.ground] = true;
+        for (std::size_t i = 0; i < pending.size(); ++i) {
+            for (int net : graph[pending[i]]) if (!reachable[net]) {
+                reachable[net] = true;
+                pending.push_back(net);
+            }
         }
-    }
+        return reachable;
+    };
+    if (stopped()) return failure("DC analysis cancelled.");
+    const std::vector<bool> conducting = reach(adjacent);
+    const std::vector<bool> reachable = reach(coupled);
     for (int net = 0; net < circuit.netCount; ++net)
         if (!reachable[net]) return failure("Floating net " + std::to_string(net) + ": no path to ground.");
 
@@ -107,9 +117,14 @@ DcResult solveDc(const DcCircuit& circuit, const std::atomic_bool* cancelled) {
     };
     std::vector<std::vector<double>> a(n, std::vector<double>(n + 1, 0));
     int source = nodeUnknowns;
+    constexpr double gmin = 1e-12;
+    for (int net = 0; net < circuit.netCount; ++net) {
+        if (!conducting[net]) a[nodeIndex(net)][nodeIndex(net)] += gmin;
+    }
     for (const auto& element : circuit.elements) {
         if (stopped()) return failure("DC analysis cancelled.");
         const int p = nodeIndex(element.positive), m = nodeIndex(element.negative);
+        if (element.kind == DcKind::Capacitor) continue;
         if (element.kind == DcKind::Resistor) {
             // A resistor whose pins share a net contributes no conductance.
             if (p == m) continue;
@@ -120,7 +135,7 @@ DcResult solveDc(const DcCircuit& circuit, const std::atomic_bool* cancelled) {
         } else {
             if (p >= 0) { a[p][source] += 1; a[source][p] += 1; }
             if (m >= 0) { a[m][source] -= 1; a[source][m] -= 1; }
-            a[source][n] = element.value;
+            a[source][n] = element.kind == DcKind::Inductor ? 0.0 : element.value;
             ++source;
         }
     }
@@ -164,7 +179,8 @@ DcResult solveDc(const DcCircuit& circuit, const std::atomic_bool* cancelled) {
     source = nodeUnknowns;
     for (const auto& element : circuit.elements) {
         if (stopped()) return failure("DC analysis cancelled.");
-        const double current = element.kind == DcKind::Resistor
+        const double current = element.kind == DcKind::Capacitor ? 0.0
+            : element.kind == DcKind::Resistor
             ? (result.voltages[element.positive] - result.voltages[element.negative]) / element.value
             : solution[source++];
         if (!std::isfinite(current)) return failure("DC current exceeds numerical range.");

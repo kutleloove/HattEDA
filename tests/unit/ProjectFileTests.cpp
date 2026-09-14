@@ -1,5 +1,7 @@
 #include "hatt/ui/ProjectFile.hpp"
 
+#include "hatt/ui/ComponentLibrary.hpp"
+
 #include <QDir>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -176,6 +178,13 @@ private slots:
         schematic[QStringLiteral("items")] = items;
         root[QStringLiteral("schematic")] = schematic;
         add("duplicate id", root);
+        root = sampleJson();
+        root[QStringLiteral("library")] = QJsonObject{{QStringLiteral("devices"), QJsonArray{QStringLiteral("board.r0603")}}};
+        add("unknown device", root);
+        root[QStringLiteral("library")] = QJsonObject{{QStringLiteral("devices"), QStringLiteral("schematic.resistor")}};
+        add("devices not a list", root);
+        root[QStringLiteral("library")] = QJsonArray{};
+        add("library not an object", root);
     }
 
     void rejectsInvalidFiles() {
@@ -285,6 +294,178 @@ private slots:
         // v2 format must write the library key (even if empty).
         QVERIFY(root.contains(QStringLiteral("library")));
         QVERIFY(root[QStringLiteral("library")].isObject());
+    }
+
+    void libraryDevicesRoundTrip() {
+        ProjectData project;
+        project.library.devices = {QStringLiteral("schematic.capacitor"), QStringLiteral("schematic.resistor")};
+        const QByteArray bytes = serializeProject(project);
+        const ProjectLoad load = parseProject(bytes);
+        QVERIFY2(load.ok(), qPrintable(load.error));
+        QCOMPARE(load.project.library.devices, project.library.devices);
+        QCOMPARE(serializeProject(load.project), bytes);
+
+        // Files written before the device list (empty library object, or none) still open.
+        QJsonObject root = sampleJson();
+        root[QStringLiteral("library")] = QJsonObject{};
+        QVERIFY(errorFor(root).isEmpty());
+        root.remove(QStringLiteral("library"));
+        QVERIFY(errorFor(root).isEmpty());
+    }
+
+    void customLibraryRoundTrips() {
+        ProjectData project;
+        FootprintDefinition generated;
+        generated.id = newCustomFootprintId();
+        generated.name = QStringLiteral("SOIC-8 wide");
+        generated.params.style = PackageStyle::DualRow;
+        generated.params.padCount = 8;
+        generated.params.pitch = 1.27;
+        generated.params.rowSpacing = 5.4;
+        generated.params.shape = PadShape::Rect;
+        generated.params.padWidth = 1.5;
+        generated.params.padLength = 0.6;
+        generated.params.drill = 0.0;
+        generated.params.bodyWidth = 3.9;
+        FootprintDefinition drawn;
+        drawn.id = newCustomFootprintId();
+        drawn.name = QStringLiteral("Drawn jack");
+        PadDefinition tip;
+        tip.number = 2;
+        tip.shape = PadShape::Oval;
+        tip.width = 1.8;
+        tip.height = 2.4;
+        tip.drillDiameter = 1.1;
+        tip.layers = 3;
+        PadDefinition sleeve;
+        drawn.pads = {tip, sleeve};
+        drawn.pins = {{3.5, -0.25}, {-3.5, 0.125}};
+        SymbolShape outline;
+        outline.points = {{-5, -3}, {5, -3}, {5, 3}};
+        outline.closed = true;
+        SymbolShape mark;
+        mark.points = {{0.5, 0.5}};
+        mark.filled = true;
+        drawn.shapes = {outline, mark};
+        DeviceDefinition device;
+        device.id = newCustomDeviceId();
+        device.name = QStringLiteral("LM358");
+        device.prefix = QStringLiteral("IC");
+        device.defaultValue = QStringLiteral("LM358");
+        device.pinCount = 8;
+        device.footprint = generated.id;
+        device.pinNames = {QStringLiteral("OUT1"), QStringLiteral("IN1-")};
+        device.pinPadMap = {8, 7, 6, 5, 4, 3, 2, 1};
+        device.spec.manufacturer = QStringLiteral("Texas Instruments");
+        device.spec.package = PackageStyle::DualRow;
+        device.spec.pitch = 1.27;
+        device.spec.pinCurrent = 0.04;
+        DeviceDefinition jack;
+        jack.id = newCustomDeviceId();
+        jack.name = QStringLiteral("Jack");
+        jack.prefix = QStringLiteral("J");
+        jack.footprint = drawn.id;
+        project.library.customFootprints = {generated, drawn};
+        project.library.customDevices = {device, jack};
+        project.library.devices = {device.id};
+        SketchItem part = item(SketchItem::Kind::Symbol, {{0, 0}}, device.id);
+        part.label = QStringLiteral("IC1");
+        project.schematic = {part};
+        project.board = {item(SketchItem::Kind::Symbol, {{0, 0}}, drawn.id)};
+
+        const QByteArray bytes = serializeProject(project);
+        const ProjectLoad load = parseProject(bytes);
+        QVERIFY2(load.ok(), qPrintable(load.error));
+        const ProjectLibrary& read = load.project.library;
+        QCOMPARE(read.devices, project.library.devices);
+        QCOMPARE(read.customFootprints.size(), 2);
+        QCOMPARE(read.customDevices.size(), 2);
+        QCOMPARE(read.customFootprints[0].params.padCount, 8);
+        QVERIFY(!read.customFootprints[0].isExplicit());
+        QCOMPARE(read.customFootprints[0].params.shape, PadShape::Rect);
+        QVERIFY(read.customFootprints[0].params.bodyWidth == 3.9);
+        const FootprintDefinition& readDrawn = read.customFootprints[1];
+        QVERIFY(readDrawn.isExplicit());
+        QCOMPARE(readDrawn.pads.size(), 2);
+        QCOMPARE(readDrawn.pads[0].number, 2);
+        QCOMPARE(readDrawn.pads[0].shape, PadShape::Oval);
+        QVERIFY(readDrawn.pads[0].drillDiameter == 1.1);
+        QCOMPARE(readDrawn.pads[0].layers, 3);
+        QVERIFY(readDrawn.pins[1] == QPointF(-3.5, 0.125));
+        QCOMPARE(readDrawn.shapes.size(), 2);
+        QVERIFY(readDrawn.shapes[0].closed && readDrawn.shapes[1].filled);
+        QCOMPARE(read.customDevices[0].pinPadMap, device.pinPadMap);
+        QCOMPARE(read.customDevices[0].pinNames, device.pinNames);
+        QCOMPARE(read.customDevices[0].spec.manufacturer, device.spec.manufacturer);
+        QCOMPARE(read.customDevices[0].spec.package, PackageStyle::DualRow);
+        QVERIFY(read.customDevices[0].spec.pinCurrent == 0.04);
+        QCOMPARE(load.project.schematic.size(), 1);
+        QCOMPARE(serializeProject(load.project), bytes);
+        const auto* symbol = findSymbol(device.id);
+        QVERIFY(symbol != nullptr);
+        QCOMPARE(symbol->defaultPinPadMap, device.pinPadMap);
+    }
+
+    void invalidCustomLibraryRowsAreRejected() {
+        auto libraryWith = [](const QJsonObject& footprint, const QJsonObject& device) {
+            QJsonObject root = sampleJson();
+            QJsonObject library;
+            if (!footprint.isEmpty()) library[QStringLiteral("customFootprints")] = QJsonArray{footprint};
+            if (!device.isEmpty()) library[QStringLiteral("customDevices")] = QJsonArray{device};
+            root[QStringLiteral("library")] = library;
+            return root;
+        };
+        auto footprint = [](int padCount) {
+            return QJsonObject{{QStringLiteral("id"), newCustomFootprintId()},
+                               {QStringLiteral("name"), QStringLiteral("F")},
+                               {QStringLiteral("style"), QStringLiteral("dual-row")},
+                               {QStringLiteral("padCount"), padCount}};
+        };
+        auto device = [](int pinCount) {
+            return QJsonObject{{QStringLiteral("id"), newCustomDeviceId()},
+                               {QStringLiteral("name"), QStringLiteral("D")},
+                               {QStringLiteral("prefix"), QStringLiteral("U")},
+                               {QStringLiteral("pinCount"), pinCount}};
+        };
+        QVERIFY(errorFor(libraryWith(footprint(8), device(3))).isEmpty());
+        // Odd pad count for a dual row, unknown style, foreign id prefix.
+        QVERIFY(!errorFor(libraryWith(footprint(7), {})).isEmpty());
+        QJsonObject style = footprint(8);
+        style[QStringLiteral("style")] = QStringLiteral("bga");
+        QVERIFY(!errorFor(libraryWith(style, {})).isEmpty());
+        QJsonObject foreign = footprint(8);
+        foreign[QStringLiteral("id")] = QStringLiteral("board.soic8");
+        QVERIFY(!errorFor(libraryWith(foreign, {})).isEmpty());
+        // Explicit pads without a position, or with a repeated number.
+        QJsonObject pad{{QStringLiteral("number"), 1}, {QStringLiteral("shape"), QStringLiteral("rect")},
+                        {QStringLiteral("width"), 1.0}, {QStringLiteral("height"), 1.0},
+                        {QStringLiteral("layers"), 1}, {QStringLiteral("at"), QJsonArray{0.0, 0.0}}};
+        QJsonObject drawn = footprint(2);
+        drawn[QStringLiteral("pads")] = QJsonArray{pad};
+        QVERIFY(errorFor(libraryWith(drawn, {})).isEmpty());
+        QJsonObject unplaced = pad;
+        unplaced.remove(QStringLiteral("at"));
+        drawn[QStringLiteral("id")] = newCustomFootprintId();
+        drawn[QStringLiteral("pads")] = QJsonArray{unplaced};
+        QVERIFY(!errorFor(libraryWith(drawn, {})).isEmpty());
+        drawn[QStringLiteral("id")] = newCustomFootprintId();
+        drawn[QStringLiteral("pads")] = QJsonArray{pad, pad};
+        QVERIFY(!errorFor(libraryWith(drawn, {})).isEmpty());
+        // Pin count out of range, footprint with another pad count, bad pin to pad map.
+        QVERIFY(!errorFor(libraryWith({}, device(0))).isEmpty());
+        QJsonObject withFootprint = device(3);
+        withFootprint[QStringLiteral("footprint")] = QStringLiteral("board.soic8");
+        QVERIFY(!errorFor(libraryWith({}, withFootprint)).isEmpty());
+        QJsonObject mapped = device(3);
+        mapped[QStringLiteral("pinPadMap")] = QJsonArray{1, 1, 2};
+        QVERIFY(!errorFor(libraryWith({}, mapped)).isEmpty());
+        mapped[QStringLiteral("pinPadMap")] = QJsonArray{3, 1, 2};
+        QVERIFY(errorFor(libraryWith({}, mapped)).isEmpty());
+        // A document using an unregistered custom device does not open.
+        QJsonObject root = withFirstSchematicItem(sampleJson(), [](QJsonObject& first) {
+            first[QStringLiteral("variant")] = newCustomDeviceId();
+        });
+        QVERIFY(!errorFor(root).isEmpty());
     }
 };
 

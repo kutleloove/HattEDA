@@ -3,13 +3,18 @@
 #include "hatt/ui/MainWindow.hpp"
 #include "hatt/ui/Theme.hpp"
 #include <QDialog>
+#include <QDialogButtonBox>
 #include <QDir>
+#include <QDoubleSpinBox>
+#include <QPushButton>
+#include <QRegularExpression>
 #include <QFontDatabase>
 #include <QSettings>
 #include <QTemporaryDir>
 #include <QTimer>
 #include <QMenu>
 #include <QTextEdit>
+#include <QToolButton>
 #include <QUndoStack>
 #include <QtTest>
 
@@ -50,6 +55,11 @@ private slots:
         QVERIFY2(transfer.errors.isEmpty(), qPrintable(transfer.errors.join("; ")));
         QCOMPARE(transfer.added, 3);
         auto board = transfer.document;
+        // Footprints are added in designator order; board[1] is linked to schematic[1] (R1).
+        const auto r1 = std::find_if(board.begin(), board.end(),
+                                     [&](const SketchItem& item) { return item.sourceId == schematic[1].id; });
+        QVERIFY(r1 != board.end());
+        std::swap(*r1, board[1]);
         translateItem(board[1], {20, 10});
         board[1].quarterTurns = 1;
         const auto guide = boardGuidance(schematic, board);
@@ -101,7 +111,7 @@ private slots:
         track.points = {symbolToWorld(source, footprint->pins[0]), symbolToWorld(source, footprint->pins[1])};
         board.append(track);
         QVERIFY(boardGuidance(schematic, board).errors.join(" ").contains("short"));
-        schematic[1].variant = QStringLiteral("schematic.capacitor");
+        schematic[1].variant = QStringLiteral("schematic.diode");
         QVERIFY(analyzeSchematic(schematic).simulationErrors.join(" ").contains("does not support"));
     }
     void actualWorkflowReportsAndUndoUpdatesGuidance() {
@@ -140,6 +150,168 @@ private slots:
         QTRY_VERIFY_WITH_TIMEOUT(sim->toPlainText().contains("2.5"), 5000);
         schematic.undoStack()->undo();
         QVERIFY(sim->toPlainText().contains("out of date"));
+    }
+    void boardPartsFollowSchematicPlacement() {
+        auto schematic = dcDividerExample();
+        auto waiting = unplacedBoardParts(schematic, {});
+        QVERIFY(waiting.problems.isEmpty());
+        QCOMPARE(waiting.parts.size(), 3);
+        QCOMPARE(waiting.parts[0].label, QString("R1"));
+        QCOMPARE(waiting.parts[1].label, QString("R2"));
+        QCOMPARE(waiting.parts[2].label, QString("V1"));
+        QCOMPARE(waiting.parts[0].sourceId, schematic[1].id);
+        QCOMPARE(waiting.parts[0].variant, QString("board.r0603"));
+
+        // A placed footprint leaves the list; an excluded component never enters it.
+        SketchDocument board = {waiting.parts[0]};
+        schematic[2].excludeFromBoard = true;
+        waiting = unplacedBoardParts(schematic, board);
+        QCOMPARE(waiting.parts.size(), 1);
+        QCOMPARE(waiting.parts[0].label, QString("V1"));
+        const auto transfer = transferToBoard(schematic, board);
+        QVERIFY2(transfer.errors.isEmpty(), qPrintable(transfer.errors.join("; ")));
+        QCOMPARE(transfer.added, 1);
+        const auto guide = boardGuidance(schematic, transfer.document);
+        QVERIFY(!guide.errors.join(" ").contains("R2"));
+
+        // Without a footprint the component is reported instead of listed.
+        schematic[1].footprint.clear();
+        waiting = unplacedBoardParts(schematic, {});
+        QCOMPARE(waiting.parts.size(), 1);
+        QCOMPARE(waiting.problems.size(), 1);
+    }
+    void autoPlacerKeepsPartsInsideOutlineWithoutOverlap() {
+        SketchItem outline;
+        outline.kind = SketchItem::Kind::Polyline;
+        outline.variant = BoardOutlineVariant;
+        outline.closed = true;
+        outline.points = {{0, 0}, {40, 0}, {40, 30}, {0, 30}};
+        SketchItem existing;
+        existing.kind = SketchItem::Kind::Symbol;
+        existing.variant = "board.dip8";
+        existing.points = {{8, 8}};
+        const SketchDocument board = {outline, existing};
+        SketchDocument parts;
+        for (int i = 0; i < 6; ++i) {
+            SketchItem part;
+            part.kind = SketchItem::Kind::Symbol;
+            part.variant = i % 2 ? "board.soic8" : "board.r0603";
+            part.label = QString("U%1").arg(i + 1);
+            parts.append(part);
+        }
+        const auto placed = autoPlaceParts(board, parts, 1.27);
+        QCOMPARE(placed.size(), board.size() + parts.size());
+        QVector<QRectF> bounds;
+        for (int i = 1; i < placed.size(); ++i) bounds.append(itemBounds(placed[i]));
+        for (int i = 0; i < bounds.size(); ++i) {
+            QVERIFY2(QRectF(0, 0, 40, 30).contains(bounds[i]), qPrintable(placed[i + 1].label));
+            for (int j = i + 1; j < bounds.size(); ++j) QVERIFY(!bounds[i].intersects(bounds[j]));
+        }
+        for (int i = 2; i < placed.size(); ++i) {
+            const QPointF origin = placed[i].points.first();
+            QVERIFY(std::abs(origin.x() / 1.27 - std::round(origin.x() / 1.27)) < 1e-6);
+        }
+    }
+    void netlistTextListsPartsAndNets() {
+        const auto text = netlistText(dcDividerExample());
+        QVERIFY(text.contains("*PARTS"));
+        QVERIFY(text.contains("R1 schematic.resistor 1k board.r0603"));
+        QVERIFY(text.contains("*NETS"));
+        QVERIFY(text.contains(QRegularExpression("\\n0: .*V1\\.2")));
+        QStringList errors;
+        auto broken = dcDividerExample();
+        broken[1].label = "V1";
+        QVERIFY(netlistText(broken, &errors).isEmpty());
+        QVERIFY(!errors.isEmpty());
+    }
+    void autoPlacerDialogPlacesPartsInOneStep() {
+        MainWindow window;
+        window.resize(1440, 900);
+        window.show();
+        QTimer::singleShot(0, [] {
+            if (auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget())) dialog->accept();
+        });
+        window.createNewProject();
+        auto* flow = window.findChild<CircuitWorkflow*>();
+        flow->loadExample();
+        window.showKayraWorkspace();
+        auto* board = window.activeCanvas();
+        SketchItem outline;
+        outline.kind = SketchItem::Kind::Polyline;
+        outline.variant = BoardOutlineVariant;
+        outline.closed = true;
+        outline.points = {{0, 0}, {50, 0}, {50, 40}, {0, 40}};
+        board->applyDocumentEdit("outline", {outline});
+
+        QTimer::singleShot(0, [] {
+            auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+            QVERIFY(dialog);
+            QCOMPARE(dialog->objectName(), QString("AutoPlacerDialog"));
+            dialog->findChild<QDoubleSpinBox*>("AutoPlacerGrid")->setValue(2.54);
+            dialog->findChild<QDoubleSpinBox*>("AutoPlacerSpacing")->setValue(5.0);
+            dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Ok)->click();
+        });
+        window.findChild<QAction*>("hatteda.action.auto-place")->trigger();
+        QCOMPARE(board->document().size(), 4);
+        QCOMPARE(board->undoStack()->count(), 2);
+        for (int i = 1; i < 4; ++i) {
+            QVERIFY(QRectF(0, 0, 50, 40).contains(itemBounds(board->document()[i])));
+            QVERIFY(!board->document()[i].sourceId.isEmpty());
+        }
+        QCOMPARE(QSettings().value("pcb/autoPlacer/spacing").toDouble(), 5.0);
+        QCOMPARE(board->airwires().size(), 3);
+        QCOMPARE(flow->autoPlace(1.27, 2.54), 0);
+        QCOMPARE(board->undoStack()->count(), 2);
+    }
+    void liveSimulationShowsProbeVoltagesAndFollowsEdits() {
+        MainWindow window;
+        window.resize(1440, 900);
+        window.show();
+        auto* start = window.findChild<QAction*>("hatteda.action.simulation-start");
+        auto* stop = window.findChild<QAction*>("hatteda.action.simulation-stop");
+        QVERIFY(start && stop);
+        QVERIFY(!start->isEnabled());
+        QTimer::singleShot(0, [] {
+            if (auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget())) dialog->accept();
+        });
+        window.createNewProject();
+        QVERIFY(start->isEnabled());
+        QVERIFY(!stop->isEnabled());
+        bool onCommandBar = false;
+        for (auto* button : window.findChildren<QToolButton*>())
+            onCommandBar = onCommandBar || button->defaultAction() == start;
+        QVERIFY(onCommandBar);
+
+        auto* flow = window.findChild<CircuitWorkflow*>();
+        flow->loadExample();
+        auto* schematic = window.activeCanvas();
+        SketchItem probe;
+        probe.kind = SketchItem::Kind::Symbol;
+        probe.variant = "schematic.voltage-probe";
+        probe.label = "VP1";
+        probe.points = {{50.8, 20.32}}; // R1 pin 2, the divider midpoint
+        auto document = schematic->document();
+        document.append(probe);
+        schematic->applyDocumentEdit("probe", document);
+
+        start->trigger();
+        QVERIFY(flow->simulationRunning());
+        QVERIFY(!start->isEnabled() && stop->isEnabled());
+        // Live runs stay on the schematic instead of opening the results workspace.
+        QCOMPARE(window.toolWorkspaceCount(), 0);
+        QTRY_COMPARE_WITH_TIMEOUT(schematic->annotations().size(), 1, 5000);
+        QCOMPARE(schematic->annotations().first().text, QString("2.5 V"));
+
+        auto r2 = schematic->document()[2];
+        QCOMPARE(r2.label, QString("R2"));
+        r2.value = "3k";
+        schematic->editItemProperties(2, r2);
+        QTRY_COMPARE_WITH_TIMEOUT(schematic->annotations().value(0).text, QString("3.75 V"), 5000);
+
+        stop->trigger();
+        QVERIFY(!flow->simulationRunning());
+        QVERIFY(schematic->annotations().isEmpty());
+        QVERIFY(start->isEnabled() && !stop->isEnabled());
     }
     void duplicateCreatesNewIdentity() {
         DesignCanvas canvas(Workspace::Schematic);

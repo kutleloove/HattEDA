@@ -14,6 +14,10 @@ add_library(hatt-ui-shell STATIC
     src/SketchCircuit.cpp
     include/hatt/ui/CircuitWorkflow.hpp
     src/CircuitWorkflow.cpp
+    include/hatt/ui/ComponentLibrary.hpp
+    src/ComponentLibrary.cpp
+    include/hatt/ui/LibraryDialogs.hpp
+    src/LibraryDialogs.cpp
     src/Theme.cpp
     src/Units.cpp
 )

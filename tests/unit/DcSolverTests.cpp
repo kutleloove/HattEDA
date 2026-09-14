@@ -81,6 +81,20 @@ int main() {
     check(reversed.success, "arbitrary ground index");
     if (reversed.success) check(near(reversed.voltages[0], -3) &&
                                near(reversed.currents[0], -0.003), "reversed source sign");
+    // DC models: a capacitor is open, an inductor is a short with a reported current.
+    const auto open = solveDc({3, 0, {{"V1", DcKind::VoltageSource, 1, 0, 5},
+                                      {"R1", DcKind::Resistor, 1, 2, 1000},
+                                      {"C1", DcKind::Capacitor, 2, 0, 1e-7}}});
+    check(open.success && near(open.voltages[2], 5) && near(open.currents[2], 0), "capacitor is open at DC");
+    const auto shorted = solveDc({3, 0, {{"V1", DcKind::VoltageSource, 1, 0, 5},
+                                         {"R1", DcKind::Resistor, 1, 2, 1000},
+                                         {"L1", DcKind::Inductor, 2, 0, 1e-5}}});
+    check(shorted.success && near(shorted.voltages[2], 0) && near(shorted.currents[2], 0.005),
+          "inductor is a short at DC");
+    const auto coupled = solveDc({3, 0, {{"V1", DcKind::VoltageSource, 1, 0, 5},
+                                         {"C1", DcKind::Capacitor, 1, 2, 1e-7},
+                                         {"R1", DcKind::Resistor, 2, 2, 1000}}});
+    check(coupled.success && near(coupled.voltages[2], 0), "net behind a capacitor solves with gmin");
     const auto passive = solveDc({2, 0, {{"R1", DcKind::Resistor, 1, 0, 1e15}}});
     check(passive.success && near(passive.voltages[1], 0), "small conductance row scaling");
     struct ParseCase { const char* text; double value; };

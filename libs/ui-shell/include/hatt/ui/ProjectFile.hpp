@@ -19,7 +19,7 @@ struct ProjectData {
     QString name;
     SketchDocument schematic;
     SketchDocument board;
-    ProjectLibrary library; // v2: user project library (placeholder)
+    ProjectLibrary library; // v2: picked devices (component mode)
 };
 
 struct ProjectLoad {

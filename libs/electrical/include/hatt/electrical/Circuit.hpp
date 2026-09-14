@@ -29,13 +29,16 @@ ConnectivityResult buildConnectivity(const ConnectivityInput& input);
 // buildConnectivity. Explicit junctions are excluded; they are drawn by their own symbol.
 std::vector<Point> junctionPoints(const ConnectivityInput& input);
 
-enum class DcKind { Resistor, VoltageSource };
+// DC operating point models: a capacitor is open (no current), an inductor is a short (a 0 V
+// source whose current is reported). Nets reached from ground only through capacitors get a
+// 1e-12 S tie to ground (SPICE GMIN) so they solve instead of being singular.
+enum class DcKind { Resistor, VoltageSource, Capacitor, Inductor };
 struct DcElement {
     std::string reference;
     DcKind kind = DcKind::Resistor;
     int positive = -1; // Net indices; current positive -> negative.
     int negative = -1;
-    double value = 0; // ohms or volts, SI.
+    double value = 0; // ohms, volts, farads or henries, SI. Unused by the DC models of C and L.
 };
 struct DcCircuit {
     int netCount = 0;

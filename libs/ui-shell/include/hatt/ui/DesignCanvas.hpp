@@ -9,6 +9,8 @@
 #include <QString>
 #include <QWidget>
 
+#include <optional>
+
 class QPainter;
 class QUndoStack;
 class QTimer;
@@ -50,6 +52,11 @@ struct SpacingIndicator {
     bool equal = false;
 };
 
+struct CanvasAnnotation {
+    QPointF position; // world, millimetres
+    QString text;
+};
+
 class DesignCanvas final : public QWidget {
     Q_OBJECT
 
@@ -82,6 +89,9 @@ public:
     [[nodiscard]] static double gridStep(Workspace workspace, int level);
 
     void setTool(CanvasTool tool, const QString& variant = {});
+    // Symbol tool only: the next placements copy `item` (label, value, footprint links) instead of
+    // creating a fresh part; each copy gets a new identity. Cleared by setTool.
+    void setPlacementTemplate(const SketchItem& item);
     void setSnapSettings(const SnapSettings& settings);
     void setLengthUnit(LengthUnit unit);
     void cancelOperation();
@@ -109,6 +119,9 @@ public:
     void applyDocumentEdit(const QString& title, const SketchDocument& document);
     void setAirwires(const QVector<QLineF>& lines);
     [[nodiscard]] QVector<QLineF> airwires() const { return airwires_; }
+    // Read-only overlay labels such as simulated probe voltages; not part of the document.
+    void setAnnotations(const QVector<CanvasAnnotation>& annotations);
+    [[nodiscard]] QVector<CanvasAnnotation> annotations() const { return annotations_; }
 
     static void paintSymbolPreview(QPainter& painter, const QRectF& target, const QString& symbolId,
                                    const QPalette& palette);
@@ -201,9 +214,11 @@ private:
     QUndoStack* undoStack_;
     SketchDocument items_;
     QVector<QLineF> airwires_;
+    QVector<CanvasAnnotation> annotations_;
     QList<int> selection_;
     CanvasTool tool_ = CanvasTool::Select;
     QString variant_;
+    std::optional<SketchItem> placementTemplate_;
     SnapSettings snap_;
     LengthUnit unit_;
     int placementTurns_ = 0;

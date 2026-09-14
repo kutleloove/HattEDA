@@ -9,6 +9,7 @@
 class QMenu;
 class QTextEdit;
 class QAction;
+class QTimer;
 namespace hatt::ui {
 class CircuitWorkflow final : public QObject {
     Q_OBJECT
@@ -20,11 +21,30 @@ public:
     ~CircuitWorkflow() override;
 public slots:
     void showNetlist();
+    // Asks for a file and writes netlistText (plain text, .net).
+    void exportNetlist();
     void updateBoard();
+    // Places every board part that is not on the board yet (one undo step); returns how many.
+    int autoPlace(double grid, double spacing);
+    // Auto placer dialog (AutoPlacerDialog) with grid and spacing, remembered in QSettings.
+    void showAutoPlacer();
     void runDc();
     void cancelDc();
+    // Interactive simulation (Proteus play/stop): solves the DC operating point, shows voltage
+    // probe readings on the schematic and re-solves after every schematic edit until stopped.
+    void startSimulation();
+    void stopSimulation();
+    [[nodiscard]] bool simulationRunning() const noexcept { return live_; }
+    // Enables run/stop actions for the current project state (the host calls it on project changes).
+    void updateSimulationActions();
     void loadExample();
+signals:
+    void statusMessage(const QString& message);
+    void simulationStateChanged(bool running);
 private:
+    // Starts a solve; `reveal` opens the results workspace (one-shot runs), live runs stay on the
+    // schematic and only reveal the report for errors.
+    void solve(bool reveal);
     void schematicChanged();
     void refreshGuidance();
     QString netlistHtml() const;
@@ -40,6 +60,10 @@ private:
     std::shared_ptr<std::atomic_bool> cancelled_;
     QAction* run_ = nullptr;
     QAction* cancel_ = nullptr;
+    QAction* start_ = nullptr;
+    QAction* stop_ = nullptr;
+    QTimer* resolveTimer_ = nullptr;
+    bool live_ = false;
     bool running_ = false;
     quint64 revision_ = 0;
 };

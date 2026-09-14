@@ -17,7 +17,20 @@ bool component(const SketchItem& item) {
     return item.kind == SketchItem::Kind::Symbol && s &&
            s->workspace == Workspace::Schematic && s->category == SymbolCategory::Component;
 }
+// Schematic components that take part in the PCB (not excluded with "exclude from board").
+bool boardComponent(const SketchItem& item) { return component(item) && !item.excludeFromBoard; }
 QString pinKey(const QString& id, int number) { return id + QLatin1Char(':') + QString::number(number); }
+// Designator order: prefix, then number (R2 before R10).
+bool designatorLess(const QString& a, const QString& b) {
+    auto split = [](const QString& text) {
+        qsizetype digits = text.size();
+        while (digits > 0 && text.at(digits - 1).isDigit()) --digits;
+        return std::pair{text.left(digits), text.mid(digits).toLongLong()};
+    };
+    const auto [prefixA, numberA] = split(a);
+    const auto [prefixB, numberB] = split(b);
+    return prefixA != prefixB ? prefixA < prefixB : numberA < numberB;
+}
 QHash<QString, int> pinNets(const CircuitSnapshot& snapshot) {
     QHash<QString, int> result;
     for (int i = 0; i < static_cast<int>(snapshot.input.pins.size()); ++i) {
@@ -94,10 +107,16 @@ CircuitSnapshot analyzeSchematic(const SketchDocument& document) {
         if (result.connectivity.nets[n].name == "0") result.dc.ground = n;
     const auto nets = pinNets(result);
     for (const auto& item : document) {
+        if (item.kind == SketchItem::Kind::Symbol && item.variant == QLatin1String("schematic.voltage-probe")) {
+            const auto* probe = findSymbol(item.variant);
+            result.probes.append({item.id, symbolToWorld(item, probe->pins.value(0)), nets.value(pinKey(item.id, 1), -1)});
+        }
         if (!component(item)) continue;
         electrical::DcElement e;
         if (item.variant == QLatin1String("schematic.resistor")) e.kind = electrical::DcKind::Resistor;
         else if (item.variant == QLatin1String("schematic.vdc")) e.kind = electrical::DcKind::VoltageSource;
+        else if (item.variant == QLatin1String("schematic.capacitor")) e.kind = electrical::DcKind::Capacitor;
+        else if (item.variant == QLatin1String("schematic.inductor")) e.kind = electrical::DcKind::Inductor;
         else {
             result.simulationErrors << tr("%1: DC simulation does not support this component.").arg(item.label);
             continue;
@@ -109,6 +128,22 @@ CircuitSnapshot analyzeSchematic(const SketchDocument& document) {
             result.simulationErrors << tr("%1: invalid value '%2'.").arg(item.label, item.value);
         result.dc.elements.push_back(e);
     }
+    // Nets no element touches (a lone probe, an unused port) are left out of the solve.
+    QVector<int> dcIndex(result.dc.netCount, -1);
+    auto use = [&](int net) {
+        if (net >= 0 && dcIndex[net] < 0) {
+            dcIndex[net] = static_cast<int>(result.dcNets.size());
+            result.dcNets.append(net);
+        }
+    };
+    use(result.dc.ground);
+    for (const auto& e : result.dc.elements) { use(e.positive); use(e.negative); }
+    for (auto& e : result.dc.elements) {
+        e.positive = e.positive >= 0 ? dcIndex[e.positive] : -1;
+        e.negative = e.negative >= 0 ? dcIndex[e.negative] : -1;
+    }
+    result.dc.ground = result.dc.ground >= 0 ? dcIndex[result.dc.ground] : -1;
+    result.dc.netCount = static_cast<int>(result.dcNets.size());
     return result;
 }
 
@@ -126,7 +161,7 @@ BoardTransfer transferToBoard(const SketchDocument& schematic, const SketchDocum
     const auto circuit = analyzeSchematic(schematic);
     result.errors = circuit.errors;
     QHash<QString, const SketchItem*> sources;
-    for (const auto& item : schematic) if (component(item)) {
+    for (const auto& item : schematic) if (boardComponent(item)) {
         sources.insert(item.id, &item);
         result.errors.append(validateFootprint(item));
     }
@@ -142,37 +177,132 @@ BoardTransfer transferToBoard(const SketchDocument& schematic, const SketchDocum
         linked.insert(item.sourceId);
     }
     if (!result.errors.isEmpty()) return result;
-    double nextX = 10;
-    for (const auto& item : board) nextX = std::max(nextX, itemBounds(item).right() + 10);
     for (const auto& item : schematic) {
-        if (!component(item)) continue;
+        if (!boardComponent(item)) continue;
         auto found = std::find_if(result.document.begin(), result.document.end(), [&](const auto& b) { return b.sourceId == item.id; });
-        if (found != result.document.end()) {
-            if (found->variant != item.footprint || found->pinPadMap != item.pinPadMap) {
-                result.errors << tr("%1: footprint or pin mapping changed; review existing routing before replacing it.").arg(item.label);
-                continue;
-            }
-            if (found->label != item.label || found->value != item.value) {
-                found->label = item.label;
-                found->value = item.value;
-                ++result.updated;
-            }
-        } else {
-            SketchItem footprint;
-            footprint.kind = SketchItem::Kind::Symbol;
-            footprint.variant = item.footprint;
-            footprint.label = item.label;
-            footprint.value = item.value;
-            footprint.sourceId = item.id;
-            footprint.pinPadMap = item.pinPadMap;
-            footprint.points = {{nextX, 10}};
-            nextX += 15;
-            result.document.append(footprint);
-            ++result.added;
+        if (found == result.document.end()) continue;
+        if (found->variant != item.footprint || found->pinPadMap != item.pinPadMap) {
+            result.errors << tr("%1: footprint or pin mapping changed; review existing routing before replacing it.").arg(item.label);
+            continue;
+        }
+        if (found->label != item.label || found->value != item.value) {
+            found->label = item.label;
+            found->value = item.value;
+            ++result.updated;
         }
     }
-    if (!result.errors.isEmpty()) { result.document = board; result.added = result.updated = 0; }
+    if (!result.errors.isEmpty()) { result.document = board; result.updated = 0; return result; }
+    const auto waiting = unplacedBoardParts(schematic, result.document);
+    result.added = waiting.parts.size();
+    result.document = autoPlaceParts(result.document, waiting.parts, 1.27);
     return result;
+}
+
+BoardParts unplacedBoardParts(const SketchDocument& schematic, const SketchDocument& board) {
+    BoardParts result;
+    QSet<QString> linked;
+    for (const auto& item : board) if (!item.sourceId.isEmpty()) linked.insert(item.sourceId);
+    for (const auto& item : schematic) {
+        if (!boardComponent(item) || linked.contains(item.id)) continue;
+        const auto problems = validateFootprint(item);
+        if (!problems.isEmpty()) {
+            result.problems.append(problems);
+            continue;
+        }
+        SketchItem footprint;
+        footprint.kind = SketchItem::Kind::Symbol;
+        footprint.variant = item.footprint;
+        footprint.label = item.label;
+        footprint.value = item.value;
+        footprint.sourceId = item.id;
+        footprint.pinPadMap = item.pinPadMap;
+        footprint.points = {{0, 0}};
+        result.parts.append(footprint);
+    }
+    std::stable_sort(result.parts.begin(), result.parts.end(),
+                     [](const SketchItem& a, const SketchItem& b) { return designatorLess(a.label, b.label); });
+    return result;
+}
+
+SketchDocument autoPlaceParts(const SketchDocument& board, const SketchDocument& parts, double grid,
+                              double spacing) {
+    const double gap = std::max(0.0, spacing);
+    SketchDocument result = board;
+    QVector<QRectF> occupied;
+    QRectF area;
+    for (const auto& item : board) {
+        const bool outline = item.variant == BoardOutlineVariant;
+        if (outline && area.isNull()) area = itemBounds(item).adjusted(gap, gap, -gap, -gap);
+        // The outline and copper zones surround parts, so they do not block placement.
+        if (!outline && item.variant != CopperZoneVariant) occupied.append(itemBounds(item));
+    }
+    if (area.isEmpty()) {
+        double right = 0.0;
+        for (const auto& rect : occupied) right = std::max(right, rect.right());
+        area = QRectF(occupied.isEmpty() ? 10.0 : right + 10.0, 10.0, 60.0, 1e6);
+    }
+    auto snapUp = [grid](double value) { return grid > 0 ? std::ceil(value / grid - 1e-9) * grid : value; };
+    double x = area.left();
+    double y = area.top();
+    double rowHeight = 0.0;
+    for (SketchItem part : parts) {
+        part.points = {{0, 0}};
+        const QRectF local = itemBounds(part);
+        for (int attempt = 0; attempt < 100000; ++attempt) {
+            if (x > area.left() && x + local.width() > area.right()) {
+                x = area.left();
+                y += rowHeight + gap;
+                rowHeight = 0.0;
+            }
+            const QPointF origin(snapUp(x - local.left()), snapUp(y - local.top()));
+            const QRectF placed = local.translated(origin);
+            const auto blocker = std::find_if(occupied.begin(), occupied.end(), [&](const QRectF& rect) {
+                return rect.adjusted(-gap / 2, -gap / 2, gap / 2, gap / 2).intersects(placed);
+            });
+            if (blocker == occupied.end()) {
+                part.points = {origin};
+                occupied.append(placed);
+                result.append(part);
+                x = placed.right() + gap;
+                rowHeight = std::max(rowHeight, placed.bottom() - y);
+                break;
+            }
+            x = std::max(x + std::max(gap, 0.254), blocker->right() + gap);
+        }
+    }
+    return result;
+}
+
+QString netlistText(const SketchDocument& schematic, QStringList* errors) {
+    const auto snapshot = analyzeSchematic(schematic);
+    if (errors) *errors = snapshot.errors;
+    if (!snapshot.errors.isEmpty()) return {};
+    QHash<QString, QString> references;
+    for (const auto& item : schematic) references.insert(item.id, item.label);
+    QString text = QStringLiteral("* HattEDA netlist\n* %1 nets\n").arg(snapshot.connectivity.nets.size());
+    text += QStringLiteral("*PARTS\n");
+    for (const auto& item : schematic) {
+        if (!component(item)) continue;
+        text += QStringLiteral("%1 %2 %3 %4\n").arg(item.label, item.variant,
+                                                    item.value.isEmpty() ? QStringLiteral("-") : item.value,
+                                                    item.footprint.isEmpty() ? QStringLiteral("-") : item.footprint);
+    }
+    text += QStringLiteral("*NETS\n");
+    for (const auto& net : snapshot.connectivity.nets) {
+        QStringList members;
+        for (int p : net.pins) {
+            const auto& pin = snapshot.input.pins[p];
+            const QString reference = references.value(QString::fromStdString(pin.component));
+            // Ports, rails and probes name nets but are not parts.
+            if (reference.isEmpty() || !std::any_of(schematic.begin(), schematic.end(), [&](const SketchItem& item) {
+                    return item.id == QString::fromStdString(pin.component) && component(item);
+                })) continue;
+            members << reference + QLatin1Char('.') + QString::fromStdString(pin.number);
+        }
+        if (members.isEmpty()) continue;
+        text += QStringLiteral("%1: %2\n").arg(QString::fromStdString(net.name), members.join(QLatin1Char(' ')));
+    }
+    return text;
 }
 
 BoardGuidance boardGuidance(const SketchDocument& schematic, const SketchDocument& board) {
@@ -182,7 +312,7 @@ BoardGuidance boardGuidance(const SketchDocument& schematic, const SketchDocumen
     if (!result.errors.isEmpty()) return result;
     const auto nets = pinNets(circuit);
     QHash<QString, const SketchItem*> sources;
-    for (const auto& item : schematic) if (component(item)) sources.insert(item.id, &item);
+    for (const auto& item : schematic) if (boardComponent(item)) sources.insert(item.id, &item);
     electrical::ConnectivityInput copper;
     QVector<int> expected;
     QVector<QPointF> locations;
