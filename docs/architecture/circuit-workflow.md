@@ -29,6 +29,14 @@ Aktif çizim/yerleştirme/taşıma sırasında sağ tık taslağı iptal eder ve
 - Kanvasta çizilen pad ve serigrafiden kılıf yapma (Make Package, #28) aynı `FootprintDefinition` yapısının açık geometri (`pads` + `pins` + `shapes`) biçimini kullanır.
 - Hepsi `.hatt` dosyasında `library.customDevices` ve `library.customFootprints` olarak saklanır (ADR-0007). Kütüphane belgelerden önce okunur. Geçersiz bir satır dosyanın açılmasını adıyla belirtilen bir hatayla durdurur.
 
+## Kayra katmanları, pad/via ve Make Package (#28, #30)
+
+- **Modlar:** Kılıf (K) hazır ve proje kılıflarını şemadan bağımsız yerleştirir. Via (I) ve Pad (O) modları stil listesi gösterir. Track (W) modunda T8–T100 track stilleri listelenir. **Yeni stil...** ile kendi track, via veya pad stilinizi oluşturursunuz. Stiller uygulama ayarıdır; yerleştirilen öğe ölçüsünü kopyalar.
+- **Aktif katman** sol alttaki `ActiveLayer` kutusundan seçilir. Yol, zone ve SMD pad aktif bakıra, 2B çizimler aktif katmana (bakır seçiliyse o yüzün serigrafisine) gider. Alt katman aktifken kılıf alt yüze aynalı yerleşir. Space üst/alt bakırı değiştirir, Page Up / Page Down seçer. Yol çizerken katman değiştirmek son köşeye via koyar ve yola yeni katmanda devam eder; Backspace son katman değişikliğini geri alır. Gizli katmanlar çizilmez ve seçilemez.
+- **Bağlantı:** Yollar yalnız aynı bakır katmanında birleşir; farklı katmanlar via veya delikli pad üzerinden bağlanır. SMD pad yalnız kendi katmanındaki yola bağlanır.
+- **Make Package** (Design › Make package..., kart sağ tık menüsü): Pad modu ile padleri yerleştirin, dış çizgiyi Üst serigrafiye çizin, hepsini seçin. Ad ve orijin (pad 1 veya padlerin merkezi) girilir; kılıf `library.customFootprints` içine açık geometriyle kaydedilir, Kılıf modunda ve eleman penceresinin kılıf listesinde görünür. Varsayılan olarak seçim yeni kılıfla değiştirilir. Numaraları 1..n olmayan padler yeniden numaralanır; yalnız alt yüzde çizilmiş kılıf üstten görünüşüyle saklanır. Yol, yazı ve diğer katmanlar yok sayılır.
+- **Decompose** (Design › Decompose) seçili kılıfları aynı yer ve ölçüde düzenlenebilir Pad öğelerine ve serigrafi çizgilerine ayırır; tek undo adımıdır. Parçalanan padler şema parçasına bağlı kalmaz.
+
 ## Simülasyon başlat/durdur (#22)
 
 Komut çubuğundaki oynat düğmesi veya **Circuit → Start simulation** (F12) canlı simülasyonu başlatır. Probe modundaki **Voltage probe** bir tele veya pine konduğunda gerilimi şemada etiket olarak görünür. Simülasyon çalışırken değer değiştirmek, parça eklemek veya taşımak devreyi yeniden çözer. Durdur düğmesi (Shift+F12) etiketleri kaldırır. Hata olursa sonuç sekmesi açılır ve simülasyon durur. DC modelinde kondansatör açık devre, bobin kısa devredir.
@@ -40,7 +48,7 @@ Komut çubuğundaki oynat düğmesi veya **Circuit → Start simulation** (F12) 
 3. **Update PCB from schematic** örnekteki üç bileşeni Kayra'ya taşır. Kesikli çizgiler eksik bağlantılardır; rota çekildikçe ve bileşenler taşındıkça yeniden hesaplanır. Tekrar aktarım yerleşimi çoğaltmaz; PCB undo/redo desteklenir.
 4. **Run DC operating point** sonucu ayrı sekmede açar: V1=5 V, R1=R2=1k için orta düğüm 2.5 V ve direnç akımları 2.5 mA olur. Kaynak akımı pin 1→pin 2 yönünde -2.5 mA'dır.
 
-Kendi devrenizde varsayılan değer ve footprint atamalarını gerekirse özelliklerden değiştirin. Aynı isimli port/güç etiketleri aynı neti paylaşır; ground adı `0` ayrılmıştır. Salt tel kesişimi junction olmadan şemada bağlanmaz; PCB tek bakır katman olduğu için kesişen yollar birleşir. Şemada bağlantı dolu bir nokta ile gösterilir: bir telin ucu başka bir tele değdiğinde veya üç ya da daha fazla kol birleştiğinde nokta çıkar, noktasız kesişim bağlı değildir. Tel çizerken başka bir telin üstüne tıklayıp devam ederseniz tel orada bölünür ve bağlanır; tıklamadan üstünden geçerseniz kesişim olarak kalır. Çizim sırasında oluşacak noktalar önizleme renginde görünür.
+Kendi devrenizde varsayılan değer ve footprint atamalarını gerekirse özelliklerden değiştirin. Aynı isimli port/güç etiketleri aynı neti paylaşır; ground adı `0` ayrılmıştır. Salt tel kesişimi junction olmadan şemada bağlanmaz; PCB'de aynı bakır katmanında kesişen yollar birleşir, farklı katmanlardakiler yalnız via veya delikli pad üzerinden bağlanır. Şemada bağlantı dolu bir nokta ile gösterilir: bir telin ucu başka bir tele değdiğinde veya üç ya da daha fazla kol birleştiğinde nokta çıkar, noktasız kesişim bağlı değildir. Tel çizerken başka bir telin üstüne tıklayıp devam ederseniz tel orada bölünür ve bağlanır; tıklamadan üstünden geçerseniz kesişim olarak kalır. Çizim sırasında oluşacak noktalar önizleme renginde görünür.
 
 ## Sınırlar
 
