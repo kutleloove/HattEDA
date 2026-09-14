@@ -6,6 +6,7 @@
 
 #include "hatt/ui/DesignCanvas.hpp"
 #include "hatt/ui/ProjectSafety.hpp"
+#include "hatt/ui/RoutingStyles.hpp"
 #include "hatt/ui/SketchCircuit.hpp"
 #include "hatt/ui/Theme.hpp"
 
@@ -63,6 +64,8 @@ constexpr int IconRole = Qt::UserRole + 2;
 constexpr int PartRole = Qt::UserRole + 3;
 // Track or via style name ("T12", "V32") of a board connect or via mode row.
 constexpr int StyleRole = Qt::UserRole + 4;
+// True for the user's own track and via styles, which can be edited and deleted.
+constexpr int CustomStyleRole = Qt::UserRole + 5;
 
 const QString TrackStyleKey = QStringLiteral("editor/board/trackStyle");
 const QString ViaStyleKey = QStringLiteral("editor/board/viaStyle");
@@ -269,6 +272,21 @@ QIcon symbolIcon(const QString& symbolId, const QPalette& palette) {
     } else {
         DesignCanvas::paintPadPreview(painter, QRectF(6, 6, 20, 20), symbolId, palette);
     }
+    painter.end();
+    return QIcon(pixmap);
+}
+
+// Track style row icon: a top copper stroke whose thickness follows the width (T8 thin, T100 bold).
+QIcon trackStyleIcon(double width, const QPalette& palette) {
+    QPixmap pixmap(64, 64);
+    pixmap.setDevicePixelRatio(2.0);
+    pixmap.fill(Qt::transparent);
+    QPainter painter(&pixmap);
+    painter.setRenderHint(QPainter::Antialiasing);
+    const double stroke = std::clamp(width * 7.0, 1.5, 16.0);
+    painter.setPen(QPen(DesignCanvas::layerColor(BoardLayer::TopCopper, palette), stroke, Qt::SolidLine,
+                        Qt::RoundCap, Qt::RoundJoin));
+    painter.drawPolyline(QPolygonF({QPointF(6, 24), QPointF(14, 24), QPointF(22, 8), QPointF(28, 8)}));
     painter.end();
     return QIcon(pixmap);
 }
@@ -1050,6 +1068,27 @@ QWidget* MainWindow::createEditor() {
     });
     partsLayout->addWidget(autoPlace, 1);
     contextLayout->addWidget(boardPartsBar_);
+    // Board track and via modes: create, edit and delete the user's own styles.
+    routingStyleBar_ = new QWidget(contextPanel);
+    routingStyleBar_->setObjectName(QStringLiteral("RoutingStyleBar"));
+    auto* styleLayout = new QHBoxLayout(routingStyleBar_);
+    styleLayout->setContentsMargins(0, 0, 0, 0);
+    styleLayout->setSpacing(6);
+    auto* newStyle = new QPushButton(tr("New style..."), routingStyleBar_);
+    newStyle->setObjectName(QStringLiteral("hatteda.styles.new"));
+    connect(newStyle, &QPushButton::clicked, this, [this] { editRoutingStyle(true); });
+    editStyleButton_ = new QPushButton(tr("Edit..."), routingStyleBar_);
+    editStyleButton_->setObjectName(QStringLiteral("hatteda.styles.edit"));
+    editStyleButton_->setProperty("quiet", true);
+    connect(editStyleButton_, &QPushButton::clicked, this, [this] { editRoutingStyle(false); });
+    deleteStyleButton_ = new QPushButton(tr("Delete"), routingStyleBar_);
+    deleteStyleButton_->setObjectName(QStringLiteral("hatteda.styles.delete"));
+    deleteStyleButton_->setProperty("quiet", true);
+    connect(deleteStyleButton_, &QPushButton::clicked, this, &MainWindow::deleteRoutingStyle);
+    styleLayout->addWidget(newStyle, 1);
+    styleLayout->addWidget(editStyleButton_);
+    styleLayout->addWidget(deleteStyleButton_);
+    contextLayout->addWidget(routingStyleBar_);
     objectSelector_ = new QListWidget(contextPanel);
     objectSelector_->setObjectName(QStringLiteral("ObjectSelector"));
     objectSelector_->setIconSize(QSize(32, 32));
@@ -1379,28 +1418,34 @@ void MainWindow::rebuildObjectSelector() {
             break;
         case ToolMode::Connect:
             if (workspace == Workspace::Board) {
-                for (const auto& style : trackStyles()) {
-                    const QString name = QLatin1String(style.name);
+                for (const auto& style : routingStyles(RoutingStyleKind::Track)) {
                     auto* item = new QListWidgetItem(
-                        makeIcon(QStringLiteral("wire"), color),
-                        tr("%1  ·  %2 mm").arg(name).arg(style.width, 0, 'f', 3), objectSelector_);
+                        trackStyleIcon(style.width, palette()),
+                        tr("%1  ·  %2 mm  ·  %3 th")
+                            .arg(style.name)
+                            .arg(style.width, 0, 'f', 3)
+                            .arg(style.width * 1000.0 / 25.4, 0, 'f', 1),
+                        objectSelector_);
                     item->setData(ToolRole, static_cast<int>(CanvasTool::Wire));
                     item->setData(IconRole, QStringLiteral("wire"));
-                    item->setData(StyleRole, name);
+                    item->setData(StyleRole, style.name);
+                    item->setData(CustomStyleRole, !style.builtIn);
+                    if (!style.builtIn) item->setToolTip(tr("Your own style"));
                 }
             }
             break;
         case ToolMode::Via:
             if (workspace == Workspace::Board) {
-                for (const auto& style : viaStyles()) {
-                    const QString name = QLatin1String(style.name);
+                for (const auto& style : routingStyles(RoutingStyleKind::Via)) {
                     auto* item = new QListWidgetItem(
                         symbolIcon(QStringLiteral("via"), palette()),
-                        tr("%1  ·  %2 / %3 mm").arg(name).arg(style.diameter, 0, 'f', 2).arg(style.drill, 0, 'f', 2),
+                        tr("%1  ·  %2 / %3 mm").arg(style.name).arg(style.width, 0, 'f', 2).arg(style.drill, 0, 'f', 2),
                         objectSelector_);
                     item->setData(ToolRole, static_cast<int>(CanvasTool::Via));
                     item->setData(VariantRole, QStringLiteral("via"));
-                    item->setData(StyleRole, name);
+                    item->setData(StyleRole, style.name);
+                    item->setData(CustomStyleRole, !style.builtIn);
+                    if (!style.builtIn) item->setToolTip(tr("Your own style"));
                 }
             }
             break;
@@ -1459,6 +1504,8 @@ void MainWindow::rebuildObjectSelector() {
                                                                    : tr("COMPONENTS TO PLACE"));
         deviceBar_->setVisible(componentMode && workspace == Workspace::Schematic);
         boardPartsBar_->setVisible(componentMode && workspace == Workspace::Board);
+        routingStyleBar_->setVisible(workspace == Workspace::Board &&
+                                     (toolMode_ == ToolMode::Connect || toolMode_ == ToolMode::Via));
         boardLayerPanel_->setVisible(workspace == Workspace::Board);
         if (hasObjects) {
             int fallback = 0;
@@ -1500,12 +1547,11 @@ void MainWindow::applyObjectSelection() {
         iconKind = QStringLiteral("wire");
         caption = workspace == Workspace::Board ? tr("Track") : tr("Wire");
         if (auto* item = objectSelector_->currentItem()) {
-            const QString style = item->data(StyleRole).toString();
-            for (const auto& track : trackStyles()) {
-                if (style == QLatin1String(track.name)) canvas->setTrackWidth(track.width);
-            }
-            QSettings().setValue(TrackStyleKey, style);
-            caption = tr("Track %1").arg(style);
+            const RoutingStyle style =
+                findRoutingStyle(RoutingStyleKind::Track, item->data(StyleRole).toString());
+            if (style.width > 0.0) canvas->setTrackWidth(style.width);
+            QSettings().setValue(TrackStyleKey, style.name);
+            caption = tr("Track %1  ·  %2").arg(style.name, formatLength(style.width, LengthUnit::Millimetre));
             rememberedObjectRows_.insert(rememberKey(static_cast<int>(toolMode_), workspace),
                                          objectSelector_->currentRow());
         }
@@ -1517,11 +1563,9 @@ void MainWindow::applyObjectSelection() {
         break;
     case ToolMode::Via:
         if (auto* item = objectSelector_->currentItem()) {
-            const QString style = item->data(StyleRole).toString();
-            for (const auto& via : viaStyles()) {
-                if (style == QLatin1String(via.name)) canvas->setViaSize(via.diameter, via.drill);
-            }
-            QSettings().setValue(ViaStyleKey, style);
+            const RoutingStyle style = findRoutingStyle(RoutingStyleKind::Via, item->data(StyleRole).toString());
+            if (style.width > 0.0) canvas->setViaSize(style.width, style.drill);
+            QSettings().setValue(ViaStyleKey, style.name);
         }
         [[fallthrough]];
     case ToolMode::Component:
@@ -1544,6 +1588,15 @@ void MainWindow::applyObjectSelection() {
         break;
     }
     canvas->setTool(tool, variant);
+    {
+        const auto* item = objectSelector_->currentItem();
+        const bool custom = item != nullptr && item->data(CustomStyleRole).toBool();
+        editStyleButton_->setEnabled(custom);
+        deleteStyleButton_->setEnabled(custom);
+        const QString builtInHint = tr("Built-in styles cannot be changed; create your own style instead.");
+        editStyleButton_->setToolTip(custom ? tr("Edit the selected style") : builtInHint);
+        deleteStyleButton_->setToolTip(custom ? tr("Delete the selected style") : builtInHint);
+    }
     QString hint = canvas->toolHint();
     if (toolMode_ == ToolMode::Component) {
         const auto* item = objectSelector_->currentItem();
@@ -1568,6 +1621,51 @@ void MainWindow::applyObjectSelection() {
     static_cast<ObjectPreview*>(objectPreview_)->setContent(symbolId, iconKind, caption);
     contextHint_->setText(hint);
     updateEditActions();
+}
+
+void MainWindow::editRoutingStyle(bool create) {
+    if (toolMode_ != ToolMode::Connect && toolMode_ != ToolMode::Via) return;
+    const RoutingStyleKind kind = toolMode_ == ToolMode::Connect ? RoutingStyleKind::Track : RoutingStyleKind::Via;
+    const auto* item = objectSelector_->currentItem();
+    RoutingStyle style;
+    if (create) {
+        // Start from the selected style so a slightly wider track is one change away.
+        if (item != nullptr) style = findRoutingStyle(kind, item->data(StyleRole).toString());
+        style.name.clear();
+    } else {
+        if (item == nullptr || !item->data(CustomStyleRole).toBool()) return;
+        style = findRoutingStyle(kind, item->data(StyleRole).toString());
+    }
+    const QString previousName = style.name;
+    if (!editRoutingStyleDialog(this, kind, style)) return;
+
+    auto styles = customRoutingStyles(kind);
+    const auto existing = std::find_if(styles.begin(), styles.end(),
+                                       [&](const RoutingStyle& other) { return other.name == previousName; });
+    if (!create && existing != styles.end()) {
+        *existing = style;
+    } else {
+        styles.append(style);
+    }
+    setCustomRoutingStyles(kind, styles);
+    QSettings().setValue(kind == RoutingStyleKind::Track ? TrackStyleKey : ViaStyleKey, style.name);
+    rememberedObjectRows_.remove(rememberKey(static_cast<int>(toolMode_), Workspace::Board));
+    rebuildObjectSelector();
+}
+
+void MainWindow::deleteRoutingStyle() {
+    if (toolMode_ != ToolMode::Connect && toolMode_ != ToolMode::Via) return;
+    const RoutingStyleKind kind = toolMode_ == ToolMode::Connect ? RoutingStyleKind::Track : RoutingStyleKind::Via;
+    const auto* item = objectSelector_->currentItem();
+    if (item == nullptr || !item->data(CustomStyleRole).toBool()) return;
+    const QString name = item->data(StyleRole).toString();
+    auto styles = customRoutingStyles(kind);
+    styles.removeIf([&](const RoutingStyle& style) { return style.name == name; });
+    setCustomRoutingStyles(kind, styles);
+    // Existing tracks and vias keep their sizes; new ones fall back to the default style.
+    QSettings().remove(kind == RoutingStyleKind::Track ? TrackStyleKey : ViaStyleKey);
+    rememberedObjectRows_.remove(rememberKey(static_cast<int>(toolMode_), Workspace::Board));
+    rebuildObjectSelector();
 }
 
 QStringList MainWindow::componentListKeys() const {

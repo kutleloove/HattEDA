@@ -2437,8 +2437,15 @@ void DesignCanvas::paintEvent(QPaintEvent*) {
     painter.setPen(colors.label);
     painter.drawText(QRectF(12, height() - 26, width() - 24, 18), Qt::AlignLeft | Qt::AlignVCenter,
                      tr("%1  ·  Grid %2  ·  %3%")
-                         .arg(board ? tr("PCB layout  ·  %1").arg(boardLayerName(activeLayer_))
-                                    : tr("Schematic sheet"))
+                         .arg(!board ? tr("Schematic sheet")
+                              : tool_ == CanvasTool::Wire
+                                  ? tr("PCB layout  ·  %1  ·  Track %2")
+                                        .arg(boardLayerName(routeLayer()), formatLength(trackWidth_, unit_))
+                              : tool_ == CanvasTool::Via
+                                  ? tr("PCB layout  ·  %1  ·  Via %2 / %3")
+                                        .arg(boardLayerName(activeLayer_), formatLength(viaDiameter_, unit_),
+                                             formatLength(viaDrill_, unit_))
+                                  : tr("PCB layout  ·  %1").arg(boardLayerName(activeLayer_)))
                          .arg(formatLength(gridSize(), unit_))
                          .arg(zoomPercent()));
 }

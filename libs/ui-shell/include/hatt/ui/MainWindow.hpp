@@ -94,6 +94,9 @@ private:
     [[nodiscard]] QStringList componentListKeys() const;
     void removeSelectedDevice();
     void applyObjectSelection();
+    // Kayra connect / via modes: the user's own track and via styles (RoutingStyles.hpp).
+    void editRoutingStyle(bool create);
+    void deleteRoutingStyle();
     void workspaceChanged();
     void applySnapSettings();
     void setGridLevel(int level);
@@ -130,6 +133,9 @@ private:
     QWidget* boardPartsBar_ = nullptr;
     // Kayra layer visibility and the active layer selector at the bottom left (BoardLayerPanel).
     BoardLayerPanel* boardLayerPanel_ = nullptr;
+    QWidget* routingStyleBar_ = nullptr;
+    QPushButton* editStyleButton_ = nullptr;
+    QPushButton* deleteStyleButton_ = nullptr;
     QPushButton* removeDeviceButton_ = nullptr;
     QStringList componentKeys_;
     // Board component mode: footprints waiting for placement, indexed by the selector rows.

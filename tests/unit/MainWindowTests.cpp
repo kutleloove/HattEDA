@@ -1,6 +1,7 @@
 #include "hatt/ui/DesignCanvas.hpp"
 #include "hatt/ui/MainWindow.hpp"
 #include "hatt/ui/ProjectFile.hpp"
+#include "hatt/ui/RoutingStyles.hpp"
 #include "hatt/ui/Theme.hpp"
 
 #include <QAction>
@@ -76,6 +77,7 @@ private slots:
     void toolActionsDriveCanvasAndObjectSelector();
     void probeModeIsUnavailableInKayra();
     void kayraPadViaPackageModesAndLayerSelector();
+    void userTrackStylesAreListedEditedAndDeleted();
     void undoFollowsActiveWorkspaceAndKeepsTool();
 
     // Automated regression coverage supporting issue #2; not manual verification.
@@ -794,6 +796,43 @@ void MainWindowTests::kayraPadViaPackageModesAndLayerSelector() {
     QVERIFY(!action(window, "hatteda.tool.package")->isEnabled());
     QVERIFY(action(window, "hatteda.tool.select")->isChecked());
     QVERIFY(window.findChild<QWidget*>(QStringLiteral("BoardLayerPanel"))->isHidden());
+    QSettings().remove(QStringLiteral("editor/board"));
+}
+
+void MainWindowTests::userTrackStylesAreListedEditedAndDeleted() {
+    using hatt::ui::RoutingStyle;
+    using hatt::ui::RoutingStyleKind;
+    QSettings().remove(QStringLiteral("editor/board"));
+    QCOMPARE(hatt::ui::routingStyleProblem(RoutingStyleKind::Track, {QStringLiteral("t12"), 0.4}, {}).isEmpty(),
+             false); // name taken (case-insensitive)
+    QVERIFY(!hatt::ui::routingStyleProblem(RoutingStyleKind::Track, {QStringLiteral("POWER"), 0.0}, {}).isEmpty());
+    QVERIFY(!hatt::ui::routingStyleProblem(RoutingStyleKind::Via, {QStringLiteral("VX"), 0.6, 0.6}, {}).isEmpty());
+    QVERIFY(hatt::ui::routingStyleProblem(RoutingStyleKind::Track, {QStringLiteral("POWER"), 1.5}, {}).isEmpty());
+    hatt::ui::setCustomRoutingStyles(RoutingStyleKind::Track, {{QStringLiteral("POWER"), 1.5}});
+
+    hatt::ui::MainWindow window;
+    window.showKayraWorkspace();
+    action(window, "hatteda.tool.connect")->trigger();
+    auto* selector = window.findChild<QListWidget*>(QStringLiteral("ObjectSelector"));
+    auto* bar = window.findChild<QWidget*>(QStringLiteral("RoutingStyleBar"));
+    auto* edit = window.findChild<QPushButton*>(QStringLiteral("hatteda.styles.edit"));
+    auto* remove = window.findChild<QPushButton*>(QStringLiteral("hatteda.styles.delete"));
+    QVERIFY(selector && bar && edit && remove);
+    QVERIFY(!bar->isHidden());
+    QCOMPARE(selector->count(), static_cast<int>(hatt::ui::trackStyles().size()) + 1);
+    QVERIFY(!edit->isEnabled()); // T12, built in
+
+    selector->setCurrentRow(selector->count() - 1);
+    QVERIFY(selector->currentItem()->text().startsWith(QStringLiteral("POWER")));
+    QVERIFY(edit->isEnabled() && remove->isEnabled());
+    QCOMPARE(window.activeCanvas()->trackWidthSetting(), 1.5);
+
+    remove->click();
+    QCOMPARE(selector->count(), static_cast<int>(hatt::ui::trackStyles().size()));
+    QVERIFY(hatt::ui::customRoutingStyles(RoutingStyleKind::Track).isEmpty());
+
+    action(window, "hatteda.tool.select")->trigger();
+    QVERIFY(bar->isHidden());
     QSettings().remove(QStringLiteral("editor/board"));
 }
 

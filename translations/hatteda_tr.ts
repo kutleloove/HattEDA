@@ -440,4 +440,38 @@ Son projeler listesinden kaldırılsın mı?</translation></message>
     <name>hatt::ui::ProjectFile</name>
     <message><source>%1 has an invalid width.</source><translation>%1 geçersiz genişliğe sahip.</translation></message>
   </context>
+  <context>
+    <name>hatt::ui::RoutingStyles</name>
+    <message><source>Enter a style name.</source><translation>Bir stil adı girin.</translation></message>
+    <message><source>A style named %1 already exists.</source><translation>%1 adında bir stil zaten var.</translation></message>
+    <message><source>The width must be greater than zero.</source><translation>Genişlik sıfırdan büyük olmalıdır.</translation></message>
+    <message><source>The via drill must be smaller than the via diameter.</source><translation>Via deliği via çapından küçük olmalıdır.</translation></message>
+    <message><source>New track style</source><translation>Yeni yol stili</translation></message>
+    <message><source>New via style</source><translation>Yeni via stili</translation></message>
+    <message><source>Edit track style</source><translation>Yol stilini düzenle</translation></message>
+    <message><source>Edit via style</source><translation>Via stilini düzenle</translation></message>
+    <message><source>Name</source><translation>Ad</translation></message>
+    <message><source>th (mil)</source><translation>th (mil)</translation></message>
+    <message><source>Unit</source><translation>Birim</translation></message>
+    <message><source>Width</source><translation>Genişlik</translation></message>
+    <message><source>Diameter</source><translation>Çap</translation></message>
+    <message><source>Drill</source><translation>Delik</translation></message>
+  </context>
+  <context>
+    <name>hatt::ui::MainWindow</name>
+    <message><source>%1  ·  %2 mm  ·  %3 th</source><translation>%1  ·  %2 mm  ·  %3 th</translation></message>
+    <message><source>Your own style</source><translation>Kendi stiliniz</translation></message>
+    <message><source>Track %1  ·  %2</source><translation>Yol %1  ·  %2</translation></message>
+    <message><source>New style...</source><translation>Yeni stil...</translation></message>
+    <message><source>Edit...</source><translation>Düzenle...</translation></message>
+    <message><source>Delete</source><translation>Sil</translation></message>
+    <message><source>Built-in styles cannot be changed; create your own style instead.</source><translation>Hazır stiller değiştirilemez; bunun yerine kendi stilinizi oluşturun.</translation></message>
+    <message><source>Edit the selected style</source><translation>Seçili stili düzenle</translation></message>
+    <message><source>Delete the selected style</source><translation>Seçili stili sil</translation></message>
+  </context>
+  <context>
+    <name>hatt::ui::DesignCanvas</name>
+    <message><source>PCB layout  ·  %1  ·  Track %2</source><translation>PCB yerleşimi  ·  %1  ·  Yol %2</translation></message>
+    <message><source>PCB layout  ·  %1  ·  Via %2 / %3</source><translation>PCB yerleşimi  ·  %1  ·  Via %2 / %3</translation></message>
+  </context>
 </TS>
