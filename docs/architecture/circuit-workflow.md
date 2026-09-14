@@ -50,9 +50,19 @@ Excellon PTH delik dosyası üretir. Pad, via, yol, bakır alan, kılıf serigra
 yukarı-pozitif olacak şekilde çevrilir. Sonuçlar atomik olarak seçilen klasöre yazılır ve
 `hatteda.tool.gerber-viewer` sekmesinde dosya listesiyle ham çıktı önizlemesi açılır.
 
-Geçici kapsamda via'lar tented kabul edilir, tüm delikler kaplamalıdır, bakır alanlarda clearance
-hesaplanmaz ve metin geometrisi CAM'e çevrilmez. Dışa aktarma durum satırında atlanan metin sayısını
-bildirir.
+Dışa aktarmadan önce DRC çalışır. **Hata** varsa `FabricationChecksDialog` sorar: **Yine de dışa aktar**,
+**Raporu aç** (tasarım denetimi sekmesini açar, dosya yazmaz) veya **İptal**. Uyarılar soru çıkarmaz,
+sayıları durum satırında bildirilir.
+
+Bakır alanların (copper zone) henüz dolgusu ve clearance'ı yoktur; katı bakır olarak üretilirse
+kapsadığı bütün netleri kısa devre eder. Bu yüzden zone'lar Gerber'e **yazılmaz**; Gerber sekmesinin
+üstünde `FabricationZonesNotice` uyarısı ve durum satırında sayısı görünür (`CamOptions::includeZones`
+yalnız bilinçli kullanım içindir).
+
+Kılıf etiketleri (R1, U1) kılıfın üstüne, kılıfın serigrafi katmanına 1 mm yüksekliğinde tek çizgili
+fontla (`StrokeFont.hpp`) yazılır; alt yüzdekiler aynalanır. Kartta yerleştirilen metinler kendi
+katmanına aynı fontla çıkar; kart kenarındaki metin atlanır ve sayısı bildirilir. Via'lar tented kabul
+edilir ve tüm delikler kaplamalıdır.
 
 ## Tasarım denetimi: ERC ve DRC (#31)
 

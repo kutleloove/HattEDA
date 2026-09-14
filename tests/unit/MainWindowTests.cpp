@@ -99,6 +99,7 @@ private slots:
     void componentModeUsesProjectDevicesAndSchematicParts();
     void newDeviceCreatesFootprintAndPinMap();
     void designChecksReportAndRules();
+    void fabricationExportAsksAboutRuleErrors();
     void selectionStatesFollowTheme_data();
     void selectionStatesFollowTheme();
 
@@ -1090,6 +1091,46 @@ void MainWindowTests::selectionStatesFollowTheme() {
 
     application->setStyleSheet(QString());
     QApplication::setPalette(originalPalette);
+}
+
+void MainWindowTests::fabricationExportAsksAboutRuleErrors() {
+    hatt::ui::MainWindow window;
+    QVERIFY(showActive(window));
+    activateEditor(window);
+    window.showKayraWorkspace();
+    auto* board = window.activeCanvas();
+    hatt::ui::SketchItem thin;
+    thin.kind = hatt::ui::SketchItem::Kind::Wire;
+    thin.layer = hatt::ui::BoardLayer::TopCopper;
+    thin.points = {QPointF(1.0, 1.0), QPointF(10.0, 1.0)};
+    thin.width = 0.05; // below the default minimum track width
+    board->applyDocumentEdit(QStringLiteral("Draw"), {thin});
+
+    // Cancel: nothing happens and no tool workspace opens.
+    bool asked = false;
+    QTimer::singleShot(0, [&] {
+        auto* box = qobject_cast<QMessageBox*>(QApplication::activeModalWidget());
+        QVERIFY(box);
+        QCOMPARE(box->objectName(), QStringLiteral("FabricationChecksDialog"));
+        asked = true;
+        box->button(QMessageBox::Cancel)->click();
+    });
+    action(window, "hatteda.action.export-fabrication")->trigger();
+    QVERIFY(asked);
+    QCOMPARE(window.toolWorkspaceCount(), 0);
+
+    // Open report shows the design checks instead of exporting.
+    asked = false;
+    QTimer::singleShot(0, [&] {
+        auto* box = qobject_cast<QMessageBox*>(QApplication::activeModalWidget());
+        QVERIFY(box);
+        box->findChild<QAbstractButton*>(QStringLiteral("hatteda.fabrication.open-report"))->click();
+        asked = true;
+    });
+    action(window, "hatteda.action.export-fabrication")->trigger();
+    QVERIFY(asked);
+    QCOMPARE(window.toolWorkspaceCount(), 1);
+    QVERIFY(window.findChild<QWidget*>(QStringLiteral("hatteda.tool.design-checks")) != nullptr);
 }
 
 QTEST_MAIN(MainWindowTests)

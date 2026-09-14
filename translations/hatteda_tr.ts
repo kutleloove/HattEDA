@@ -623,4 +623,14 @@ Son projeler listesinden kaldırılsın mı?</translation></message>
     <message><source>The design rules section is invalid.</source><translation>Tasarım kuralları bölümü geçersiz.</translation></message>
     <message><source>The design rules are invalid: %1</source><translation>Tasarım kuralları geçersiz: %1</translation></message>
   </context>
+  <context>
+    <name>hatt::ui::MainWindow</name>
+    <message numerus="yes"><source>The board has %n design rule error(s). Boards made from these files may not work.</source><translation><numerusform>Kartta %n tasarım kuralı hatası var. Bu dosyalarla üretilen kart çalışmayabilir.</numerusform></translation></message>
+    <message><source>Export anyway</source><translation>Yine de dışa aktar</translation></message>
+    <message><source>Open report</source><translation>Raporu aç</translation></message>
+    <message numerus="yes"><source>%n copper zone(s) were NOT exported: zones have no pour or clearance yet and would short every net they cover. Route those connections with tracks, or add copper in your CAM tool.</source><translation><numerusform>%n bakır alan dışa AKTARILMADI: zone'ların henüz dolgusu ve clearance'ı yok, kapsadıkları bütün netleri kısa devre ederlerdi. Bu bağlantıları yollarla çizin veya bakırı CAM aracınızda ekleyin.</numerusform></translation></message>
+    <message numerus="yes"><source>; %n copper zone(s) not exported</source><translation><numerusform>; %n bakır alan dışa aktarılmadı</numerusform></translation></message>
+    <message numerus="yes"><source>; %n design rule error(s)</source><translation><numerusform>; %n tasarım kuralı hatası</numerusform></translation></message>
+    <message numerus="yes"><source>; %n design rule warning(s)</source><translation><numerusform>; %n tasarım kuralı uyarısı</numerusform></translation></message>
+  </context>
 </TS>
