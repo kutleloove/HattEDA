@@ -2517,6 +2517,33 @@ void MainWindow::updateProjectState() {
 
 void MainWindow::exportFabricationFiles() {
     if (projectPath_.isEmpty()) return;
+    // Fabrication files should not silently carry rule errors: ask before exporting (warnings such
+    // as unfilled zones do not ask; they are reported with the result).
+    const CheckReport checks =
+        runDesignRuleCheck(canvases_.value(0)->document(), canvases_.value(1)->document(), rules_);
+    const int errors = checks.count(CheckSeverity::Error);
+    if (errors > 0) {
+        QMessageBox box(QMessageBox::Warning, tr("Export fabrication files"),
+                        tr("The board has %n design rule error(s). Boards made from these files may not "
+                           "work.",
+                           nullptr, errors),
+                        QMessageBox::NoButton, this);
+        box.setObjectName(QStringLiteral("FabricationChecksDialog"));
+        auto* exportAnyway = box.addButton(tr("Export anyway"), QMessageBox::AcceptRole);
+        exportAnyway->setObjectName(QStringLiteral("hatteda.fabrication.export-anyway"));
+        auto* openReport = box.addButton(tr("Open report"), QMessageBox::ActionRole);
+        openReport->setObjectName(QStringLiteral("hatteda.fabrication.open-report"));
+        auto* cancel = box.addButton(QMessageBox::Cancel);
+        box.setDefaultButton(qobject_cast<QPushButton*>(openReport));
+        box.setEscapeButton(cancel);
+        box.exec();
+        if (box.clickedButton() == openReport) {
+            runDesignChecks();
+            return;
+        }
+        if (box.clickedButton() != exportAnyway) return;
+    }
+
     const QString directory = QFileDialog::getExistingDirectory(
         this, tr("Export fabrication files"), QFileInfo(projectPath_).absolutePath());
     if (directory.isEmpty()) return;
@@ -2534,7 +2561,19 @@ void MainWindow::exportFabricationFiles() {
     }
 
     auto* page = new QWidget;
-    auto* layout = new QHBoxLayout(page);
+    auto* pageLayout = new QVBoxLayout(page);
+    if (output.skippedZones > 0) {
+        auto* notice = new QLabel(
+            tr("%n copper zone(s) were NOT exported: zones have no pour or clearance yet and would short "
+               "every net they cover. Route those connections with tracks, or add copper in your CAM tool.",
+               nullptr, output.skippedZones),
+            page);
+        notice->setObjectName(QStringLiteral("FabricationZonesNotice"));
+        notice->setWordWrap(true);
+        pageLayout->addWidget(notice);
+    }
+    auto* layout = new QHBoxLayout;
+    pageLayout->addLayout(layout, 1);
     auto* list = new QListWidget(page);
     list->setObjectName(QStringLiteral("GerberFileList"));
     list->setMinimumWidth(210);
@@ -2561,6 +2600,16 @@ void MainWindow::exportFabricationFiles() {
                           .arg(QDir::toNativeSeparators(directory));
     if (output.skippedTexts > 0) {
         message += tr("; skipped %1 text items").arg(output.skippedTexts);
+    }
+    if (output.skippedZones > 0) {
+        message += tr("; %n copper zone(s) not exported", nullptr, output.skippedZones);
+    }
+    if (errors > 0) {
+        message += tr("; %n design rule error(s)", nullptr, errors);
+    }
+    const int warnings = checks.count(CheckSeverity::Warning);
+    if (warnings > 0) {
+        message += tr("; %n design rule warning(s)", nullptr, warnings);
     }
     statusBar()->showMessage(message, 8000);
 }

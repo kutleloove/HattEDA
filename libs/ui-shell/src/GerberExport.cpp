@@ -1,5 +1,7 @@
 #include "hatt/ui/GerberExport.hpp"
 
+#include "hatt/ui/StrokeFont.hpp"
+
 #include <QCoreApplication>
 #include <QDir>
 #include <QFileInfo>
@@ -153,7 +155,7 @@ QString camLayerName(CamLayerKind kind) {
     return {};
 }
 
-CamOutput buildCamOutput(const SketchDocument& board) {
+CamOutput buildCamOutput(const SketchDocument& board, const CamOptions& options) {
     CamOutput output;
     for (int kind = 0; kind <= static_cast<int>(CamLayerKind::Outline); ++kind) {
         output.layers.append({static_cast<CamLayerKind>(kind), {}});
@@ -207,6 +209,22 @@ CamOutput buildCamOutput(const SketchDocument& board) {
                 }
             }
             addPads(item, false);
+            if (options.designators && !item.label.trimmed().isEmpty()) {
+                // Centred above the footprint, like the canvas label; bottom-side text is mirrored so
+                // it reads correctly when the board is turned over.
+                const QString label = item.label.trimmed();
+                const QRectF bounds = itemBounds(item);
+                const double width = strokeTextWidth(label, CamDesignatorHeight);
+                const QPointF topLeft(bounds.center().x() - width / 2.0,
+                                      bounds.top() - CamDesignatorGap - CamDesignatorHeight);
+                const double axis = bounds.center().x();
+                for (QVector<QPointF> line : strokeText(label, topLeft, CamDesignatorHeight)) {
+                    if (item.onBottom) {
+                        for (QPointF& point : line) point.setX(2.0 * axis - point.x());
+                    }
+                    stroke(silk, line, false, CamSilkLineWidth);
+                }
+            }
             break;
         }
         case SketchItem::Kind::Pad:
@@ -220,9 +238,26 @@ CamOutput buildCamOutput(const SketchDocument& board) {
                 stroke(camLayerFor(item.layer), item.points, false, trackWidth(item));
             }
             break;
-        case SketchItem::Kind::Text:
-            ++output.skippedTexts;
+        case SketchItem::Kind::Text: {
+            const CamLayerKind kind = camLayerFor(item.layer);
+            if (item.label.trimmed().isEmpty() || kind == CamLayerKind::Outline) {
+                if (!item.label.trimmed().isEmpty()) ++output.skippedTexts;
+                break;
+            }
+            // Same box as the canvas: top-left anchor, TextHeightMm tall, vertically centred.
+            const double height = TextHeightMm * 0.7;
+            const QPointF topLeft = item.points.first() + QPointF(0.0, (TextHeightMm - height) / 2.0);
+            const double lineWidth = isCopperLayer(item.layer) ? CamCopperLineWidth : CamSilkLineWidth;
+            const bool mirror = isBottomLayer(item.layer);
+            const double axis = topLeft.x() + strokeTextWidth(item.label, height) / 2.0;
+            for (QVector<QPointF> line : strokeText(item.label, topLeft, height)) {
+                if (mirror) {
+                    for (QPointF& point : line) point.setX(2.0 * axis - point.x());
+                }
+                stroke(kind, line, false, lineWidth);
+            }
             break;
+        }
         case SketchItem::Kind::Line:
         case SketchItem::Kind::Polyline:
         case SketchItem::Kind::Rectangle:
@@ -232,8 +267,12 @@ CamOutput buildCamOutput(const SketchDocument& board) {
             const QVector<QPointF> outline = graphicOutline(item, closed);
             if (item.variant == BoardOutlineVariant) {
                 stroke(CamLayerKind::Outline, outline, true, CamOutlineLineWidth);
-            } else if (item.variant == CopperZoneVariant && isCopperLayer(item.layer)) {
-                region(camLayerFor(item.layer), outline);
+            } else if (item.variant == CopperZoneVariant) {
+                if (options.includeZones && isCopperLayer(item.layer)) {
+                    region(camLayerFor(item.layer), outline);
+                } else {
+                    ++output.skippedZones;
+                }
             } else {
                 const CamLayerKind kind = camLayerFor(item.layer);
                 stroke(kind, outline, closed, strokeWidthFor(kind));

@@ -14,8 +14,10 @@ namespace hatt::ui {
 // canvas (itemPads, trackWidth, symbol silkscreen), so what is drawn is what is fabricated.
 // Coordinates are millimetres with Y pointing up (the editor's Y is negated).
 //
-// Interim scope: copper zones are exported as solid regions without clearance, text is not
-// exported, vias are tented (no solder mask opening) and every hole is plated.
+// Interim scope: copper zones have no pour or clearance yet, so they are left out unless
+// CamOptions::includeZones is set (they would short every net they cover); board text and
+// footprint designators are written with the single-stroke font (StrokeFont.hpp); vias are
+// tented (no solder mask opening) and every hole is plated.
 
 enum class CamApertureShape { Circle, Rectangle, Obround };
 
@@ -52,8 +54,20 @@ struct CamDrillHit {
 struct CamOutput {
     QVector<CamLayer> layers; // always all nine, in CamLayerKind order
     QVector<CamDrillHit> drills;
-    int skippedTexts = 0;
+    int skippedTexts = 0; // text on layers without a fabrication file
+    int skippedZones = 0; // copper zones left out (CamOptions::includeZones is false)
 };
+
+struct CamOptions {
+    // Copper zones as solid regions. Off by default: without pour and clearance a zone shorts
+    // every pad and track it covers.
+    bool includeZones = false;
+    // Footprint designators (item labels) on the footprint's silkscreen, above the footprint.
+    bool designators = true;
+};
+
+inline constexpr double CamDesignatorHeight = 1.0; // mm
+inline constexpr double CamDesignatorGap = 0.3;    // mm between the footprint and its designator
 
 struct CamFile {
     QString fileName; // e.g. "board-F_Cu.gtl"
@@ -65,7 +79,7 @@ inline constexpr double CamOutlineLineWidth = 0.1;
 inline constexpr double CamCopperLineWidth = 0.254;
 inline constexpr double CamMaskExpansion = 0.05; // per side
 
-[[nodiscard]] CamOutput buildCamOutput(const SketchDocument& board);
+[[nodiscard]] CamOutput buildCamOutput(const SketchDocument& board, const CamOptions& options = {});
 [[nodiscard]] QString camLayerName(CamLayerKind kind);
 // Gerber X2 text of one layer.
 [[nodiscard]] QByteArray gerberLayer(const CamLayer& layer, const QString& generator);
