@@ -500,5 +500,39 @@ Son projeler listesinden kaldırılsın mı?</translation></message>
     <message><source>Select a footprint to decompose</source><translation>Parçalamak için bir kılıf seçin</translation></message>
     <message numerus="yes"><source>Decomposed %n footprint(s) into pads and silkscreen</source><translation><numerusform>%n kılıf pad ve serigrafiye ayrıldı</numerusform></translation></message>
     <message><source>Project footprint</source><translation>Proje kılıfı</translation></message>
+    <message><source>%1 × %2 mm, drill %3</source><translation>%1 × %2 mm, delik %3</translation></message>
+    <message><source>none (SMD)</source><translation>yok (SMD)</translation></message>
+    <message><source>Layer colours...</source><translation>Katman renkleri...</translation></message>
+  </context>
+  <context>
+    <name>hatt::ui::PadStyle</name>
+    <message><source>Edge connector pad</source><translation>Kenar konnektörü pad'i</translation></message>
+  </context>
+  <context>
+    <name>hatt::ui::PadStyles</name>
+    <message><source>Enter a style name.</source><translation>Bir stil adı girin.</translation></message>
+    <message><source>A pad style named %1 already exists.</source><translation>%1 adında bir pad stili zaten var.</translation></message>
+    <message><source>The pad size must be greater than zero.</source><translation>Pad boyutu sıfırdan büyük olmalıdır.</translation></message>
+    <message><source>The drill cannot be negative.</source><translation>Delik negatif olamaz.</translation></message>
+    <message><source>The drill must be smaller than the pad.</source><translation>Delik pad'den küçük olmalıdır.</translation></message>
+    <message><source>New pad style</source><translation>Yeni pad stili</translation></message>
+    <message><source>Edit pad style</source><translation>Pad stilini düzenle</translation></message>
+    <message><source>e.g. C-70-30 or S-60x120</source><translation>örn. C-70-30 veya S-60x120</translation></message>
+    <message><source>Name</source><translation>Ad</translation></message>
+    <message><source>Round</source><translation>Yuvarlak</translation></message>
+    <message><source>Rectangular</source><translation>Dikdörtgen</translation></message>
+    <message><source>Oval</source><translation>Oval</translation></message>
+    <message><source>Shape</source><translation>Şekil</translation></message>
+    <message><source>Width (X)</source><translation>Genişlik (X)</translation></message>
+    <message><source>Height (Y)</source><translation>Yükseklik (Y)</translation></message>
+    <message><source>0 makes a surface mount pad on the active copper layer</source><translation>0, aktif bakır katmanında yüzey montaj pad'i oluşturur</translation></message>
+    <message><source>Drill (0 = SMD)</source><translation>Delik (0 = SMD)</translation></message>
+  </context>
+  <context>
+    <name>hatt::ui::LayerColors</name>
+    <message><source>Layer colours (dark theme)</source><translation>Katman renkleri (koyu tema)</translation></message>
+    <message><source>Layer colours (light theme)</source><translation>Katman renkleri (aydınlık tema)</translation></message>
+    <message><source>Restore defaults</source><translation>Varsayılanlara dön</translation></message>
+    <message><source>Top copper red and bottom copper blue follow the Proteus and KiCad convention.</source><translation>Üst bakırın kırmızı, alt bakırın mavi olması Proteus ve KiCad geleneğidir.</translation></message>
   </context>
 </TS>

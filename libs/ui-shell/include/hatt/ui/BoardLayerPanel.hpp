@@ -26,6 +26,8 @@ public:
     // Updates the controls without emitting signals (e.g. after the canvas changed the layer).
     void setActiveLayer(BoardLayer layer);
     void setVisibleLayers(int mask);
+    // Redraws the layer swatches (theme change or edited layer colours).
+    void refreshColors();
 
 signals:
     void activeLayerChanged(hatt::ui::BoardLayer layer);
@@ -35,7 +37,6 @@ protected:
     void changeEvent(QEvent* event) override;
 
 private:
-    void refreshColors();
     void storeVisibility();
 
     QComboBox* activeLayer_ = nullptr;

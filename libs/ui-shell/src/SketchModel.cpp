@@ -531,6 +531,9 @@ const QVector<PadStyle>& padStyles() {
                        makePad(1, 1.0, 1.5)});
         result.append({"pad.smd-round", QT_TRANSLATE_NOOP("hatt::ui::PadStyle", "SMD round pad"),
                        makeRoundPad(1, 1.2)});
+        // Card edge connector finger (Proteus ARES edge connector pad), 2.54 mm pitch contacts.
+        result.append({"pad.edge", QT_TRANSLATE_NOOP("hatt::ui::PadStyle", "Edge connector pad"),
+                       makePad(1, 1.78, 7.0)});
         return result;
     }();
     return styles;

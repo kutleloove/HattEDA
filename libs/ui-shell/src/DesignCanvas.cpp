@@ -1,4 +1,6 @@
 #include "hatt/ui/DesignCanvas.hpp"
+#include "hatt/ui/LayerColors.hpp"
+#include "hatt/ui/PadStyles.hpp"
 #include "hatt/ui/SketchCircuit.hpp"
 
 #include <QFont>
@@ -71,22 +73,6 @@ struct CanvasColors {
 };
 
 // Top copper and bottom copper follow the design system's copper and secondary layer tokens.
-QColor boardLayerColor(BoardLayer layer, bool dark) {
-    switch (layer) {
-    // Proteus ARES / KiCad convention: top copper red, bottom copper blue.
-    case BoardLayer::TopCopper: return QColor(dark ? "#ff4d4d" : "#d11f1f");
-    case BoardLayer::BottomCopper: return QColor(dark ? "#4d8dff" : "#1f4fd1");
-    case BoardLayer::TopSilk: return QColor(dark ? "#f2f2f2" : "#3a3a3a");
-    case BoardLayer::BottomSilk: return QColor(dark ? "#c9a3e6" : "#7a48a3");
-    case BoardLayer::TopResist: return QColor(dark ? "#4cc38a" : "#1d8a5c");
-    case BoardLayer::BottomResist: return QColor(dark ? "#5cc8c8" : "#1f8080");
-    case BoardLayer::TopPaste: return QColor(dark ? "#a9b4be" : "#66727d");
-    case BoardLayer::BottomPaste: return QColor(dark ? "#8f99cc" : "#4d5891");
-    case BoardLayer::BoardEdge: return QColor(dark ? "#e9c46a" : "#b8860b");
-    }
-    return {};
-}
-
 // Items are drawn bottom side first, then the active side, so the active layer stays on top.
 struct LayerView {
     int visible = AllLayersMask;
@@ -639,10 +625,10 @@ QString DesignCanvas::toolHint() const {
     case CanvasTool::Measure:
         return tr("Drag, or click two points, to measure. Measurements are not added to the design.");
     case CanvasTool::Pad:
-        if (const auto* style = findPadStyle(variant_)) {
+        if (const auto style = findPadStyleEntry(variant_)) {
             return tr("Click to place a %1. SMD pads go to the active copper layer; pads are numbered "
                       "in placement order. Ctrl+R rotates before placing.")
-                .arg(padStyleDisplayName(*style).toLower());
+                .arg(style->builtIn ? style->name.toLower() : style->name);
         }
         return tr("Choose a pad from the list.");
     case CanvasTool::Via:
@@ -1567,8 +1553,8 @@ void DesignCanvas::placeSymbol(QPointF world) {
 }
 
 void DesignCanvas::placePad(QPointF world) {
-    const auto* style = findPadStyle(variant_);
-    if (style == nullptr) {
+    const auto style = findPadStyleEntry(variant_);
+    if (!style) {
         emit statusMessage(tr("Choose a pad from the list first."));
         return;
     }
@@ -2260,7 +2246,7 @@ void DesignCanvas::paintEvent(QPaintEvent*) {
             }
             break;
         case CanvasTool::Pad:
-            if (const auto* style = findPadStyle(variant_)) {
+            if (const auto style = findPadStyleEntry(variant_)) {
                 preview.kind = SketchItem::Kind::Pad;
                 preview.points = {hover_.point};
                 preview.pad = style->pad;
@@ -2503,7 +2489,7 @@ void DesignCanvas::paintPadPreview(QPainter& painter, const QRectF& target,
     if (target.isEmpty()) return;
     SketchItem item;
     item.points = {QPointF()};
-    if (const auto* style = findPadStyle(padStyleId)) {
+    if (const auto style = findPadStyleEntry(padStyleId)) {
         item.kind = SketchItem::Kind::Pad;
         item.pad = style->pad;
     } else {

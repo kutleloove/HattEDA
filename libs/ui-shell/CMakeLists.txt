@@ -26,6 +26,10 @@ add_library(hatt-ui-shell STATIC
     src/RoutingStyles.cpp
     include/hatt/ui/PackageFromSelection.hpp
     src/PackageFromSelection.cpp
+    include/hatt/ui/PadStyles.hpp
+    src/PadStyles.cpp
+    include/hatt/ui/LayerColors.hpp
+    src/LayerColors.cpp
 )
 
 add_library(HattEDA::UiShell ALIAS hatt-ui-shell)

@@ -5,7 +5,9 @@
 #include "hatt/ui/LibraryDialogs.hpp"
 
 #include "hatt/ui/DesignCanvas.hpp"
+#include "hatt/ui/LayerColors.hpp"
 #include "hatt/ui/PackageFromSelection.hpp"
+#include "hatt/ui/PadStyles.hpp"
 #include "hatt/ui/ProjectSafety.hpp"
 #include "hatt/ui/RoutingStyles.hpp"
 #include "hatt/ui/SketchCircuit.hpp"
@@ -1292,6 +1294,14 @@ void MainWindow::createMenus() {
     viewMenu->addSeparator();
     viewMenu->addMenu(tr("Snap grid"))->addActions(gridActions_->actions());
     viewMenu->addMenu(tr("PCB units"))->addActions(unitActions_->actions());
+    auto* layerColors = viewMenu->addAction(tr("Layer colours..."));
+    layerColors->setObjectName(QStringLiteral("hatteda.action.layer-colors"));
+    connect(layerColors, &QAction::triggered, this, [this] {
+        if (!editLayerColorsDialog(this, palette().color(QPalette::Window).lightness() < 128)) return;
+        boardLayerPanel_->refreshColors();
+        for (auto* canvas : canvases_) canvas->update();
+        rebuildObjectSelector();
+    });
     viewMenu->addSeparator();
     auto* diagnostics = viewMenu->addAction(tr("Simulation diagnostics"));
     connect(diagnostics, &QAction::triggered, this, &MainWindow::openDiagnosticsWorkspace);
@@ -1481,12 +1491,17 @@ void MainWindow::rebuildObjectSelector() {
             break;
         case ToolMode::Pad:
             if (workspace == Workspace::Board) {
-                for (const auto& style : padStyles()) {
-                    const QString id = QLatin1String(style.id);
-                    auto* item = new QListWidgetItem(symbolIcon(id, palette()), padStyleDisplayName(style),
-                                                     objectSelector_);
+                for (const auto& style : padStyleEntries()) {
+                    auto* item = new QListWidgetItem(symbolIcon(style.id, palette()), style.name, objectSelector_);
                     item->setData(ToolRole, static_cast<int>(CanvasTool::Pad));
-                    item->setData(VariantRole, id);
+                    item->setData(VariantRole, style.id);
+                    item->setData(CustomStyleRole, !style.builtIn);
+                    item->setToolTip(tr("%1 × %2 mm, drill %3")
+                                         .arg(style.pad.width, 0, 'f', 2)
+                                         .arg(style.pad.height, 0, 'f', 2)
+                                         .arg(style.pad.drillDiameter > 0.0
+                                                  ? QString::number(style.pad.drillDiameter, 'f', 2)
+                                                  : tr("none (SMD)")));
                 }
             }
             break;
@@ -1535,7 +1550,8 @@ void MainWindow::rebuildObjectSelector() {
         deviceBar_->setVisible(componentMode && workspace == Workspace::Schematic);
         boardPartsBar_->setVisible(componentMode && workspace == Workspace::Board);
         routingStyleBar_->setVisible(workspace == Workspace::Board &&
-                                     (toolMode_ == ToolMode::Connect || toolMode_ == ToolMode::Via));
+                                     (toolMode_ == ToolMode::Connect || toolMode_ == ToolMode::Via ||
+                                      toolMode_ == ToolMode::Pad));
         boardLayerPanel_->setVisible(workspace == Workspace::Board);
         if (hasObjects) {
             int fallback = 0;
@@ -1654,6 +1670,38 @@ void MainWindow::applyObjectSelection() {
 }
 
 void MainWindow::editRoutingStyle(bool create) {
+    if (toolMode_ == ToolMode::Pad) {
+        const auto* item = objectSelector_->currentItem();
+        PadStyleEntry style;
+        if (item != nullptr) {
+            if (const auto selected = findPadStyleEntry(item->data(VariantRole).toString())) style = *selected;
+        }
+        if (create) {
+            // Start from the selected pad so a variant is one change away.
+            style.id.clear();
+            style.name.clear();
+        } else if (item == nullptr || !item->data(CustomStyleRole).toBool()) {
+            return;
+        }
+        if (!editPadStyleDialog(this, style)) return;
+        auto styles = customPadStyles();
+        const auto existing = std::find_if(styles.begin(), styles.end(),
+                                           [&](const PadStyleEntry& other) { return other.id == style.id; });
+        if (existing != styles.end()) {
+            *existing = style;
+        } else {
+            styles.append(style);
+        }
+        setCustomPadStyles(styles);
+        rememberedObjectRows_.remove(rememberKey(static_cast<int>(toolMode_), Workspace::Board));
+        rebuildObjectSelector();
+        for (int row = 0; row < objectSelector_->count(); ++row) {
+            if (objectSelector_->item(row)->data(VariantRole).toString() == style.id) {
+                objectSelector_->setCurrentRow(row);
+            }
+        }
+        return;
+    }
     if (toolMode_ != ToolMode::Connect && toolMode_ != ToolMode::Via) return;
     const RoutingStyleKind kind = toolMode_ == ToolMode::Connect ? RoutingStyleKind::Track : RoutingStyleKind::Via;
     const auto* item = objectSelector_->currentItem();
@@ -1684,6 +1732,18 @@ void MainWindow::editRoutingStyle(bool create) {
 }
 
 void MainWindow::deleteRoutingStyle() {
+    if (toolMode_ == ToolMode::Pad) {
+        const auto* item = objectSelector_->currentItem();
+        if (item == nullptr || !item->data(CustomStyleRole).toBool()) return;
+        const QString id = item->data(VariantRole).toString();
+        auto styles = customPadStyles();
+        // Placed pads keep their own copy of the definition.
+        styles.removeIf([&](const PadStyleEntry& style) { return style.id == id; });
+        setCustomPadStyles(styles);
+        rememberedObjectRows_.remove(rememberKey(static_cast<int>(toolMode_), Workspace::Board));
+        rebuildObjectSelector();
+        return;
+    }
     if (toolMode_ != ToolMode::Connect && toolMode_ != ToolMode::Via) return;
     const RoutingStyleKind kind = toolMode_ == ToolMode::Connect ? RoutingStyleKind::Track : RoutingStyleKind::Via;
     const auto* item = objectSelector_->currentItem();

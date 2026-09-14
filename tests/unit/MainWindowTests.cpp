@@ -1,6 +1,8 @@
 #include "hatt/ui/DesignCanvas.hpp"
 #include "hatt/ui/MainWindow.hpp"
 #include "hatt/ui/ProjectFile.hpp"
+#include "hatt/ui/LayerColors.hpp"
+#include "hatt/ui/PadStyles.hpp"
 #include "hatt/ui/RoutingStyles.hpp"
 #include "hatt/ui/Theme.hpp"
 
@@ -79,6 +81,7 @@ private slots:
     void kayraPadViaPackageModesAndLayerSelector();
     void userTrackStylesAreListedEditedAndDeleted();
     void makePackageStoresFootprintAndDecomposeUndoes();
+    void userPadStylesAndLayerColors();
     void undoFollowsActiveWorkspaceAndKeepsTool();
 
     // Automated regression coverage supporting issue #2; not manual verification.
@@ -834,6 +837,52 @@ void MainWindowTests::userTrackStylesAreListedEditedAndDeleted() {
 
     action(window, "hatteda.tool.select")->trigger();
     QVERIFY(bar->isHidden());
+    QSettings().remove(QStringLiteral("editor/board"));
+}
+
+void MainWindowTests::userPadStylesAndLayerColors() {
+    using hatt::ui::BoardLayer;
+    using hatt::ui::PadStyleEntry;
+    QSettings().remove(QStringLiteral("editor/board"));
+    PadStyleEntry style;
+    style.id = hatt::ui::UserPadStylePrefix + QStringLiteral("test");
+    style.name = QStringLiteral("C-70-30");
+    style.pad.shape = hatt::ui::PadShape::Round;
+    style.pad.width = style.pad.height = 1.778;
+    style.pad.drillDiameter = 0.762;
+    QVERIFY(hatt::ui::padStyleProblem(style).isEmpty());
+    PadStyleEntry badDrill = style;
+    badDrill.pad.drillDiameter = 2.0;
+    QVERIFY(!hatt::ui::padStyleProblem(badDrill).isEmpty());
+    hatt::ui::setCustomPadStyles({style});
+
+    hatt::ui::MainWindow window;
+    window.resize(1440, 900);
+    window.showKayraWorkspace();
+    auto* board = window.activeCanvas();
+    action(window, "hatteda.tool.pad")->trigger();
+    auto* selector = window.findChild<QListWidget*>(QStringLiteral("ObjectSelector"));
+    QCOMPARE(selector->count(), static_cast<int>(hatt::ui::padStyles().size()) + 1);
+    QVERIFY(!window.findChild<QWidget*>(QStringLiteral("RoutingStyleBar"))->isHidden());
+    selector->setCurrentRow(selector->count() - 1);
+    QCOMPARE(board->toolVariant(), style.id);
+    QVERIFY(window.findChild<QPushButton*>(QStringLiteral("hatteda.styles.delete"))->isEnabled());
+    clickCanvas(board, {5.08, 5.08});
+    QCOMPARE(board->document().size(), 1);
+    QCOMPARE(board->document().first().pad.width, 1.778);
+    QCOMPARE(board->document().first().pad.layers, hatt::ui::CopperLayerMask);
+
+    window.findChild<QPushButton*>(QStringLiteral("hatteda.styles.delete"))->click();
+    QCOMPARE(selector->count(), static_cast<int>(hatt::ui::padStyles().size()));
+    QCOMPARE(board->document().first().pad.width, 1.778); // placed pads keep their definition
+
+    QPalette dark;
+    dark.setColor(QPalette::Window, QColor(QStringLiteral("#101418")));
+    QCOMPARE(DesignCanvas::layerColor(BoardLayer::TopCopper, dark), QColor(QStringLiteral("#ff4d4d")));
+    hatt::ui::setLayerColorOverride(BoardLayer::TopCopper, true, QColor(QStringLiteral("#ff8800")));
+    QCOMPARE(DesignCanvas::layerColor(BoardLayer::TopCopper, dark), QColor(QStringLiteral("#ff8800")));
+    hatt::ui::clearLayerColorOverrides(true);
+    QCOMPARE(DesignCanvas::layerColor(BoardLayer::TopCopper, dark), QColor(QStringLiteral("#ff4d4d")));
     QSettings().remove(QStringLiteral("editor/board"));
 }
 
