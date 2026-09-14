@@ -1,6 +1,7 @@
 #include "hatt/ui/MainWindow.hpp"
 #include "hatt/ui/BoardLayerPanel.hpp"
 #include "hatt/ui/ChecksReport.hpp"
+#include "hatt/ui/DesignRuleManager.hpp"
 #include "hatt/ui/CircuitWorkflow.hpp"
 #include "hatt/ui/ComponentLibrary.hpp"
 #include "hatt/ui/CamPreview.hpp"
@@ -2800,7 +2801,9 @@ void MainWindow::runDesignChecks() {
 
 void MainWindow::editDesignRules() {
     if (projectPath_.isEmpty()) return;
-    DesignRulesDialog dialog(rules_, this);
+    const SketchDocument& schematic = canvases_.value(0)->document();
+    const QHash<QString, QString> automaticClasses = netClassAssignments(DesignRules{}, schematic);
+    DesignRuleManagerDialog dialog(rules_, automaticClasses.keys(), automaticClasses, this);
     if (dialog.exec() != QDialog::Accepted || dialog.rules() == rules_) return;
     rules_ = dialog.rules();
     rulesModified_ = true;

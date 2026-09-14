@@ -2,12 +2,9 @@
 
 #include "hatt/ui/DesignChecks.hpp"
 
-#include <QDialog>
 #include <QWidget>
 
-class QDoubleSpinBox;
 class QLabel;
-class QDialogButtonBox;
 class QTreeWidget;
 
 namespace hatt::ui {
@@ -34,27 +31,6 @@ private:
     QLabel* summary_ = nullptr;
     QTreeWidget* table_ = nullptr;
     QVector<CheckViolation> violations_;
-};
-
-// Edits the project's DesignRules (`DesignRulesDialog`, fields `RulesClearance`,
-// `RulesTrackWidth`, `RulesDrill`, `RulesAnnularRing`, `RulesBoardEdge`) in millimetres.
-class DesignRulesDialog final : public QDialog {
-    Q_OBJECT
-
-public:
-    explicit DesignRulesDialog(const DesignRules& rules, QWidget* parent = nullptr);
-    [[nodiscard]] DesignRules rules() const;
-
-private:
-    void validate();
-
-    QDoubleSpinBox* clearance_ = nullptr;
-    QDoubleSpinBox* trackWidth_ = nullptr;
-    QDoubleSpinBox* drill_ = nullptr;
-    QDoubleSpinBox* annularRing_ = nullptr;
-    QDoubleSpinBox* boardEdge_ = nullptr;
-    QLabel* validation_ = nullptr;
-    QDialogButtonBox* buttons_ = nullptr;
 };
 
 } // namespace hatt::ui

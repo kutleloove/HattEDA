@@ -588,6 +588,91 @@ Son projeler listesinden kaldırılsın mı?</translation></message>
     <message><source>%1 and %2 overlap.</source><translation>%1 ile %2 üst üste biniyor.</translation></message>
     <message numerus="yes"><source>Net %1 is not fully routed: %n unconnected part(s).</source><translation><numerusform>%1 neti tamamlanmamış: %n bağlanmamış parça.</numerusform></translation></message>
     <message><source>%1 is not placed on the board.</source><translation>%1 karta yerleştirilmemiş.</translation></message>
+    <message><source>Track on net %1 is %2 wide; the %3 net class needs %4.</source><translation>%1 netindeki yol %2 genişliğinde; %3 net sınıfı %4 istiyor.</translation></message>
+    <message><source>Track on net %1 uses a copper layer the %2 net class does not allow.</source><translation>%1 netindeki yol, %2 net sınıfının izin vermediği bir bakır katmanda.</translation></message>
+    <message><source>Board</source><translation>Kart</translation></message>
+    <message><source>Top copper</source><translation>Üst bakır</translation></message>
+    <message><source>Bottom copper</source><translation>Alt bakır</translation></message>
+    <message><source>Every design rule needs a name.</source><translation>Her tasarım kuralının bir adı olmalı.</translation></message>
+    <message><source>The design rule name %1 is used twice.</source><translation>%1 kural adı iki kez kullanılmış.</translation></message>
+    <message><source>Clearances of the rule %1 must be between 0 and 100 mm.</source><translation>%1 kuralının aralıkları 0 ile 100 mm arasında olmalı.</translation></message>
+    <message><source>Every net class needs a name.</source><translation>Her net sınıfının bir adı olmalı.</translation></message>
+    <message><source>The net class name %1 is used twice.</source><translation>%1 net sınıfı adı iki kez kullanılmış.</translation></message>
+    <message><source>Sizes of the net class %1 must be between 0 and 100 mm.</source><translation>%1 net sınıfının ölçüleri 0 ile 100 mm arasında olmalı.</translation></message>
+    <message><source>The via drill of the net class %1 must be smaller than the via.</source><translation>%1 net sınıfının via deliği via çapından küçük olmalı.</translation></message>
+    <message><source>The neck of the net class %1 cannot be wider than its trace.</source><translation>%1 net sınıfının boyun genişliği yol genişliğinden büyük olamaz.</translation></message>
+    <message><source>The net class %1 must allow at least one copper layer.</source><translation>%1 net sınıfı en az bir bakır katmana izin vermeli.</translation></message>
+    <message><source>The ratsnest colour of the net class %1 is invalid.</source><translation>%1 net sınıfının ratsnest rengi geçersiz.</translation></message>
+    <message><source>The net class %1 lists an empty net name.</source><translation>%1 net sınıfında boş bir net adı var.</translation></message>
+    <message><source>The net %1 is in the classes %2 and %3.</source><translation>%1 neti hem %2 hem %3 sınıfında.</translation></message>
+    <message><source>Every differential pair needs a name.</source><translation>Her diferansiyel çiftin bir adı olmalı.</translation></message>
+    <message><source>The differential pair name %1 is used twice.</source><translation>%1 diferansiyel çift adı iki kez kullanılmış.</translation></message>
+    <message><source>The differential pair %1 needs two different nets.</source><translation>%1 diferansiyel çifti iki farklı net gerektirir.</translation></message>
+    <message><source>Sizes of the differential pair %1 must be between 0 and 100 mm.</source><translation>%1 diferansiyel çiftinin ölçüleri 0 ile 100 mm arasında olmalı.</translation></message>
+    <message><source>Default sizes must be between 0 and 100 mm.</source><translation>Varsayılan ölçüler 0 ile 100 mm arasında olmalı.</translation></message>
+    <message><source>The design rules section is invalid.</source><translation>Tasarım kuralları bölümü geçersiz.</translation></message>
+    <message><source>The design rules are invalid: %1</source><translation>Tasarım kuralları geçersiz: %1</translation></message>
+  </context>
+  <context>
+    <name>hatt::ui::DesignRuleManagerDialog</name>
+    <message><source>Design Rule Manager</source><translation>Tasarım Kuralı Yöneticisi</translation></message>
+    <message><source>Design Rules</source><translation>Tasarım Kuralları</translation></message>
+    <message><source>Net Classes</source><translation>Net Sınıfları</translation></message>
+    <message><source>Differential Pairs</source><translation>Diferansiyel Çiftler</translation></message>
+    <message><source>Defaults</source><translation>Varsayılanlar</translation></message>
+    <message><source>New</source><translation>Yeni</translation></message>
+    <message><source>Clone</source><translation>Kopyala</translation></message>
+    <message><source>Delete</source><translation>Sil</translation></message>
+    <message><source>Clearances of the selected rule</source><translation>Seçili kuralın aralıkları</translation></message>
+    <message><source>Name</source><translation>Ad</translation></message>
+    <message><source>Region</source><translation>Bölge</translation></message>
+    <message><source>Pad - pad</source><translation>Pad - pad</translation></message>
+    <message><source>Pad - trace</source><translation>Pad - yol</translation></message>
+    <message><source>Trace - trace</source><translation>Yol - yol</translation></message>
+    <message><source>Copper graphics and zone pours to other copper</source><translation>Bakır grafiklerin ve alan dökümlerinin diğer bakıra mesafesi</translation></message>
+    <message><source>Graphics</source><translation>Grafikler</translation></message>
+    <message><source>Board edge</source><translation>Kart kenarı</translation></message>
+    <message><source>Manufacturing minimums (whole board)</source><translation>Üretim alt sınırları (tüm kart)</translation></message>
+    <message><source>Minimum track width</source><translation>En küçük yol genişliği</translation></message>
+    <message><source>Minimum hole</source><translation>En küçük delik</translation></message>
+    <message><source>Minimum annular ring</source><translation>En küçük halka genişliği</translation></message>
+    <message><source> copy</source><translation> kopya</translation></message>
+    <message><source>Net class</source><translation>Net sınıfı</translation></message>
+    <message><source>New...</source><translation>Yeni...</translation></message>
+    <message><source>Routing</source><translation>Rota</translation></message>
+    <message><source>Trace width</source><translation>Yol genişliği</translation></message>
+    <message><source>Neck width</source><translation>Boyun genişliği</translation></message>
+    <message><source>no neck</source><translation>boyun yok</translation></message>
+    <message><source>Via diameter</source><translation>Via çapı</translation></message>
+    <message><source>Via drill</source><translation>Via deliği</translation></message>
+    <message><source>Top copper</source><translation>Üst bakır</translation></message>
+    <message><source>Bottom copper</source><translation>Alt bakır</translation></message>
+    <message><source>Layers</source><translation>Katmanlar</translation></message>
+    <message><source>theme colour, or #rrggbb</source><translation>tema rengi veya #rrggbb</translation></message>
+    <message><source>Ratsnest colour</source><translation>Ratsnest rengi</translation></message>
+    <message><source>Hide ratsnest</source><translation>Ratsnest'i gizle</translation></message>
+    <message><source>Nets</source><translation>Netler</translation></message>
+    <message><source>Other nets</source><translation>Diğer netler</translation></message>
+    <message><source>Add →</source><translation>Ekle →</translation></message>
+    <message><source>← Remove</source><translation>← Çıkar</translation></message>
+    <message><source>In this class</source><translation>Bu sınıftakiler</translation></message>
+    <message><source>Nets without an explicit class use POWER when they contain a ground or power rail, otherwise SIGNAL.</source><translation>Sınıfı atanmamış netler ground veya güç hattı içeriyorsa POWER, değilse SIGNAL kullanır.</translation></message>
+    <message><source>%1 (auto: %2)</source><translation>%1 (otomatik: %2)</translation></message>
+    <message><source>%1 (%2)</source><translation>%1 (%2)</translation></message>
+    <message><source>Positive net</source><translation>Pozitif net</translation></message>
+    <message><source>Negative net</source><translation>Negatif net</translation></message>
+    <message><source>Width (mm)</source><translation>Genişlik (mm)</translation></message>
+    <message><source>Gap (mm)</source><translation>Aralık (mm)</translation></message>
+    <message><source>Add</source><translation>Ekle</translation></message>
+    <message><source>Remove</source><translation>Kaldır</translation></message>
+    <message><source>Differential pairs are stored with the project; routing and checks for them come later.</source><translation>Diferansiyel çiftler projeyle saklanır; bunlar için rota ve denetim daha sonra gelecek.</translation></message>
+    <message><source>Thermal relief spokes between pads and pours</source><translation>Padler ile dökümler arasında termal bağlantı kolları</translation></message>
+    <message><source>Relief</source><translation>Termal bağlantı</translation></message>
+    <message><source>Thermal gap</source><translation>Termal boşluk</translation></message>
+    <message><source>Spoke width</source><translation>Kol genişliği</translation></message>
+    <message><source>Solder resist guard</source><translation>Lehim maskesi payı</translation></message>
+    <message><source>Silkscreen to pad</source><translation>Serigrafi - pad mesafesi</translation></message>
+    <message><source>Curve tolerance</source><translation>Eğri toleransı</translation></message>
   </context>
   <context>
     <name>hatt::ui::ChecksReport</name>

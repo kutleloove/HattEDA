@@ -18,16 +18,6 @@ namespace {
 enum Column { SeverityColumn, AreaColumn, MessageColumn };
 constexpr int RowRole = Qt::UserRole + 1;
 
-QDoubleSpinBox* rulesField(QWidget* parent, const QString& name) {
-    auto* field = new QDoubleSpinBox(parent);
-    field->setObjectName(name);
-    field->setDecimals(3);
-    field->setRange(0.0, 100.0);
-    field->setSingleStep(0.05);
-    field->setSuffix(QStringLiteral(" mm"));
-    return field;
-}
-
 } // namespace
 
 ChecksReport::ChecksReport(QWidget* parent) : QWidget(parent) {
@@ -96,62 +86,6 @@ void ChecksReport::activateRow(int row) {
     if (row < 0 || row >= violations_.size()) return;
     const CheckViolation& violation = violations_[row];
     if (violation.hasLocation || !violation.itemIds.isEmpty()) emit violationActivated(violation);
-}
-
-DesignRulesDialog::DesignRulesDialog(const DesignRules& rules, QWidget* parent) : QDialog(parent) {
-    setObjectName(QStringLiteral("DesignRulesDialog"));
-    setWindowTitle(tr("Design rules"));
-    auto* layout = new QVBoxLayout(this);
-    auto* form = new QFormLayout;
-    clearance_ = rulesField(this, QStringLiteral("RulesClearance"));
-    form->addRow(tr("Copper clearance"), clearance_);
-    trackWidth_ = rulesField(this, QStringLiteral("RulesTrackWidth"));
-    form->addRow(tr("Minimum track width"), trackWidth_);
-    drill_ = rulesField(this, QStringLiteral("RulesDrill"));
-    form->addRow(tr("Minimum hole"), drill_);
-    annularRing_ = rulesField(this, QStringLiteral("RulesAnnularRing"));
-    form->addRow(tr("Minimum annular ring"), annularRing_);
-    boardEdge_ = rulesField(this, QStringLiteral("RulesBoardEdge"));
-    form->addRow(tr("Copper to board edge"), boardEdge_);
-    layout->addLayout(form);
-    validation_ = new QLabel(this);
-    validation_->setObjectName(QStringLiteral("RulesValidation"));
-    validation_->setWordWrap(true);
-    layout->addWidget(validation_);
-    buttons_ = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel | QDialogButtonBox::RestoreDefaults, this);
-    connect(buttons_, &QDialogButtonBox::accepted, this, &QDialog::accept);
-    connect(buttons_, &QDialogButtonBox::rejected, this, &QDialog::reject);
-    layout->addWidget(buttons_);
-
-    auto load = [this](const DesignRules& values) {
-        clearance_->setValue(values.clearance);
-        trackWidth_->setValue(values.minTrackWidth);
-        drill_->setValue(values.minDrill);
-        annularRing_->setValue(values.minAnnularRing);
-        boardEdge_->setValue(values.boardEdgeClearance);
-    };
-    load(rules);
-    connect(buttons_->button(QDialogButtonBox::RestoreDefaults), &QPushButton::clicked, this, [load] { load(DesignRules{}); });
-    for (auto* field : {clearance_, trackWidth_, drill_, annularRing_, boardEdge_}) {
-        connect(field, &QDoubleSpinBox::valueChanged, this, &DesignRulesDialog::validate);
-    }
-    validate();
-}
-
-DesignRules DesignRulesDialog::rules() const {
-    DesignRules rules;
-    rules.clearance = clearance_->value();
-    rules.minTrackWidth = trackWidth_->value();
-    rules.minDrill = drill_->value();
-    rules.minAnnularRing = annularRing_->value();
-    rules.boardEdgeClearance = boardEdge_->value();
-    return rules;
-}
-
-void DesignRulesDialog::validate() {
-    const QString problem = validateDesignRules(rules());
-    validation_->setText(problem);
-    buttons_->button(QDialogButtonBox::Ok)->setEnabled(problem.isEmpty());
 }
 
 } // namespace hatt::ui

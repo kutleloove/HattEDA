@@ -1,4 +1,5 @@
 #include "hatt/ui/ChecksReport.hpp"
+#include "hatt/ui/DesignRuleManager.hpp"
 #include "hatt/ui/DesignCanvas.hpp"
 #include "hatt/ui/MainWindow.hpp"
 #include "hatt/ui/ProjectFile.hpp"
@@ -11,6 +12,7 @@
 #include <QApplication>
 #include <QDialog>
 #include <QDialogButtonBox>
+#include <QCheckBox>
 #include <QComboBox>
 #include <QDoubleSpinBox>
 #include <QLabel>
@@ -101,6 +103,7 @@ private slots:
     void designChecksReportAndRules();
     void fabricationExportAsksAboutRuleErrors();
     void assemblyExportsWriteCsv();
+    void designRuleManagerEditsRulesClassesPairsAndDefaults();
     void zoneNetPropertyPoursOnTheCanvas();
     void selectionStatesFollowTheme_data();
     void selectionStatesFollowTheme();
@@ -1027,23 +1030,89 @@ void MainWindowTests::designChecksReportAndRules() {
     QTimer::singleShot(0, [] {
         auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
         QVERIFY(dialog);
-        QCOMPARE(dialog->objectName(), QStringLiteral("DesignRulesDialog"));
+        QCOMPARE(dialog->objectName(), QStringLiteral("DesignRuleManagerDialog"));
         auto* ok = dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Ok);
-        auto* clearance = dialog->findChild<QDoubleSpinBox*>(QStringLiteral("RulesClearance"));
-        clearance->setValue(0.0);
+        auto* padPad = dialog->findChild<QDoubleSpinBox*>(QStringLiteral("RulePadPad"));
+        padPad->setValue(0.0);
         QVERIFY(!ok->isEnabled());
-        clearance->setValue(0.25);
+        for (const char* name : {"RulePadPad", "RulePadTrace", "RuleTraceTrace", "RuleGraphic"}) {
+            dialog->findChild<QDoubleSpinBox*>(QString::fromLatin1(name))->setValue(0.25);
+        }
         QVERIFY(ok->isEnabled());
         ok->click();
     });
     QVERIFY(window.projectGuard() != nullptr);
     action(window, "hatteda.action.design-rules")->trigger();
     QCOMPARE(window.designRules().clearance, 0.25);
+    QVERIFY(window.designRules().clearanceRules.isEmpty()); // one DEFAULT rule stays compact
     QVERIFY(window.isWindowModified());
     QVERIFY(window.saveProject());
     const auto saved = hatt::ui::loadProjectFile(window.projectPath());
     QVERIFY2(saved.ok(), qPrintable(saved.error));
     QCOMPARE(saved.project.rules.clearance, 0.25);
+}
+
+void MainWindowTests::designRuleManagerEditsRulesClassesPairsAndDefaults() {
+    hatt::ui::DesignRules start;
+    const QStringList nets{QStringLiteral("0"), QStringLiteral("N1"), QStringLiteral("VCC")};
+    const QHash<QString, QString> automatic{{QStringLiteral("0"), hatt::ui::PowerNetClass},
+                                            {QStringLiteral("N1"), hatt::ui::SignalNetClass},
+                                            {QStringLiteral("VCC"), hatt::ui::PowerNetClass}};
+    hatt::ui::DesignRuleManagerDialog dialog(start, nets, automatic);
+    auto* ok = dialog.findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Ok);
+    QVERIFY(ok->isEnabled());
+    QVERIFY(dialog.rules() == start); // nothing edited: compact rules equal the input
+
+    // Design Rules: clone DEFAULT into a top copper rule with a tighter trace gap.
+    auto* ruleList = dialog.findChild<QListWidget*>(QStringLiteral("RuleList"));
+    QCOMPARE(ruleList->count(), 1);
+    QVERIFY(!dialog.findChild<QPushButton*>(QStringLiteral("RuleDelete"))->isEnabled());
+    dialog.findChild<QPushButton*>(QStringLiteral("RuleClone"))->click();
+    QCOMPARE(ruleList->count(), 2);
+    dialog.findChild<QLineEdit*>(QStringLiteral("RuleName"))->setText(QStringLiteral("TOP"));
+    auto* region = dialog.findChild<QComboBox*>(QStringLiteral("RuleRegion"));
+    region->setCurrentIndex(region->findData(static_cast<int>(hatt::ui::RuleRegion::TopCopper)));
+    dialog.findChild<QDoubleSpinBox*>(QStringLiteral("RuleTraceTrace"))->setValue(0.15);
+    dialog.findChild<QLineEdit*>(QStringLiteral("RuleName"))->setText(QStringLiteral("DEFAULT"));
+    QVERIFY(!ok->isEnabled()); // duplicate rule name
+    dialog.findChild<QLineEdit*>(QStringLiteral("RuleName"))->setText(QStringLiteral("TOP"));
+    QVERIFY(ok->isEnabled());
+
+    // Net Classes: a new class that takes N1 and routes on top only.
+    dialog.findChild<QPushButton*>(QStringLiteral("NetClassNew"))->click();
+    auto* classCombo = dialog.findChild<QComboBox*>(QStringLiteral("NetClassCombo"));
+    QCOMPARE(classCombo->count(), 3);
+    dialog.findChild<QDoubleSpinBox*>(QStringLiteral("NetClassTraceWidth"))->setValue(0.5);
+    dialog.findChild<QCheckBox*>(QStringLiteral("NetClassBottom"))->setChecked(false);
+    auto* available = dialog.findChild<QListWidget*>(QStringLiteral("NetClassAvailableNets"));
+    for (int row = 0; row < available->count(); ++row) {
+        available->item(row)->setSelected(available->item(row)->data(Qt::UserRole).toString() == QLatin1String("N1"));
+    }
+    dialog.findChild<QPushButton*>(QStringLiteral("NetClassAssign"))->click();
+    QCOMPARE(dialog.findChild<QListWidget*>(QStringLiteral("NetClassNets"))->count(), 1);
+
+    // Differential pair and defaults.
+    dialog.findChild<QPushButton*>(QStringLiteral("PairAdd"))->click();
+    auto* pairs = dialog.findChild<QTableWidget*>(QStringLiteral("PairTable"));
+    QCOMPARE(pairs->rowCount(), 1);
+    pairs->item(0, 4)->setText(QStringLiteral("abc"));
+    QVERIFY(!ok->isEnabled()); // gap is not a number
+    pairs->item(0, 4)->setText(QStringLiteral("0.18"));
+    QVERIFY(ok->isEnabled());
+    dialog.findChild<QCheckBox*>(QStringLiteral("DefaultThermalRelief"))->setChecked(false);
+
+    const hatt::ui::DesignRules rules = dialog.rules();
+    QVERIFY2(hatt::ui::validateDesignRules(rules).isEmpty(), qPrintable(hatt::ui::validateDesignRules(rules)));
+    QCOMPARE(rules.clearanceRules.size(), 2);
+    QCOMPARE(rules.clearanceRules[1].region, hatt::ui::RuleRegion::TopCopper);
+    QCOMPARE(rules.clearanceRules[1].traceTrace, 0.15);
+    QCOMPARE(rules.netClasses.size(), 3);
+    QCOMPARE(rules.netClasses[2].nets, QStringList{QStringLiteral("N1")});
+    QCOMPARE(rules.netClasses[2].traceWidth, 0.5);
+    QCOMPARE(rules.netClasses[2].layers, hatt::ui::layerBit(hatt::ui::BoardLayer::TopCopper));
+    QCOMPARE(rules.differentialPairs.size(), 1);
+    QCOMPARE(rules.differentialPairs.first().gap, 0.18);
+    QVERIFY(!rules.defaults.thermalRelief);
 }
 
 void MainWindowTests::selectionStatesFollowTheme_data() {
