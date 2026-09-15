@@ -63,4 +63,6 @@ document or the design rules change and are never stored.
   aligned and can be cut by other nets' clearance, leaving a pad with fewer spokes; island removal
   still only drops regions that nothing of the net touches. The DRC evaluates the pour
   (`pourZones`) rather than the solid zone polygon.
+- ADR-0012 adds a Zone mode, keepout zones that cut pours, non-copper area zones, and the Hatched
+  and Empty fill styles. An Empty copper zone is not poured and does not conduct.
 - Pouring cost grows with the copper near a zone; boards of MVP size pour in milliseconds.

@@ -127,7 +127,8 @@ private slots:
     void writesVersionedHeaderAndOmitsDefaults() {
         const QJsonObject root = sampleJson();
         QCOMPARE(root[QStringLiteral("format")].toString(), QStringLiteral("hatteda-project"));
-        QCOMPARE(root[QStringLiteral("formatVersion")].toInt(), ProjectFormatVersion);
+        // No version 4 feature (ADR-0012) is used, so older builds can still open the file.
+        QCOMPARE(root[QStringLiteral("formatVersion")].toInt(), ProjectBaseFormatVersion);
         const QJsonObject line = root[QStringLiteral("schematic")][QStringLiteral("items")][2].toObject();
         QCOMPARE(line[QStringLiteral("kind")].toString(), QStringLiteral("line"));
         QVERIFY(!line.contains(QStringLiteral("label")));

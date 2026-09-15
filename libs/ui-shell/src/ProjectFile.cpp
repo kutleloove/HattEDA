@@ -151,6 +151,8 @@ QJsonObject itemToJson(const SketchItem& item) {
     if (item.width > 0.0) object[QStringLiteral("width")] = item.width;
     if (!item.net.isEmpty()) object[QStringLiteral("net")] = item.net;
     if (!item.fontFamily.isEmpty()) object[QStringLiteral("fontFamily")] = item.fontFamily;
+    // Format 4 (ADR-0012)
+    if (item.zoneFill != ZoneFillStyle::Solid) object[QStringLiteral("zoneFill")] = zoneFillStyleToken(item.zoneFill);
     return object;
 }
 
@@ -260,6 +262,13 @@ QString documentFromJson(const QJsonValue& value, Workspace workspace, const QSt
         if (!netVal.isUndefined()) {
             if (!netVal.isString()) return tr("%1 has an invalid net.").arg(at);
             item.net = netVal.toString();
+        }
+        // Zone fill style (ADR-0012); absent in older files, which read as Solid.
+        const QJsonValue fillVal = object.value(QStringLiteral("zoneFill"));
+        if (!fillVal.isUndefined()) {
+            const auto style = fillVal.isString() ? zoneFillStyleFromToken(fillVal.toString()) : std::nullopt;
+            if (!style) return tr("%1 has an invalid zone fill.").arg(at);
+            item.zoneFill = *style;
         }
         if (item.kind == SketchItem::Kind::Symbol) {
             const auto* symbol = findSymbol(item.variant);
@@ -513,10 +522,22 @@ QString rulesFromJson(const QJsonValue& value, DesignRules& rules) { return desi
 
 } // namespace
 
+int requiredFormatVersion(const ProjectData& project) {
+    for (const SketchDocument* document : {&project.schematic, &project.board}) {
+        for (const SketchItem& item : *document) {
+            if (item.variant == KeepoutZoneVariant || item.variant == AreaZoneVariant ||
+                item.zoneFill != ZoneFillStyle::Solid) {
+                return ProjectFormatVersion;
+            }
+        }
+    }
+    return ProjectBaseFormatVersion;
+}
+
 QByteArray serializeProject(const ProjectData& project) {
     QJsonObject root;
     root[QStringLiteral("format")] = ProjectFormatName;
-    root[QStringLiteral("formatVersion")] = ProjectFormatVersion;
+    root[QStringLiteral("formatVersion")] = requiredFormatVersion(project);
     root[QStringLiteral("name")] = project.name;
     root[QStringLiteral("schematic")] = documentToJson(project.schematic);
     root[QStringLiteral("board")] = documentToJson(project.board);

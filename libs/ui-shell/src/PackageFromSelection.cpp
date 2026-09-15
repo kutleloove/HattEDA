@@ -67,7 +67,7 @@ PackageExtraction extractPackage(const SketchDocument& document, const QList<int
             }
             result.usedItems.append(index);
         } else if (isGraphic(item.kind) && isSilkLayer(item.layer) && item.variant != BoardOutlineVariant &&
-                   item.variant != CopperZoneVariant) {
+                   !isZoneVariant(item.variant)) {
             SymbolShape shape = outlineShape(item);
             if (shape.points.size() < 2) {
                 ++result.ignoredItems;

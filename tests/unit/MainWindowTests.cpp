@@ -106,6 +106,7 @@ private slots:
     void assemblyExportsWriteCsv();
     void designRuleManagerEditsRulesClassesPairsAndDefaults();
     void zoneNetPropertyPoursOnTheCanvas();
+    void zoneModeDrawsZonesAndListsThem();
     void selectionStatesFollowTheme_data();
     void selectionStatesFollowTheme();
 
@@ -1368,6 +1369,106 @@ void MainWindowTests::textStyleBarShowsFontAndAppliesToNewText() {
     boardSelector->setCurrentRow(rowForTool(boardSelector, CanvasTool::Text));
     QVERIFY(!styleBar->isHidden());
     QVERIFY(fontCombo->isHidden());
+}
+
+void MainWindowTests::zoneModeDrawsZonesAndListsThem() {
+    using hatt::ui::SketchItem;
+    hatt::ui::MainWindow window;
+    QVERIFY(showActive(window));
+    activateEditor(window);
+    auto* selector = window.findChild<QListWidget*>(QStringLiteral("ObjectSelector"));
+    auto* zones = window.findChild<QListWidget*>(QStringLiteral("ZoneList"));
+    QVERIFY(selector && zones);
+    auto* zoneMode = action(window, "hatteda.tool.zone");
+    QCOMPARE(zoneMode->shortcut(), QKeySequence(QStringLiteral("Z")));
+    QVERIFY(!zoneMode->isEnabled()); // Kayra only
+
+    window.showKayraWorkspace();
+    auto* board = window.activeCanvas();
+    QVERIFY(zoneMode->isEnabled());
+    // Zones left the 2D graphics list for their own mode.
+    action(window, "hatteda.tool.draw")->trigger();
+    for (int row = 0; row < selector->count(); ++row) {
+        QVERIFY(!hatt::ui::isZoneVariant(selector->item(row)->data(Qt::UserRole + 1).toString()));
+    }
+    QVERIFY(zones->isHidden());
+
+    zoneMode->trigger();
+    QVERIFY(zoneMode->isChecked());
+    QVERIFY(!action(window, "hatteda.tool.draw")->isChecked());
+    QCOMPARE(selector->count(), 3);
+    QCOMPARE(board->tool(), CanvasTool::Zone);
+    QCOMPARE(board->toolVariant(), hatt::ui::CopperZoneVariant);
+    QVERIFY(!zones->isHidden());
+    QCOMPARE(zones->count(), 0);
+
+    auto drawSquare = [board](double x) {
+        for (const QPointF& corner : {QPointF(x, 0), QPointF(x + 12.7, 0), QPointF(x + 12.7, 12.7), QPointF(x, 12.7)}) {
+            clickCanvas(board, corner);
+        }
+        clickCanvas(board, QPointF(x, 0)); // the first corner closes the zone
+    };
+    drawSquare(0.0);
+    QCOMPARE(board->document().size(), 1);
+    const SketchItem copper = board->document().first();
+    QCOMPARE(copper.variant, hatt::ui::CopperZoneVariant);
+    QVERIFY(copper.closed);
+    QCOMPARE(copper.points.size(), 4);
+    QVERIFY(hatt::ui::isCopperLayer(copper.layer));
+    QCOMPARE(zones->count(), 1);
+    QVERIFY2(zones->item(0)->text().startsWith(QStringLiteral("No net, Solid")), qPrintable(zones->item(0)->text()));
+
+    selector->setCurrentRow(1);
+    QCOMPARE(board->toolVariant(), hatt::ui::KeepoutZoneVariant);
+    drawSquare(25.4);
+    QCOMPARE(board->document().size(), 2);
+    QCOMPARE(board->document().last().variant, hatt::ui::KeepoutZoneVariant);
+    QCOMPARE(zones->count(), 2);
+    QVERIFY(zones->item(1)->text().startsWith(QStringLiteral("Keepout")));
+
+    selector->setCurrentRow(2);
+    drawSquare(50.8);
+    QCOMPARE(board->document().last().variant, hatt::ui::AreaZoneVariant);
+    QVERIFY(!hatt::ui::isCopperLayer(board->document().last().layer));
+    QVERIFY(zones->item(2)->text().startsWith(QStringLiteral("Area, Solid")));
+    QVERIFY(board->zoneFills().contains(board->document().last().id)); // area fill drawn on the canvas
+
+    // The list and the board selection follow each other.
+    emit zones->itemClicked(zones->item(0));
+    QCOMPARE(board->selection(), QList<int>{0});
+    board->revealItems({board->document().at(1).id}, std::nullopt);
+    QCOMPARE(zones->currentRow(), 1);
+
+    // Double-click edits the copper zone: net and fill show up in its summary.
+    QTimer::singleShot(0, [] {
+        auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+        QVERIFY(dialog);
+        auto* fill = dialog->findChild<QComboBox*>(QStringLiteral("ItemZoneFill"));
+        QVERIFY(fill);
+        fill->setCurrentIndex(fill->findData(static_cast<int>(hatt::ui::ZoneFillStyle::Hatched)));
+        dialog->findChild<QComboBox*>(QStringLiteral("ItemZoneNet"))->setEditText(QStringLiteral("GND"));
+        dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Ok)->click();
+    });
+    emit zones->itemDoubleClicked(zones->item(0));
+    QCOMPARE(board->document().first().zoneFill, hatt::ui::ZoneFillStyle::Hatched);
+    QCOMPARE(board->document().first().net, QStringLiteral("GND"));
+    QVERIFY2(zones->item(0)->text().startsWith(QStringLiteral("GND=")) && zones->item(0)->text().contains(QStringLiteral("Hatched")),
+             qPrintable(zones->item(0)->text()));
+
+    // Keepouts have no fill style to edit.
+    QTimer::singleShot(0, [] {
+        auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+        QVERIFY(dialog);
+        QVERIFY(dialog->findChild<QComboBox*>(QStringLiteral("ItemZoneFill")) == nullptr);
+        QVERIFY(dialog->findChild<QComboBox*>(QStringLiteral("ItemZoneNet")) == nullptr);
+        dialog->reject();
+    });
+    emit zones->itemDoubleClicked(zones->item(1));
+
+    window.showMergenWorkspace();
+    QVERIFY(!zoneMode->isEnabled());
+    QVERIFY(action(window, "hatteda.tool.select")->isChecked());
+    QVERIFY(zones->isHidden());
 }
 
 QTEST_MAIN(MainWindowTests)

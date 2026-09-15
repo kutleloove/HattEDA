@@ -658,10 +658,43 @@ int itemCopperLayers(const SketchItem& item) {
         return layers;
     }
     case SketchItem::Kind::Polyline:
-        return item.variant == CopperZoneVariant && isCopperLayer(item.layer) ? layerBit(item.layer) : 0;
+        // Empty copper zones are only a boundary; keepouts and area zones never conduct.
+        return item.variant == CopperZoneVariant && item.zoneFill != ZoneFillStyle::Empty && isCopperLayer(item.layer)
+                   ? layerBit(item.layer)
+                   : 0;
     default:
         return 0;
     }
+}
+
+bool isZoneVariant(const QString& variant) {
+    return variant == CopperZoneVariant || variant == KeepoutZoneVariant || variant == AreaZoneVariant;
+}
+
+QString zoneFillStyleToken(ZoneFillStyle style) {
+    switch (style) {
+    case ZoneFillStyle::Solid: return QStringLiteral("solid");
+    case ZoneFillStyle::Hatched: return QStringLiteral("hatched");
+    case ZoneFillStyle::Empty: return QStringLiteral("empty");
+    }
+    return QStringLiteral("solid");
+}
+
+std::optional<ZoneFillStyle> zoneFillStyleFromToken(const QString& token) {
+    for (const ZoneFillStyle style : {ZoneFillStyle::Solid, ZoneFillStyle::Hatched, ZoneFillStyle::Empty}) {
+        if (token == zoneFillStyleToken(style)) return style;
+    }
+    return std::nullopt;
+}
+
+QString zoneFillStyleName(ZoneFillStyle style) {
+    const char* name = "";
+    switch (style) {
+    case ZoneFillStyle::Solid: name = QT_TRANSLATE_NOOP("hatt::ui::ZoneFill", "Solid"); break;
+    case ZoneFillStyle::Hatched: name = QT_TRANSLATE_NOOP("hatt::ui::ZoneFill", "Hatched"); break;
+    case ZoneFillStyle::Empty: name = QT_TRANSLATE_NOOP("hatt::ui::ZoneFill", "Empty"); break;
+    }
+    return QCoreApplication::translate("hatt::ui::ZoneFill", name);
 }
 
 int itemLayerMask(const SketchItem& item) {

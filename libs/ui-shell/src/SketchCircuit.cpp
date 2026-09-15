@@ -314,8 +314,8 @@ SketchDocument autoPlaceParts(const SketchDocument& board, const SketchDocument&
     for (const auto& item : board) {
         const bool outline = item.variant == BoardOutlineVariant;
         if (outline && area.isNull()) area = itemBounds(item).adjusted(gap, gap, -gap, -gap);
-        // The outline and copper zones surround parts, so they do not block placement.
-        if (!outline && item.variant != CopperZoneVariant) occupied.append(itemBounds(item));
+        // The outline and zones surround parts, so they do not block placement.
+        if (!outline && !isZoneVariant(item.variant)) occupied.append(itemBounds(item));
     }
     if (area.isEmpty()) {
         double right = 0.0;

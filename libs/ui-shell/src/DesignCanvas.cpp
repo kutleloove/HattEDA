@@ -370,8 +370,15 @@ void drawItem(QPainter& painter, const SketchItem& item, const CanvasColors& col
         const QColor base = board ? graphicsColor() : outline ? colors.outline : colors.graphics;
         const QColor color = pick(base);
         painter.setPen(strokePen(color, outline ? std::max(width, 2.0) : width, preview));
-        if (zone && (item.net.isEmpty() || preview)) {
-            // Zones with a net show their pour (setZoneFills) instead of a wash over the outline.
+        if (item.variant == KeepoutZoneVariant) {
+            // Keepouts are never filled; a diagonal hatch marks the area that copper must stay out of.
+            QColor fill = base;
+            fill.setAlpha(preview ? 70 : 130);
+            painter.setBrush(QBrush(fill, Qt::BDiagPattern));
+        } else if ((zone || item.variant == AreaZoneVariant) && item.zoneFill != ZoneFillStyle::Empty &&
+                   (preview || (zone && item.net.isEmpty()))) {
+            // Poured zones and filled areas show their fill (setZoneFills) instead of a wash over the
+            // outline; Empty zones are only a boundary.
             QColor fill = board ? base : colors.copper;
             fill.setAlpha(preview ? 40 : 70);
             painter.setBrush(fill);
@@ -599,7 +606,9 @@ bool isTwoPointTool(CanvasTool tool) {
            tool == CanvasTool::Circle || tool == CanvasTool::Measure;
 }
 
-bool isPathTool(CanvasTool tool) { return tool == CanvasTool::Wire || tool == CanvasTool::Polyline; }
+bool isPathTool(CanvasTool tool) {
+    return tool == CanvasTool::Wire || tool == CanvasTool::Polyline || tool == CanvasTool::Zone;
+}
 
 QVector<QPointF> diagonalRoute(QPointF from, QPointF to) {
     const double dx = to.x() - from.x();
@@ -735,6 +744,13 @@ QString DesignCanvas::toolHint() const {
     case CanvasTool::Polyline:
         return tr("Click to add vertices. Double-click or Enter finishes; right-click cancels. Backspace "
                   "removes the last vertex.");
+    case CanvasTool::Zone:
+        if (variant_ == AreaZoneVariant) {
+            return tr("Click the area's corners on the active silk, resist or paste layer; click the first "
+                      "corner or press Enter to close it.");
+        }
+        return tr("Click the zone's corners on the active copper layer; click the first corner or press Enter "
+                  "to close it.");
     case CanvasTool::Arc:
         return tr("Click the start point, the end point, then a point the arc passes through.");
     case CanvasTool::Text:
@@ -856,6 +872,13 @@ BoardLayer DesignCanvas::graphicsLayer() const noexcept {
     return activeLayer_ == BoardLayer::BottomCopper ? BoardLayer::BottomSilk : BoardLayer::TopSilk;
 }
 
+BoardLayer DesignCanvas::zoneLayer() const noexcept {
+    if (variant_ != AreaZoneVariant) return routeLayer();
+    // Area zones are never on the board edge; copper and the edge fall back to the silkscreen.
+    const BoardLayer layer = graphicsLayer();
+    return layer == BoardLayer::BoardEdge ? BoardLayer::TopSilk : layer;
+}
+
 SketchItem DesignCanvas::pendingTrack(const QVector<QPointF>& points) const {
     SketchItem track;
     track.kind = SketchItem::Kind::Wire;
@@ -970,7 +993,7 @@ void DesignCanvas::editItemProperties(int index, const SketchItem& properties) {
         item.layer == properties.layer && item.onBottom == properties.onBottom &&
         item.pad == properties.pad && item.width == properties.width &&
         item.drillDiameter == properties.drillDiameter && item.net == properties.net &&
-        item.fontFamily == properties.fontFamily) return;
+        item.fontFamily == properties.fontFamily && item.zoneFill == properties.zoneFill) return;
     const int delta = (turns - item.quarterTurns + 4) % 4;
     for (int i = 0; i < delta; ++i) rotateItemQuarterTurn(item, anchor);
     item.quarterTurns = turns;
@@ -987,6 +1010,7 @@ void DesignCanvas::editItemProperties(int index, const SketchItem& properties) {
     item.drillDiameter = properties.drillDiameter;
     item.net = properties.net;
     item.fontFamily = properties.fontFamily;
+    item.zoneFill = properties.zoneFill;
     pushEdit(tr("Edit properties"), document, {index});
 }
 
@@ -1319,7 +1343,7 @@ DesignCanvas::Snap DesignCanvas::snap(QPointF screen, const QPointF* origin,
                 }
             }
         }
-        if (tool_ == CanvasTool::Polyline && pending_.size() >= 3) {
+        if ((tool_ == CanvasTool::Polyline || tool_ == CanvasTool::Zone) && pending_.size() >= 3) {
             const double distance = QLineF(world, pending_.first()).length();
             if (distance < best) {
                 best = distance;
@@ -1665,8 +1689,9 @@ std::optional<QVector<QPointF>> DesignCanvas::obstacleAvoidingRoute(QPointF from
                 tracks.append({segment, separation});
             }
         } else if (item.kind == SketchItem::Kind::Polyline &&
-                   item.variant == CopperZoneVariant && item.layer == routeLayer() &&
-                   item.points.size() >= 3) {
+                   (item.variant == KeepoutZoneVariant ||
+                    (item.variant == CopperZoneVariant && item.zoneFill != ZoneFillStyle::Empty)) &&
+                   item.layer == routeLayer() && item.points.size() >= 3) {
             QRectF bounds = QPolygonF(item.points).boundingRect();
             const double expansion = routeRadius + routingClearance_;
             areas.append(bounds.adjusted(-expansion, -expansion, expansion, expansion));
@@ -1872,7 +1897,7 @@ int DesignCanvas::hitTest(QPointF screen) const {
         if (item.kind == SketchItem::Kind::Symbol || item.kind == SketchItem::Kind::Text) {
             return itemBounds(item).adjusted(-tolerance, -tolerance, tolerance, tolerance).contains(world);
         }
-        if (item.variant == CopperZoneVariant &&
+        if (isZoneVariant(item.variant) &&
             QPolygonF(item.points).containsPoint(world, Qt::OddEvenFill)) {
             return true;
         }
@@ -2210,12 +2235,12 @@ void DesignCanvas::finishPath() {
         simplifyPath(points);
     }
     bool closed = false;
-    if (tool_ == CanvasTool::Polyline) {
+    if (tool_ == CanvasTool::Polyline || tool_ == CanvasTool::Zone) {
         if (points.size() >= 4 && samePoint(points.first(), points.last())) {
             points.removeLast();
             closed = true;
         }
-        closed = closed || variant_ == BoardOutlineVariant || variant_ == CopperZoneVariant;
+        closed = closed || variant_ == BoardOutlineVariant || isZoneVariant(variant_);
     }
     if (points.size() < (closed ? 3 : 2)) {
         update();
@@ -2228,7 +2253,7 @@ void DesignCanvas::finishPath() {
     item.closed = closed;
     if (workspace_ == Workspace::Board) {
         item.layer = variant_ == BoardOutlineVariant ? BoardLayer::BoardEdge
-                     : variant_ == CopperZoneVariant ? routeLayer()
+                     : isZoneVariant(variant_)       ? zoneLayer()
                                                      : graphicsLayer();
     }
     QString text;
@@ -2238,6 +2263,10 @@ void DesignCanvas::finishPath() {
         text = tr("Draw board outline");
     } else if (variant_ == CopperZoneVariant) {
         text = tr("Draw copper zone");
+    } else if (variant_ == KeepoutZoneVariant) {
+        text = tr("Draw keepout zone");
+    } else if (variant_ == AreaZoneVariant) {
+        text = tr("Draw area zone");
     } else {
         text = tr("Draw polyline");
     }
@@ -2369,7 +2398,8 @@ void DesignCanvas::mousePressEvent(QMouseEvent* event) {
         break;
     }
     case CanvasTool::Wire:
-    case CanvasTool::Polyline: {
+    case CanvasTool::Polyline:
+    case CanvasTool::Zone: {
         freeAngle_ = event->modifiers() & Qt::ControlModifier;
         const Snap point = snap(position, constraintOrigin());
         if (pending_.isEmpty()) {
@@ -2380,7 +2410,7 @@ void DesignCanvas::mousePressEvent(QMouseEvent* event) {
         } else if (samePoint(point.point, pending_.last())) {
             finishPath();
         } else {
-            const bool closing = tool_ == CanvasTool::Polyline && pending_.size() >= 3 &&
+            const bool closing = (tool_ == CanvasTool::Polyline || tool_ == CanvasTool::Zone) && pending_.size() >= 3 &&
                                  samePoint(point.point, pending_.first());
             const bool appended = appendPathPoint(point);
             if (appended &&
@@ -2778,7 +2808,7 @@ void DesignCanvas::paintEvent(QPaintEvent*) {
         // when the pour is out of date.
         for (int i = 0; board && !dragging && i < shown.size(); ++i) {
             const SketchItem& zone = shown[i];
-            if (zone.variant != CopperZoneVariant || drawRank(zone, view) != rank || !itemVisible(zone)) continue;
+            if (!isZoneVariant(zone.variant) || drawRank(zone, view) != rank || !itemVisible(zone)) continue;
             const auto fill = zoneFills_.constFind(zone.id);
             if (fill == zoneFills_.constEnd()) continue;
             const QTransform toScreen(scale_, 0, 0, scale_, offset_.x(), offset_.y());
@@ -2913,6 +2943,18 @@ void DesignCanvas::paintEvent(QPaintEvent*) {
                 } else {
                     hasPreview = true;
                 }
+            }
+            break;
+        case CanvasTool::Zone:
+            if (!pending_.isEmpty()) {
+                // Zones are always closed; the preview shows the area they will cover.
+                preview.kind = SketchItem::Kind::Polyline;
+                preview.points = pending_;
+                if (!samePoint(hover_.point, pending_.last())) preview.points.append(hover_.point);
+                preview.variant = variant_;
+                preview.closed = preview.points.size() > 2;
+                preview.layer = zoneLayer();
+                hasPreview = true;
             }
             break;
         case CanvasTool::Arc:
