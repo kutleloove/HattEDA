@@ -41,6 +41,7 @@ ProjectData sampleProject() {
         item(SketchItem::Kind::Text, {{3, 3}}),
     };
     project.schematic.last().label = QStringLiteral("Güç girişi");
+    project.schematic.last().fontFamily = QStringLiteral("Consolas");
     SketchItem footprint = item(SketchItem::Kind::Symbol, {{10.16, 10.16}}, QStringLiteral("board.r0603"));
     footprint.sourceId = resistor.id;
     SketchItem outline =
@@ -74,6 +75,7 @@ void compareDocuments(const SketchDocument& actual, const SketchDocument& expect
         QCOMPARE(a.layer, e.layer);
         QCOMPARE(a.onBottom, e.onBottom);
         QCOMPARE(a.excludeFromBoard, e.excludeFromBoard);
+        QCOMPARE(a.fontFamily, e.fontFamily);
         if (e.kind == SketchItem::Kind::Pad) {
             QCOMPARE(a.pad.number, e.pad.number);
             QCOMPARE(a.pad.shape, e.pad.shape);

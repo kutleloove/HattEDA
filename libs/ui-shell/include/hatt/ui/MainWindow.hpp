@@ -11,6 +11,8 @@
 class QAction;
 class QCloseEvent;
 class QActionGroup;
+class QDoubleSpinBox;
+class QFontComboBox;
 class QLabel;
 class QListWidget;
 class QPushButton;
@@ -127,6 +129,9 @@ private:
     void updateEditActions();
     void refreshIcons();
     void showCanvasContextMenu(DesignCanvas* canvas, QPoint position, int index);
+    // Text tool style bar (#36): default font (schematic only) / height / live preview, pushed to
+    // the active canvas whenever they change.
+    void applyTextStyle();
     void editItemProperties(DesignCanvas* canvas, int index);
     void showArrayDialog(DesignCanvas* canvas);
     QAction* makeAction(const QString& objectName, const QString& text, const QString& iconKind);
@@ -158,6 +163,11 @@ private:
     QWidget* routingStyleBar_ = nullptr;
     QPushButton* editStyleButton_ = nullptr;
     QPushButton* deleteStyleButton_ = nullptr;
+    // Draw mode, Text tool: default font / height / live preview (#36).
+    QWidget* textStyleBar_ = nullptr;
+    QFontComboBox* textFontCombo_ = nullptr;
+    QDoubleSpinBox* textSizeSpin_ = nullptr;
+    QLabel* textPreviewLabel_ = nullptr;
     QPushButton* removeDeviceButton_ = nullptr;
     QStringList componentKeys_;
     // Board component mode: footprints waiting for placement, indexed by the selector rows.

@@ -4,6 +4,7 @@
 #include <QList>
 #include <QPointF>
 #include <QRectF>
+#include <QSizeF>
 #include <QString>
 #include <QStringList>
 #include <QUuid>
@@ -130,6 +131,9 @@ struct SketchItem {
     double width = 0.0;
     // Copper zones: name of the net the zone is poured for (ADR-0009); empty = not poured.
     QString net;
+    // Kind::Text only: QFont family for schematic text; empty = the application default font.
+    // Board text always renders with StrokeFont (fabrication output), so this is ignored there.
+    QString fontFamily;
 };
 
 using SketchDocument = QVector<SketchItem>;
@@ -288,6 +292,10 @@ void registerSymbols(const QVector<SymbolDefinition>& symbols);
 [[nodiscard]] QVector<QLineF> itemSegments(const SketchItem& item);
 [[nodiscard]] QVector<QPointF> itemAnchors(const SketchItem& item);
 [[nodiscard]] QRectF itemBounds(const SketchItem& item);
+// Kind::Text only: size of the text's bounding box (world millimetres) at its current height and
+// content, `item.points.first()` being the top-left corner. Used for hit testing and the on-canvas
+// resize handle.
+[[nodiscard]] QSizeF textBoxSize(const SketchItem& item);
 [[nodiscard]] QVector<QPointF> arcSamples(QPointF start, QPointF through, QPointF end,
                                           int segments = 32);
 [[nodiscard]] double distanceToSegment(QPointF point, const QLineF& segment,

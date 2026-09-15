@@ -15,6 +15,7 @@
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDoubleSpinBox>
+#include <QFontComboBox>
 #include <QLabel>
 #include <QLineEdit>
 #include <QMenu>
@@ -107,6 +108,10 @@ private slots:
     void zoneNetPropertyPoursOnTheCanvas();
     void selectionStatesFollowTheme_data();
     void selectionStatesFollowTheme();
+
+    // #36: right-click layer change and the text tool's font/size style bar.
+    void moveToLayerContextMenuChangesTextItemLayer();
+    void textStyleBarShowsFontAndAppliesToNewText();
 
 private:
     QTemporaryDir settingsDir_;
@@ -1283,6 +1288,86 @@ void MainWindowTests::zoneNetPropertyPoursOnTheCanvas() {
     action(window, "hatteda.action.undo")->trigger();
     QVERIFY(board->document().first().net.isEmpty());
     QVERIFY(board->zoneFills().isEmpty());
+}
+
+void MainWindowTests::moveToLayerContextMenuChangesTextItemLayer() {
+    hatt::ui::MainWindow window;
+    QVERIFY(showActive(window));
+    activateEditor(window);
+    window.showKayraWorkspace();
+    auto* board = window.activeCanvas();
+    hatt::ui::SketchItem text;
+    text.kind = hatt::ui::SketchItem::Kind::Text;
+    text.label = QStringLiteral("REV A");
+    text.layer = hatt::ui::BoardLayer::TopSilk;
+    text.points = {QPointF(5, 5)};
+    board->applyDocumentEdit(QStringLiteral("Place text"), {text});
+
+    board->contextMenuRequested(board->mapToGlobal(QPoint(100, 100)), 0);
+    auto* menu = window.findChild<QMenu*>(QStringLiteral("CanvasContextMenu"));
+    QVERIFY(menu);
+    auto* layerMenu = menu->findChild<QMenu*>(QStringLiteral("hatteda.context.move-to-layer"));
+    QVERIFY(layerMenu);
+    QAction* bottomSilkAction = nullptr;
+    for (QAction* candidate : layerMenu->actions()) {
+        if (candidate->text() == hatt::ui::boardLayerName(hatt::ui::BoardLayer::BottomSilk)) {
+            bottomSilkAction = candidate;
+        }
+    }
+    QVERIFY(bottomSilkAction);
+    menu->hide();
+    bottomSilkAction->trigger();
+    // Bottom-side text mirrors automatically at paint time (DesignCanvas::drawItem checks
+    // isBottomLayer), so a plain layer change is enough to match Gerber bottom-silk convention.
+    QCOMPARE(board->document().first().layer, hatt::ui::BoardLayer::BottomSilk);
+
+    action(window, "hatteda.action.undo")->trigger();
+    QCOMPARE(board->document().first().layer, hatt::ui::BoardLayer::TopSilk);
+}
+
+void MainWindowTests::textStyleBarShowsFontAndAppliesToNewText() {
+    hatt::ui::MainWindow window;
+    QVERIFY(showActive(window));
+    activateEditor(window);
+    auto* selector = window.findChild<QListWidget*>(QStringLiteral("ObjectSelector"));
+    auto* styleBar = window.findChild<QWidget*>(QStringLiteral("TextStyleBar"));
+    auto* fontCombo = window.findChild<QFontComboBox*>(QStringLiteral("TextFontCombo"));
+    auto* sizeSpin = window.findChild<QDoubleSpinBox*>(QStringLiteral("TextSizeSpin"));
+    QVERIFY(selector && styleBar && fontCombo && sizeSpin);
+
+    action(window, "hatteda.tool.draw")->trigger();
+    QVERIFY(styleBar->isHidden());
+    selector->setCurrentRow(rowForTool(selector, CanvasTool::Text));
+    QVERIFY(!styleBar->isHidden());
+    QVERIFY(!fontCombo->isHidden()); // schematic text: a QFont family applies
+
+    // Pick a font the offscreen test platform actually has, rather than assuming a specific
+    // family is installed; what matters here is that whatever the combo shows reaches the item.
+    if (fontCombo->count() > 1) fontCombo->setCurrentIndex(1);
+    const QString expectedFamily = fontCombo->currentFont().family();
+    sizeSpin->setValue(5.0);
+
+    bool answered = false;
+    QTimer::singleShot(50, [&answered] {
+        auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+        QVERIFY(dialog);
+        dialog->findChild<QLineEdit*>(QStringLiteral("TextContent"))->setText(QStringLiteral("NOTE"));
+        answered = true;
+        dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Ok)->click();
+    });
+    clickCanvas(window.activeCanvas(), {10.0, 10.0});
+    QTRY_VERIFY(answered);
+    QTRY_COMPARE(window.activeCanvas()->document().size(), 1);
+    QCOMPARE(window.activeCanvas()->document().first().fontFamily, expectedFamily);
+    QCOMPARE(window.activeCanvas()->document().first().width, 5.0);
+
+    // Board fabrication text always uses the fixed StrokeFont, so the font choice is hidden there.
+    window.showKayraWorkspace();
+    action(window, "hatteda.tool.draw")->trigger();
+    auto* boardSelector = window.findChild<QListWidget*>(QStringLiteral("ObjectSelector"));
+    boardSelector->setCurrentRow(rowForTool(boardSelector, CanvasTool::Text));
+    QVERIFY(!styleBar->isHidden());
+    QVERIFY(fontCombo->isHidden());
 }
 
 QTEST_MAIN(MainWindowTests)

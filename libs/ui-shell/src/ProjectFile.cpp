@@ -150,6 +150,7 @@ QJsonObject itemToJson(const SketchItem& item) {
         object[QStringLiteral("drillDiameter")] = item.drillDiameter;
     if (item.width > 0.0) object[QStringLiteral("width")] = item.width;
     if (!item.net.isEmpty()) object[QStringLiteral("net")] = item.net;
+    if (!item.fontFamily.isEmpty()) object[QStringLiteral("fontFamily")] = item.fontFamily;
     return object;
 }
 
@@ -207,7 +208,8 @@ QString documentFromJson(const QJsonValue& value, Workspace workspace, const QSt
             !optionalString(object, "label", item.label) ||
             !optionalString(object, "value", item.value) ||
             !optionalString(object, "footprint", item.footprint) ||
-            !optionalString(object, "sourceId", item.sourceId)) {
+            !optionalString(object, "sourceId", item.sourceId) ||
+            !optionalString(object, "fontFamily", item.fontFamily)) {
             return tr("%1 has a text field of the wrong type.").arg(at);
         }
         const QJsonValue turns = object.value(QStringLiteral("quarterTurns"));

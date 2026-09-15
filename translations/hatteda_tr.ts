@@ -20,6 +20,8 @@
     <name>hatt::ui::MainWindow</name>
     <message><source>Circuit</source><translation>Devre</translation></message>
     <message><source>Edit properties</source><translation>Özellikleri düzenle</translation></message>
+    <message><source>Move to layer</source><translation>Katmana taşı</translation></message>
+    <message><source>Font</source><translation>Yazı tipi</translation></message>
     <message><source>Label / text</source><translation>Etiket / metin</translation></message>
     <message><source>Value (SI / SPICE)</source><translation>Değer (SI / SPICE)</translation></message>
     <message><source>Unassigned</source><translation>Atanmamış</translation></message>
@@ -147,6 +149,8 @@
     <message><source>Move</source><translation>Taşı</translation></message>
     <message><source>Drag wire</source><translation>Teli sürükle</translation></message>
     <message><source>Drag track</source><translation>Yolu sürükle</translation></message>
+    <message><source>Resize text</source><translation>Metni yeniden boyutlandır</translation></message>
+    <message><source>Edit text</source><translation>Metni düzenle</translation></message>
     <message><source>Click to start a track and click to add corners. The track ends on a pad automatically; double-click or Enter finishes, right-click cancels.</source><translation>Yolu başlatmak ve köşe eklemek için tıklayın. Yol pad üzerinde otomatik biter; çift tık veya Enter bitirir, sağ tık iptal eder.</translation></message>
     <message><source>Click a pin to start a wire and click the target; right-angle corners are added automatically (hold Ctrl for a free angle). The wire ends on a pin automatically; double-click or Enter finishes, right-click cancels.</source><translation>Teli başlatmak için bir pine, sonra hedefe tıklayın; dik açılı köşeler otomatik eklenir (serbest açı için Ctrl basılı tutun). Tel pin üzerinde otomatik biter; çift tık veya Enter bitirir, sağ tık iptal eder.</translation></message>
     <message><source>Click to place %1. Guides show alignment with other pins and pins join when close. Ctrl+R rotates before placing. Esc returns to selection.</source><translation>%1 yerleştirmek için tıklayın. Kılavuzlar diğer pinlerle hizayı gösterir, yakın pinler birleşir. Ctrl+R yerleştirmeden önce döndürür. Esc seçime döner.</translation></message>

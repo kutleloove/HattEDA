@@ -781,6 +781,8 @@ QVector<QPointF> itemAnchors(const SketchItem& item) {
     }
 }
 
+QSizeF textBoxSize(const SketchItem& item) { return textBox(item); }
+
 QRectF itemBounds(const SketchItem& item) {
     QPolygonF points;
     for (const QLineF& segment : itemSegments(item)) {

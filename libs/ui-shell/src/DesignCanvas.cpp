@@ -424,11 +424,13 @@ void drawItem(QPainter& painter, const SketchItem& item, const CanvasColors& col
             }
             break;
         }
+        const double height = item.width > 0.0 ? item.width : TextHeightMm;
         QFont font = painter.font();
-        font.setPixelSize(std::max(6, static_cast<int>(TextHeightMm * scale * 0.8)));
+        if (!item.fontFamily.isEmpty()) font.setFamily(item.fontFamily);
+        font.setPixelSize(std::max(6, static_cast<int>(height * scale * 0.8)));
         painter.setFont(font);
         painter.setPen(pick(graphicsColor()));
-        painter.drawText(QRectF(map(item.points.first()), QSizeF(4000, TextHeightMm * scale)),
+        painter.drawText(QRectF(map(item.points.first()), QSizeF(4000, height * scale)),
                          Qt::AlignLeft | Qt::AlignVCenter, item.label);
         break;
     }
@@ -899,8 +901,14 @@ void DesignCanvas::setSnapSettings(const SnapSettings& settings) {
     update();
 }
 
+void DesignCanvas::setDefaultTextStyle(const QString& fontFamily, double height) {
+    defaultTextFont_ = fontFamily;
+    if (height > 0.0) textHeight_ = height;
+}
+
 void DesignCanvas::cancelOperation() {
     if (contextMenuTimer_) contextMenuTimer_->stop();
+    cancelInlineTextEdit();
     pending_.clear();
     routePieces_.clear();
     activeRouteWidth_ = 0.0;
@@ -961,7 +969,8 @@ void DesignCanvas::editItemProperties(int index, const SketchItem& properties) {
         item.pinPadMap == properties.pinPadMap && item.excludeFromBoard == properties.excludeFromBoard &&
         item.layer == properties.layer && item.onBottom == properties.onBottom &&
         item.pad == properties.pad && item.width == properties.width &&
-        item.drillDiameter == properties.drillDiameter && item.net == properties.net) return;
+        item.drillDiameter == properties.drillDiameter && item.net == properties.net &&
+        item.fontFamily == properties.fontFamily) return;
     const int delta = (turns - item.quarterTurns + 4) % 4;
     for (int i = 0; i < delta; ++i) rotateItemQuarterTurn(item, anchor);
     item.quarterTurns = turns;
@@ -977,11 +986,13 @@ void DesignCanvas::editItemProperties(int index, const SketchItem& properties) {
     item.width = properties.width;
     item.drillDiameter = properties.drillDiameter;
     item.net = properties.net;
+    item.fontFamily = properties.fontFamily;
     pushEdit(tr("Edit properties"), document, {index});
 }
 
 void DesignCanvas::restore(const SketchDocument& document, const QList<int>& selection) {
     if (contextMenuTimer_) contextMenuTimer_->stop();
+    cancelInlineTextEdit();
     pending_.clear();
     routePieces_.clear();
     pressGesture_ = false;
@@ -1028,6 +1039,7 @@ void DesignCanvas::deleteSelection() {
     if (selection_.isEmpty()) {
         return;
     }
+    cancelInlineTextEdit();
     SketchDocument document = items_;
     QList<int> ordered = selection_;
     std::sort(ordered.begin(), ordered.end(), std::greater<>());
@@ -1114,6 +1126,7 @@ SketchDocument DesignCanvas::movedDocument(QPointF delta) const {
     case MoveKind::WireVertex:
         return dragWireVertex(items_, moveWire_, movePart_, delta, gridSize());
     case MoveKind::Selection:
+    case MoveKind::TextScale: // handled directly in mouseMoveEvent, not through this helper
         break;
     }
     return moveItemsKeepingConnections(items_, selection_, delta, gridSize());
@@ -1195,6 +1208,7 @@ void DesignCanvas::align(AlignOperation operation) {
 }
 
 void DesignCanvas::zoomAround(QPointF screen, double factor) {
+    cancelInlineTextEdit(); // the overlay's screen geometry would no longer match the text
     const QPointF world = screenToWorld(screen);
     scale_ = std::clamp(scale_ * factor, defaultScale() * 0.1, defaultScale() * 20.0);
     offset_ = screen - world * scale_;
@@ -1207,6 +1221,7 @@ void DesignCanvas::zoomIn() { zoomAround(QRectF(rect()).center(), 1.25); }
 void DesignCanvas::zoomOut() { zoomAround(QRectF(rect()).center(), 1.0 / 1.25); }
 
 void DesignCanvas::zoomToFit() {
+    cancelInlineTextEdit();
     if (items_.isEmpty()) {
         scale_ = defaultScale();
         offset_ = QPointF(48.0, 48.0);
@@ -1915,7 +1930,27 @@ DesignCanvas::WirePart DesignCanvas::wirePartAt(int wire, QPointF screen) const 
     return part;
 }
 
+bool DesignCanvas::textResizeHandleAt(QPointF screen, int& itemIndex) const {
+    if (selection_.size() != 1) return false;
+    const int index = selection_.first();
+    if (index < 0 || index >= items_.size() || items_[index].kind != SketchItem::Kind::Text) {
+        return false;
+    }
+    const SketchItem& item = items_[index];
+    const QPointF handle = item.points.first() + QPointF(textBoxSize(item).width(), textBoxSize(item).height());
+    if (QLineF(worldToScreen(handle), screen).length() <= 7.0) {
+        itemIndex = index;
+        return true;
+    }
+    return false;
+}
+
 void DesignCanvas::updateSelectCursor(QPointF screen) {
+    int textItem = -1;
+    if (textResizeHandleAt(screen, textItem)) {
+        if (cursor().shape() != Qt::SizeFDiagCursor) setCursor(Qt::SizeFDiagCursor);
+        return;
+    }
     const int hit = hitTest(screen);
     Qt::CursorShape shape = Qt::ArrowCursor;
     if (hit >= 0 && items_[hit].kind == SketchItem::Kind::Wire &&
@@ -2036,15 +2071,66 @@ void DesignCanvas::placeText(QPointF world) {
         item.kind = SketchItem::Kind::Text;
         item.points = {world};
         item.label = content->text().trimmed();
+        item.width = textHeight_;
         if (board) {
             item.layer = graphicsLayer();
             textHeight_ = height->value();
             item.width = textHeight_;
+        } else {
+            item.fontFamily = defaultTextFont_;
         }
         SketchDocument document = items_;
         document.append(item);
         pushEdit(tr("Place text"), document, {});
     });
+}
+
+void DesignCanvas::beginInlineTextEdit(int index) {
+    if (index < 0 || index >= items_.size() || items_[index].kind != SketchItem::Kind::Text) return;
+    cancelInlineTextEdit();
+    inlineTextIndex_ = index;
+    const SketchItem& item = items_[index];
+    const double height = item.width > 0.0 ? item.width : TextHeightMm;
+    inlineTextEdit_ = new QLineEdit(this);
+    inlineTextEdit_->setObjectName(QStringLiteral("InlineTextEdit"));
+    inlineTextEdit_->setText(item.label);
+    QFont font = inlineTextEdit_->font();
+    if (workspace_ == Workspace::Schematic && !item.fontFamily.isEmpty()) font.setFamily(item.fontFamily);
+    font.setPixelSize(std::max(9, static_cast<int>(height * scale_ * 0.8)));
+    inlineTextEdit_->setFont(font);
+    const QRectF box(item.points.first(), textBoxSize(item));
+    const QPoint topLeft = worldToScreen(box.topLeft()).toPoint();
+    const QPoint bottomRight = worldToScreen(box.bottomRight()).toPoint();
+    inlineTextEdit_->setGeometry(QRect(topLeft, bottomRight).adjusted(-3, -3, 60, 3));
+    inlineTextEdit_->installEventFilter(this);
+    connect(inlineTextEdit_, &QLineEdit::editingFinished, this, &DesignCanvas::commitInlineTextEdit);
+    inlineTextEdit_->show();
+    inlineTextEdit_->setFocus(Qt::MouseFocusReason);
+    inlineTextEdit_->selectAll();
+}
+
+void DesignCanvas::commitInlineTextEdit() {
+    if (!inlineTextEdit_) return;
+    const int index = inlineTextIndex_;
+    const QString text = inlineTextEdit_->text().trimmed();
+    inlineTextEdit_->deleteLater();
+    inlineTextEdit_ = nullptr;
+    inlineTextIndex_ = -1;
+    if (index < 0 || index >= items_.size() || text.isEmpty() || text == items_[index].label) {
+        update();
+        return;
+    }
+    SketchDocument document = items_;
+    document[index].label = text;
+    pushEdit(tr("Edit text"), document, {index});
+}
+
+void DesignCanvas::cancelInlineTextEdit() {
+    if (!inlineTextEdit_) return;
+    inlineTextEdit_->deleteLater();
+    inlineTextEdit_ = nullptr;
+    inlineTextIndex_ = -1;
+    update();
 }
 
 void DesignCanvas::finishTwoPoint(QPointF world) {
@@ -2165,6 +2251,7 @@ void DesignCanvas::mousePressEvent(QMouseEvent* event) {
     const QPointF position = event->position();
 
     if (event->button() == Qt::MiddleButton) {
+        cancelInlineTextEdit();
         drag_ = Drag::Pan;
         dragStartScreen_ = position;
         panStartOffset_ = offset_;
@@ -2197,6 +2284,18 @@ void DesignCanvas::mousePressEvent(QMouseEvent* event) {
 
     switch (tool_) {
     case CanvasTool::Select: {
+        int textItem = -1;
+        if (textResizeHandleAt(position, textItem)) {
+            drag_ = Drag::Move;
+            dragStartScreen_ = position;
+            dragStartWorld_ = screenToWorld(position);
+            moveKind_ = MoveKind::TextScale;
+            textScaleItem_ = textItem;
+            textScaleStartHeight_ = items_[textItem].width > 0.0 ? items_[textItem].width : TextHeightMm;
+            moveDelta_ = {};
+            moveDocument_.clear();
+            break;
+        }
         const int hit = hitTest(position);
         const bool additive = event->modifiers() & (Qt::ShiftModifier | Qt::ControlModifier);
         if (hit >= 0) {
@@ -2330,6 +2429,18 @@ void DesignCanvas::mouseMoveEvent(QMouseEvent* event) {
         if (axisLock) {
             raw = horizontalLock ? QPointF(raw.x(), 0) : QPointF(0, raw.y());
         }
+        if (moveKind_ == MoveKind::TextScale) {
+            // Diagonal drag of the bottom-right handle scales text height; width follows the
+            // font metrics (textBoxSize), so one handle is enough for a uniform resize.
+            const double newHeight = std::clamp(textScaleStartHeight_ + raw.y(), 0.5, 50.0);
+            moveDocument_ = items_;
+            moveDocument_[textScaleItem_].width = newHeight;
+            moveDelta_ = QPointF(0, newHeight - textScaleStartHeight_);
+            moveGuides_.clear();
+            emit cursorMoved(items_[textScaleItem_].points.first());
+            update();
+            return;
+        }
         if (moveKind_ == MoveKind::Selection) {
             QVector<QPointF> points{moveReference_};
             for (int index : selection_) {
@@ -2415,14 +2526,21 @@ void DesignCanvas::mouseReleaseEvent(QMouseEvent* event) {
     }
     if (drag_ == Drag::Move) {
         drag_ = Drag::None;
+        const bool wasTextScale = moveKind_ == MoveKind::TextScale;
+        const int scaledItem = textScaleItem_;
         const SketchDocument document =
             moveDelta_.isNull() ? SketchDocument() : std::move(moveDocument_);
         const bool reshaped = moveKind_ != MoveKind::Selection;
         moveDelta_ = {};
         moveDocument_.clear();
         moveGuides_.clear();
-        if (!document.isEmpty() && !sameGeometry(document, items_)) {
-            const QString text = !reshaped                        ? tr("Move")
+        const bool changed =
+            !document.isEmpty() &&
+            (wasTextScale ? document[scaledItem].width != items_[scaledItem].width
+                          : !sameGeometry(document, items_));
+        if (changed) {
+            const QString text = wasTextScale                     ? tr("Resize text")
+                                 : !reshaped                       ? tr("Move")
                                  : workspace_ == Workspace::Board ? tr("Drag track")
                                                                   : tr("Drag wire");
             pushEdit(text, document, selection_);
@@ -2486,6 +2604,14 @@ void DesignCanvas::mouseDoubleClickEvent(QMouseEvent* event) {
             finishPath();
         }
         return;
+    }
+    if (event->button() == Qt::LeftButton && tool_ == CanvasTool::Select) {
+        const int hit = hitTest(event->position());
+        if (hit >= 0 && items_[hit].kind == SketchItem::Kind::Text) {
+            setSelection({hit});
+            beginInlineTextEdit(hit);
+            return;
+        }
     }
     mousePressEvent(event);
 }
@@ -2598,6 +2724,16 @@ void DesignCanvas::leaveEvent(QEvent* event) {
     hoverValid_ = false;
     update();
     QWidget::leaveEvent(event);
+}
+
+bool DesignCanvas::eventFilter(QObject* watched, QEvent* event) {
+    if (watched == inlineTextEdit_ && event->type() == QEvent::KeyPress) {
+        if (static_cast<QKeyEvent*>(event)->key() == Qt::Key_Escape) {
+            cancelInlineTextEdit();
+            return true;
+        }
+    }
+    return QWidget::eventFilter(watched, event);
 }
 
 void DesignCanvas::paintEvent(QPaintEvent*) {
@@ -2881,6 +3017,20 @@ void DesignCanvas::paintEvent(QPaintEvent*) {
         painter.setPen(strokePen(colors.selection, 1.0, true));
         painter.drawRect(QRectF(dragStartScreen_, dragCurrentScreen_).normalized());
         painter.setBrush(Qt::NoBrush);
+    }
+
+    // Resize handle for a single selected text item (#36): drag it to scale the text height.
+    if (tool_ == CanvasTool::Select && selection_.size() == 1 && !inlineTextEdit_) {
+        const int index = selection_.first();
+        if (index >= 0 && index < shown.size() && shown[index].kind == SketchItem::Kind::Text) {
+            const SketchItem& item = shown[index];
+            const QPointF handle =
+                map(item.points.first() + QPointF(textBoxSize(item).width(), textBoxSize(item).height()));
+            painter.setPen(strokePen(colors.selection, 1.5));
+            painter.setBrush(colors.background);
+            painter.drawRect(QRectF(handle - QPointF(4, 4), QSizeF(8, 8)));
+            painter.setBrush(Qt::NoBrush);
+        }
     }
 
     if (hoverValid_ && drag_ == Drag::None && tool_ != CanvasTool::Select) {

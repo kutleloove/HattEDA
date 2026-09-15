@@ -31,6 +31,7 @@ Projects could not be saved: New project created no file, Open only changed the 
 - The symbol library is compiled in. A file that references a symbol removed from a later build is rejected rather than silently dropping parts. Library versioning is future work.
 - Autosave, crash recovery, the `.bak` backup and the project lock file are in ADR-0005. They do not change the format.
 - Later sections: format version 2 layers/pads and the `library` object (ADR-0006), project devices and footprints in `library.customDevices|customFootprints` (ADR-0007), design rules in `rules` (ADR-0008), and version 3 custom-device simulation model ids. Built-in catalog definitions are referenced by stable id and are not copied into the file.
+- `Kind::Text` items gained an optional `fontFamily` string (#36): the QFont family used for schematic text, empty meaning the application default; board text ignores it and always renders with StrokeFont. Purely additive (omitted when empty, defaults to empty when absent), so no `formatVersion` bump.
 - Not covered yet: embedded schematic symbol drawings, and project-level editor settings (units, grid) inside the file.
 
 ## Validation

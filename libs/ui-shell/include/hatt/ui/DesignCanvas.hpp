@@ -16,6 +16,7 @@
 class QPainter;
 class QUndoStack;
 class QTimer;
+class QLineEdit;
 
 namespace hatt::ui {
 
@@ -111,6 +112,9 @@ public:
     void setSnapSettings(const SnapSettings& settings);
     void setLengthUnit(LengthUnit unit);
     void cancelOperation();
+    // Defaults applied to newly placed text (#36); the text tool's style bar keeps these in sync.
+    // `fontFamily` is used for schematic text only (board text always renders with StrokeFont).
+    void setDefaultTextStyle(const QString& fontFamily, double height);
 
     void selectAll();
     void clearSelection();
@@ -183,6 +187,7 @@ signals:
     void contextMenuRequested(QPoint globalPosition, int itemIndex);
 
 protected:
+    bool eventFilter(QObject* watched, QEvent* event) override;
     void paintEvent(QPaintEvent* event) override;
     void mousePressEvent(QMouseEvent* event) override;
     void mouseMoveEvent(QMouseEvent* event) override;
@@ -197,8 +202,9 @@ protected:
 private:
     enum class SnapKind { None, Grid, Object, Center, Edge };
     enum class Drag { None, Move, RubberBand, Pan };
-    // What a Drag::Move edits: the whole selection, or one segment/vertex of a single wire.
-    enum class MoveKind { Selection, WireSegment, WireVertex };
+    // What a Drag::Move edits: the whole selection, one segment/vertex of a single wire, or the
+    // height of a single selected text item dragged from its resize handle (#36).
+    enum class MoveKind { Selection, WireSegment, WireVertex, TextScale };
 
     struct Snap {
         QPointF point;
@@ -272,6 +278,12 @@ private:
     void finishPath();
     void nudgeSelection(QPointF delta);
     void zoomAround(QPointF screen, double factor);
+    // On-canvas text editing (#36): resize handle at the bottom-right corner of a single selected
+    // text item's box, and a Photoshop-style double-click-to-edit overlay for its content.
+    [[nodiscard]] bool textResizeHandleAt(QPointF screen, int& itemIndex) const;
+    void beginInlineTextEdit(int index);
+    void commitInlineTextEdit();
+    void cancelInlineTextEdit();
 
     Workspace workspace_;
     QUndoStack* undoStack_;
@@ -301,8 +313,16 @@ private:
     double viaDiameter_ = DefaultViaDiameter;
     double viaDrill_ = DefaultViaDrill;
     double textHeight_ = TextHeightMm; // last board text height, mm
+    QString defaultTextFont_; // last schematic text font family; empty = application default
     bool pressGesture_ = false;
     QPointF pressScreen_;
+
+    // Text resize handle drag (#36); textScaleItem_ also names the item while dragging.
+    int textScaleItem_ = -1;
+    double textScaleStartHeight_ = 0.0;
+    // Inline text edit overlay (#36).
+    QLineEdit* inlineTextEdit_ = nullptr;
+    int inlineTextIndex_ = -1;
 
     Drag drag_ = Drag::None;
     QPointF dragStartScreen_;

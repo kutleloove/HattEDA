@@ -148,6 +148,11 @@ private slots:
     void equalSpacingSnapsWhileMovingAndPlacing();
     void createArrayCopiesInRowOrder();
     void textToolPlacesBoardTextWithHeight();
+
+    // #36: text layer clarity, in-canvas resize and inline edit, font/size style defaults.
+    void textToolUsesConfiguredFontAndHeight();
+    void textResizeHandleDragsHeight();
+    void doubleClickEditsTextInlineAndEscapeCancels();
     void pcbRouteStartsOnPadLayerAndFitsPad();
     void pcbRoutePreviewCompletesToAirwireTarget();
     void pcbAssistedRouteAvoidsCopperObstacles();
@@ -1112,6 +1117,98 @@ void DesignCanvasTests::textToolPlacesBoardTextWithHeight() {
     QVERIFY(board.tool() == CanvasTool::Text); // ready for the next label
     board.undoStack()->undo();
     QVERIFY(board.document().isEmpty());
+}
+
+void DesignCanvasTests::textToolUsesConfiguredFontAndHeight() {
+    // Schematic text (#36): the text tool's style bar sets a default font and height before
+    // placing; placeText should apply them to the new item.
+    canvas_->setDefaultTextStyle(QStringLiteral("Courier New"), 4.0);
+    canvas_->setTool(CanvasTool::Text);
+
+    bool answered = false;
+    QTimer::singleShot(50, [&answered] {
+        auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+        QVERIFY(dialog);
+        dialog->findChild<QLineEdit*>(QStringLiteral("TextContent"))->setText(QStringLiteral("NOTE"));
+        answered = true;
+        dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Ok)->click();
+    });
+    click(*canvas_, {10.0, 10.0});
+    QTRY_VERIFY(answered);
+    QTRY_COMPARE(canvas_->document().size(), 1);
+    const SketchItem text = canvas_->document().first();
+    QCOMPARE(text.fontFamily, QStringLiteral("Courier New"));
+    QCOMPARE(text.width, 4.0);
+}
+
+void DesignCanvasTests::textResizeHandleDragsHeight() {
+    canvas_->setDefaultTextStyle(QString(), 4.0);
+    canvas_->setTool(CanvasTool::Text);
+    bool answered = false;
+    QTimer::singleShot(50, [&answered] {
+        auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+        QVERIFY(dialog);
+        dialog->findChild<QLineEdit*>(QStringLiteral("TextContent"))->setText(QStringLiteral("NOTE"));
+        answered = true;
+        dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Ok)->click();
+    });
+    click(*canvas_, {10.0, 10.0});
+    QTRY_VERIFY(answered);
+    QTRY_COMPARE(canvas_->document().size(), 1);
+
+    canvas_->setTool(CanvasTool::Select);
+    canvas_->selectItem(0);
+    const SketchItem before = canvas_->document().first();
+    QCOMPARE(before.width, 4.0);
+    const QPointF handle = before.points.first() + QPointF(hatt::ui::textBoxSize(before).width(),
+                                                            hatt::ui::textBoxSize(before).height());
+    const int undoCountBefore = canvas_->undoStack()->count();
+    drag(*canvas_, handle, handle + QPointF(0, 3.0));
+    QCOMPARE(canvas_->undoStack()->count(), undoCountBefore + 1);
+    QCOMPARE(canvas_->document().first().width, 7.0);
+    // Only the height changed; the anchor (top-left) stays put.
+    QVERIFY(samePoint(canvas_->document().first().points.first(), before.points.first()));
+    canvas_->undoStack()->undo();
+    QCOMPARE(canvas_->document().first().width, 4.0);
+}
+
+void DesignCanvasTests::doubleClickEditsTextInlineAndEscapeCancels() {
+    canvas_->setDefaultTextStyle(QString(), 3.0);
+    canvas_->setTool(CanvasTool::Text);
+    bool answered = false;
+    QTimer::singleShot(50, [&answered] {
+        auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+        QVERIFY(dialog);
+        dialog->findChild<QLineEdit*>(QStringLiteral("TextContent"))->setText(QStringLiteral("OLD"));
+        answered = true;
+        dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Ok)->click();
+    });
+    click(*canvas_, {10.0, 10.0});
+    QTRY_VERIFY(answered);
+    QTRY_COMPARE(canvas_->document().size(), 1);
+
+    canvas_->setTool(CanvasTool::Select);
+    sendMouse(*canvas_, QEvent::MouseButtonDblClick, {10.0, 10.0}, Qt::LeftButton, Qt::LeftButton);
+    auto* editor = canvas_->findChild<QLineEdit*>(QStringLiteral("InlineTextEdit"));
+    QVERIFY(editor);
+    QCOMPARE(editor->text(), QStringLiteral("OLD"));
+    editor->setText(QStringLiteral("NEW"));
+    const int undoCountBefore = canvas_->undoStack()->count();
+    QTest::keyClick(editor, Qt::Key_Return);
+    QTest::qWait(10);
+    QCOMPARE(canvas_->undoStack()->count(), undoCountBefore + 1);
+    QCOMPARE(canvas_->document().first().label, QStringLiteral("NEW"));
+    QVERIFY(!canvas_->findChild<QLineEdit*>(QStringLiteral("InlineTextEdit")));
+
+    // Escape cancels without touching the document or the undo stack.
+    sendMouse(*canvas_, QEvent::MouseButtonDblClick, {10.0, 10.0}, Qt::LeftButton, Qt::LeftButton);
+    auto* secondEditor = canvas_->findChild<QLineEdit*>(QStringLiteral("InlineTextEdit"));
+    QVERIFY(secondEditor);
+    secondEditor->setText(QStringLiteral("IGNORED"));
+    QTest::keyClick(secondEditor, Qt::Key_Escape);
+    QTest::qWait(10);
+    QCOMPARE(canvas_->undoStack()->count(), undoCountBefore + 1);
+    QCOMPARE(canvas_->document().first().label, QStringLiteral("NEW"));
 }
 
 QTEST_MAIN(DesignCanvasTests)

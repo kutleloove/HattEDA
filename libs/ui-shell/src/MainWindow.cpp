@@ -37,6 +37,7 @@
 #include <QFileDialog>
 #include <QSaveFile>
 #include <QFileInfo>
+#include <QFontComboBox>
 #include <QFormLayout>
 #include <QGridLayout>
 #include <QSpinBox>
@@ -67,6 +68,7 @@
 
 #include <algorithm>
 #include <functional>
+#include <optional>
 
 namespace hatt::ui {
 namespace {
@@ -82,6 +84,26 @@ constexpr int CustomStyleRole = Qt::UserRole + 5;
 
 const QString TrackStyleKey = QStringLiteral("editor/board/trackStyle");
 const QString ViaStyleKey = QStringLiteral("editor/board/viaStyle");
+const QString TextFontKey = QStringLiteral("editor/text/fontFamily");
+const QString TextHeightKey = QStringLiteral("editor/text/height");
+
+// Board layers a context menu may offer to move `item` to (#36), matching the layer choice already
+// in editItemProperties; std::nullopt when the item has no layer (e.g. footprints, which carry a
+// board side instead).
+std::optional<int> layerMaskForItem(const SketchItem& item) {
+    switch (item.kind) {
+    case SketchItem::Kind::Wire:
+    case SketchItem::Kind::Pad:
+        return CopperLayerMask;
+    case SketchItem::Kind::Symbol:
+    case SketchItem::Kind::Via:
+        return std::nullopt;
+    default:
+        if (item.variant == BoardOutlineVariant) return std::nullopt;
+        if (item.variant == CopperZoneVariant) return CopperLayerMask;
+        return AllLayersMask;
+    }
+}
 
 QColor iconColor(const QPalette& palette) {
     return palette.color(QPalette::Window).lightness() < 128 ? QColor(QStringLiteral("#b4bfca"))
@@ -489,6 +511,27 @@ void MainWindow::showCanvasContextMenu(DesignCanvas* canvas, QPoint position, in
         menu->addAction(actions_.value(QStringLiteral("hatteda.action.array")));
         menu->addAction(actions_.value(QStringLiteral("hatteda.action.delete")));
         if (canvas->workspace() == Workspace::Board) {
+            // Quick layer change (#36), without opening the full properties dialog. Moving text (or
+            // any graphic) between a top and bottom layer mirrors it automatically: DesignCanvas
+            // paints text mirrored whenever its layer is on the bottom side (isBottomLayer), the same
+            // convention Gerber bottom-silk uses so the board reads correctly once flipped.
+            const auto item = canvas->document().at(index);
+            if (const auto mask = layerMaskForItem(item)) {
+                auto* layerMenu = menu->addMenu(tr("Move to layer"));
+                layerMenu->setObjectName(QStringLiteral("hatteda.context.move-to-layer"));
+                for (int i = 0; i < BoardLayerCount; ++i) {
+                    if (!(*mask & (1 << i))) continue;
+                    const auto layer = static_cast<BoardLayer>(i);
+                    auto* action = layerMenu->addAction(boardLayerName(layer));
+                    action->setCheckable(true);
+                    action->setChecked(layer == item.layer);
+                    connect(action, &QAction::triggered, this, [canvas, index, item, layer] {
+                        auto properties = item;
+                        properties.layer = layer;
+                        canvas->editItemProperties(index, properties);
+                    });
+                }
+            }
             menu->addSeparator();
             menu->addAction(actions_.value(QStringLiteral("hatteda.action.make-package")));
             menu->addAction(actions_.value(QStringLiteral("hatteda.action.decompose")));
@@ -605,6 +648,7 @@ void MainWindow::editItemProperties(DesignCanvas* canvas, int index) {
     QDoubleSpinBox* viaDrillField = nullptr;
     QComboBox* zoneNet = nullptr;
     QDoubleSpinBox* textHeightField = nullptr;
+    QFontComboBox* fontField = nullptr;
     auto size = [&](const QString& name, double millimetres, double minimum) {
         auto* field = new QDoubleSpinBox(&dialog);
         field->setObjectName(name);
@@ -695,6 +739,15 @@ void MainWindow::editItemProperties(DesignCanvas* canvas, int index) {
             }
             break;
         }
+    } else if (item.kind == SketchItem::Kind::Text) {
+        // Schematic text (#36): font family (StrokeFont is fixed on the board, so no font choice
+        // there) and height, matching the text tool's style bar.
+        fontField = new QFontComboBox(&dialog);
+        fontField->setObjectName(QStringLiteral("ItemFontFamily"));
+        if (!item.fontFamily.isEmpty()) fontField->setCurrentFont(QFont(item.fontFamily));
+        form->addRow(tr("Font"), fontField);
+        textHeightField = size(QStringLiteral("ItemTextHeight"), item.width > 0.0 ? item.width : TextHeightMm, 0.5);
+        form->addRow(tr("Text height"), textHeightField);
     }
     auto coordinate = [&](const QString& name, double millimetres) {
         auto* field = new QDoubleSpinBox(&dialog);
@@ -765,6 +818,7 @@ void MainWindow::editItemProperties(DesignCanvas* canvas, int index) {
         if (footprint) properties.footprint = footprint->currentData().toString();
         if (excludeFromBoard) properties.excludeFromBoard = excludeFromBoard->isChecked();
         if (layer) properties.layer = static_cast<BoardLayer>(layer->currentData().toInt());
+        if (fontField) properties.fontFamily = fontField->currentFont().family();
         if (bottomSide) properties.onBottom = bottomSide->isChecked();
         if (trackWidthField) properties.width = fromDisplayUnit(trackWidthField->value(), unit);
         if (textHeightField) properties.width = fromDisplayUnit(textHeightField->value(), unit);
@@ -789,6 +843,17 @@ void MainWindow::editItemProperties(DesignCanvas* canvas, int index) {
         properties.pinPadMap = pinPadMap;
         canvas->editItemProperties(index, properties);
     }
+}
+
+void MainWindow::applyTextStyle() {
+    const QString family = textFontCombo_->currentFont().family();
+    const double height = textSizeSpin_->value();
+    QFont preview = textFontCombo_->currentFont();
+    preview.setPointSizeF(std::clamp(height * 2.8, 7.0, 28.0));
+    textPreviewLabel_->setFont(preview);
+    QSettings().setValue(TextFontKey, family);
+    QSettings().setValue(TextHeightKey, height);
+    if (auto* canvas = activeCanvas()) canvas->setDefaultTextStyle(family, height);
 }
 
 MainWindow::~MainWindow() {
@@ -1181,6 +1246,33 @@ QWidget* MainWindow::createEditor() {
     styleLayout->addWidget(editStyleButton_);
     styleLayout->addWidget(deleteStyleButton_);
     contextLayout->addWidget(routingStyleBar_);
+    // Draw mode, Text tool: default font (schematic; board fabrication always uses StrokeFont),
+    // height and a live preview (#36), shown while the Text row is selected.
+    textStyleBar_ = new QWidget(contextPanel);
+    textStyleBar_->setObjectName(QStringLiteral("TextStyleBar"));
+    auto* textLayout = new QVBoxLayout(textStyleBar_);
+    textLayout->setContentsMargins(0, 0, 0, 0);
+    textLayout->setSpacing(6);
+    textFontCombo_ = new QFontComboBox(textStyleBar_);
+    textFontCombo_->setObjectName(QStringLiteral("TextFontCombo"));
+    textLayout->addWidget(textFontCombo_);
+    textSizeSpin_ = new QDoubleSpinBox(textStyleBar_);
+    textSizeSpin_->setObjectName(QStringLiteral("TextSizeSpin"));
+    textSizeSpin_->setDecimals(2);
+    textSizeSpin_->setRange(0.5, 50.0);
+    textSizeSpin_->setSingleStep(0.25);
+    textSizeSpin_->setSuffix(QStringLiteral(" mm"));
+    textLayout->addWidget(textSizeSpin_);
+    textPreviewLabel_ = new QLabel(textStyleBar_);
+    textPreviewLabel_->setObjectName(QStringLiteral("TextPreviewLabel"));
+    textPreviewLabel_->setText(QStringLiteral("Aa 123"));
+    textPreviewLabel_->setAlignment(Qt::AlignCenter);
+    textPreviewLabel_->setMinimumHeight(40);
+    textPreviewLabel_->setFrameShape(QFrame::StyledPanel);
+    textLayout->addWidget(textPreviewLabel_);
+    connect(textFontCombo_, &QFontComboBox::currentFontChanged, this, [this] { applyTextStyle(); });
+    connect(textSizeSpin_, &QDoubleSpinBox::valueChanged, this, [this] { applyTextStyle(); });
+    contextLayout->addWidget(textStyleBar_);
     objectSelector_ = new QListWidget(contextPanel);
     objectSelector_->setObjectName(QStringLiteral("ObjectSelector"));
     objectSelector_->setIconSize(QSize(32, 32));
@@ -1722,6 +1814,22 @@ void MainWindow::applyObjectSelection() {
         break;
     }
     canvas->setTool(tool, variant);
+    {
+        // Text tool style bar (#36): font choice only makes sense for schematic text (board text
+        // always renders with the fixed StrokeFont), height applies to both.
+        const bool textTool = toolMode_ == ToolMode::Draw && tool == CanvasTool::Text;
+        textStyleBar_->setVisible(textTool);
+        textFontCombo_->setVisible(workspace == Workspace::Schematic);
+        if (textTool) {
+            const QSettings settings;
+            const QSignalBlocker blockFont(textFontCombo_);
+            const QSignalBlocker blockSize(textSizeSpin_);
+            textFontCombo_->setCurrentFont(
+                QFont(settings.value(TextFontKey, textFontCombo_->currentFont().family()).toString()));
+            textSizeSpin_->setValue(settings.value(TextHeightKey, TextHeightMm).toDouble());
+            applyTextStyle();
+        }
+    }
     {
         const auto* item = objectSelector_->currentItem();
         const bool custom = item != nullptr && item->data(CustomStyleRole).toBool();
