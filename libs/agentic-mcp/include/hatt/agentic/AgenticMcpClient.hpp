@@ -10,7 +10,7 @@
 
 namespace hatt::agentic {
 
-// Client side of the local MCP server (ADR-0009): connects a `QLocalSocket` to the named pipe an
+// Client side of the local MCP server (ADR-0013): connects a `QLocalSocket` to the named pipe an
 // `AgenticMcpServer` is listening on and speaks the same Content-Length-framed JSON-RPC 2.0. Used
 // by the embedded agent demonstrator (`apps/hatteda-embedded-agent`) and by tests that exercise a
 // real client-server round trip; an external MCP-speaking agent (Claude Code, etc.) would use its

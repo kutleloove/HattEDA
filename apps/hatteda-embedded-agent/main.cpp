@@ -1,10 +1,10 @@
-// Demonstrator MCP client (ADR-0009). This program is deliberately NOT the embedded, in-app
-// agent described in ADR-0009 decision 3 -- it has no LLM reasoning, no orchestration, and no way
+// Demonstrator MCP client (ADR-0013). This program is deliberately NOT the embedded, in-app
+// agent described in ADR-0013 decision 3 -- it has no LLM reasoning, no orchestration, and no way
 // to discover a running HattEDA instance's server on its own. It only proves the round trip:
 // connect to the local agentic MCP server by pipe name, do the MCP `initialize` handshake, call
 // the `list_actions` tool, print the result, and exit. Building the real embedded agent (its
 // reasoning/orchestration, and how it finds the pipe name of "the" running instance) is separate
-// follow-up work; see ADR-0009 "Out of scope" #37.
+// follow-up work; see ADR-0013 "Out of scope" #37.
 //
 // `MainWindow` currently names its pipe "hatteda-agentic-mcp-<pid>" (only when the user has
 // turned on the `agentic/mcpEnabled` setting), so there is no stable, discoverable name to default
@@ -30,7 +30,7 @@ int main(int argc, char* argv[]) {
     parser.setApplicationDescription(QStringLiteral(
         "Demonstrator MCP client: connects to a running HattEDA instance's local agentic MCP "
         "server, lists available actions, and exits. Not the real embedded agent -- no LLM "
-        "reasoning or orchestration (ADR-0009, issue #37)."));
+        "reasoning or orchestration (ADR-0013, issue #37)."));
     parser.addHelpOption();
     const QCommandLineOption pipeOption(
         QStringList{QStringLiteral("pipe")},
