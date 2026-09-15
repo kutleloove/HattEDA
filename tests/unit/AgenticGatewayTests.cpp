@@ -42,7 +42,8 @@ void AgenticGatewayTests::blockedActionsAreRejectedWithoutTriggeringTheUnderlyin
 
     const QStringList blockedIds = {QStringLiteral("hatteda.action.quit"),
                                      QStringLiteral("hatteda.action.new-project"),
-                                     QStringLiteral("hatteda.action.open-project")};
+                                     QStringLiteral("hatteda.action.open-project"),
+                                     QStringLiteral("hatteda.action.open-recent")};
     for (const QString& id : blockedIds) {
         QVERIFY2(MainWindowAgenticGateway::blockedActionIds().contains(id),
                  qPrintable(QStringLiteral("%1 should be block-listed").arg(id)));

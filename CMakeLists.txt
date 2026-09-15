@@ -22,6 +22,7 @@ add_subdirectory(libs/electrical)
 add_subdirectory(libs/agentic-mcp)
 add_subdirectory(libs/ui-shell)
 add_subdirectory(apps/hatteda-desktop)
+add_subdirectory(apps/hatteda-embedded-agent)
 
 if(BUILD_TESTING)
     find_package(Qt6 6.11 REQUIRED COMPONENTS Test)

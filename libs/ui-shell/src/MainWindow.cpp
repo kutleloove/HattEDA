@@ -1525,6 +1525,14 @@ void MainWindow::createMenus() {
     open->setObjectName(QStringLiteral("hatteda.action.open-project"));
     open->setShortcut(QKeySequence::Open);
     connect(open, &QAction::triggered, this, &MainWindow::openProject);
+    auto* openRecent = fileMenu->addAction(tr("Open recent project"));
+    // Block-listed for agentic callers (ADR-0013): openRecentProject() routes through the same
+    // blocking Save/Discard/Cancel dialog as Open project via `maybeSaveChanges`.
+    openRecent->setObjectName(QStringLiteral("hatteda.action.open-recent"));
+    connect(openRecent, &QAction::triggered, this, [this]() {
+        const QStringList recent = QSettings().value(QStringLiteral("recentProjects")).toStringList();
+        if (!recent.isEmpty()) openRecentProject(recent.first());
+    });
     fileMenu->addSeparator();
     fileMenu->addAction(actions_.value(QStringLiteral("hatteda.action.save")));
     fileMenu->addAction(actions_.value(QStringLiteral("hatteda.action.save-as")));

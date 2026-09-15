@@ -77,3 +77,7 @@ hatt_add_qt_test(hatt-agentic-mcp-tests)
 add_executable(hatt-agentic-gateway-tests AgenticGatewayTests.cpp)
 target_link_libraries(hatt-agentic-gateway-tests PRIVATE HattEDA::UiShell Qt6::Test)
 hatt_add_qt_test(hatt-agentic-gateway-tests)
+
+add_executable(hatt-agentic-mcp-client-tests AgenticMcpClientTests.cpp)
+target_link_libraries(hatt-agentic-mcp-client-tests PRIVATE HattEDA::AgenticMcp Qt6::Test Qt6::Network)
+hatt_add_qt_test(hatt-agentic-mcp-client-tests)

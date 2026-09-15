@@ -13,6 +13,7 @@ const QSet<QString>& MainWindowAgenticGateway::blockedActionIds() {
         QStringLiteral("hatteda.action.quit"),
         QStringLiteral("hatteda.action.new-project"),
         QStringLiteral("hatteda.action.open-project"),
+        QStringLiteral("hatteda.action.open-recent"),
     };
     return blocked;
 }
