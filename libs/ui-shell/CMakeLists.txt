@@ -56,12 +56,14 @@ add_library(hatt-ui-shell STATIC
     src/PrintLayout.cpp
     include/hatt/ui/PrintLayoutDialog.hpp
     src/PrintLayoutDialog.cpp
+    include/hatt/ui/AgenticGateway.hpp
+    src/AgenticGateway.cpp
 )
 
 add_library(HattEDA::UiShell ALIAS hatt-ui-shell)
 
 target_include_directories(hatt-ui-shell PUBLIC include)
-target_link_libraries(hatt-ui-shell PUBLIC Qt6::Widgets HattEDA::Electrical PRIVATE Qt6::PrintSupport)
+target_link_libraries(hatt-ui-shell PUBLIC Qt6::Widgets HattEDA::Electrical HattEDA::AgenticMcp PRIVATE Qt6::PrintSupport)
 
 if(MSVC)
     target_compile_options(hatt-ui-shell PRIVATE /W4 /permissive-)

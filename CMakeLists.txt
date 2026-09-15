@@ -15,9 +15,11 @@ endif()
 
 include(CTest)
 # PrintSupport: Kayra print layout to printers (ADR-0011); part of Qt Base, no extra install.
-find_package(Qt6 6.11 REQUIRED COMPONENTS Widgets PrintSupport LinguistTools)
+# Network: agentic MCP local server transport (#37/ADR-0013).
+find_package(Qt6 6.11 REQUIRED COMPONENTS Widgets PrintSupport Network LinguistTools)
 
 add_subdirectory(libs/electrical)
+add_subdirectory(libs/agentic-mcp)
 add_subdirectory(libs/ui-shell)
 add_subdirectory(apps/hatteda-desktop)
 

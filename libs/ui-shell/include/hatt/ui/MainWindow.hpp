@@ -7,6 +7,9 @@
 #include <QMainWindow>
 #include <QPointer>
 #include <QString>
+#include <QVector>
+
+#include <memory>
 
 class QAction;
 class QCloseEvent;
@@ -20,11 +23,16 @@ class QStackedWidget;
 class QTabWidget;
 class QUndoGroup;
 
+namespace hatt::agentic {
+class AgenticMcpServer;
+}
+
 namespace hatt::ui {
 
 class BoardLayerPanel;
 class ChecksReport;
 class DesignCanvas;
+class MainWindowAgenticGateway;
 class ProjectGuard;
 
 class MainWindow final : public QMainWindow {
@@ -49,6 +57,14 @@ public:
     bool removeProjectDevice(const QString& id);
     // The project's design rules used by the DRC (ADR-0008).
     [[nodiscard]] DesignRules designRules() const { return rules_; }
+    // The project as it would be saved right now, or an empty ProjectData while none is open.
+    // Used by the agentic MCP gateway (ADR-0013) and available for tests.
+    [[nodiscard]] ProjectData currentProjectData() const;
+    // The most recent ERC/DRC violations (ADR-0008); empty until `runDesignChecks` has run once
+    // in this session, even if that run found nothing (see `hasDesignChecksReport`).
+    [[nodiscard]] QVector<CheckViolation> lastCheckViolations() const;
+    // True once `hatteda.action.run-checks` has produced a report this session.
+    [[nodiscard]] bool hasDesignChecksReport() const;
 
 public slots:
     void showMergenWorkspace();
@@ -198,6 +214,10 @@ private:
     DesignRules rules_;
     bool rulesModified_ = false;
     QPointer<ChecksReport> checksReport_;
+    // Local MCP server for agentic use (ADR-0013), started only when the `agentic/mcpEnabled`
+    // QSettings key is true (default off).
+    std::unique_ptr<MainWindowAgenticGateway> agenticGateway_;
+    hatt::agentic::AgenticMcpServer* agenticServer_ = nullptr;
 };
 
 } // namespace hatt::ui
