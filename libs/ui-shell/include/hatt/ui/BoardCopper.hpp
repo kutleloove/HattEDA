@@ -2,6 +2,7 @@
 
 #include "hatt/ui/SketchModel.hpp"
 
+#include <QHash>
 #include <QPainterPath>
 #include <QPair>
 #include <QPointF>
@@ -71,5 +72,15 @@ struct BoardCopperModel {
 [[nodiscard]] BoardCopperModel buildBoardCopperModel(const SketchDocument& schematic, const SketchDocument& board,
                                                      double nearDistance = 0.0);
 [[nodiscard]] double conductorGap(const BoardConductor& first, const BoardConductor& second, QPointF* where = nullptr);
+
+struct DesignRules;
+struct RouteClass;
+// Net class routing of the board's copper (issue #39), keyed by routeClassKey: every pad, via and
+// track whose touching group has exactly one schematic net gets that net's class trace width and
+// clearance (at least the trace-to-trace rule on its layers). Empty when the nets are unknown.
+[[nodiscard]] QHash<QString, RouteClass> boardRouteClasses(const SketchDocument& schematic, const SketchDocument& board,
+                                                           const DesignRules& rules);
+// "<item id>:<pad index>" for pads and vias (index in itemPads), the item id for tracks.
+[[nodiscard]] QString routeClassKey(const QString& itemId, int padIndex = -1);
 
 } // namespace hatt::ui

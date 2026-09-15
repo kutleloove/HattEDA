@@ -254,6 +254,12 @@ QWidget* DesignRuleManagerDialog::createNetClassesTab() {
     neckWidth_ = lengthField(page, QStringLiteral("NetClassNeckWidth"));
     neckWidth_->setSpecialValueText(tr("no neck"));
     form->addRow(tr("Neck width"), neckWidth_);
+    classClearance_ = lengthField(page, QStringLiteral("NetClassClearance"));
+    classClearance_->setSpecialValueText(tr("design rules"));
+    classClearance_->setToolTip(tr("Copper of other nets keeps at least this gap from the nets of this class, "
+                                   "on top of the clearance rules. Tracks started on these nets route at the "
+                                   "class trace width."));
+    form->addRow(tr("Clearance"), classClearance_);
     viaDiameter_ = lengthField(page, QStringLiteral("NetClassViaDiameter"));
     form->addRow(tr("Via diameter"), viaDiameter_);
     viaDrill_ = lengthField(page, QStringLiteral("NetClassViaDrill"));
@@ -354,7 +360,7 @@ QWidget* DesignRuleManagerDialog::createNetClassesTab() {
         refreshNetLists();
         validate();
     });
-    for (auto* field : {traceWidth_, neckWidth_, viaDiameter_, viaDrill_}) {
+    for (auto* field : {traceWidth_, neckWidth_, classClearance_, viaDiameter_, viaDrill_}) {
         connect(field, &QDoubleSpinBox::valueChanged, this, [this] { storeNetClass(); });
     }
     for (auto* box : {classTop_, classBottom_, ratsnestHidden_}) {
@@ -371,6 +377,7 @@ void DesignRuleManagerDialog::showNetClass(int index) {
     const NetClass& netClass = working_.netClasses[index];
     traceWidth_->setValue(netClass.traceWidth);
     neckWidth_->setValue(netClass.neckWidth);
+    classClearance_->setValue(netClass.clearance);
     viaDiameter_->setValue(netClass.viaDiameter);
     viaDrill_->setValue(netClass.viaDrill);
     classTop_->setChecked(netClass.layers & layerBit(BoardLayer::TopCopper));
@@ -388,6 +395,7 @@ void DesignRuleManagerDialog::storeNetClass() {
     NetClass& netClass = working_.netClasses[currentClass_];
     netClass.traceWidth = traceWidth_->value();
     netClass.neckWidth = neckWidth_->value();
+    netClass.clearance = classClearance_->value();
     netClass.viaDiameter = viaDiameter_->value();
     netClass.viaDrill = viaDrill_->value();
     netClass.layers = (classTop_->isChecked() ? layerBit(BoardLayer::TopCopper) : 0) |

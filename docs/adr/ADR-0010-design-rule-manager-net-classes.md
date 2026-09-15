@@ -23,8 +23,8 @@ expect its Design Rule Manager:
 - `clearanceRules`: `ClearanceRule { name, region (Board | TopCopper | BottomCopper), padPad,
   padTrace, traceTrace, graphic, edge }`. Empty means one DEFAULT Board rule built from `clearance`
   and `boardEdgeClearance` (`effectiveClearanceRules`).
-- `netClasses`: `NetClass { name, traceWidth, viaDiameter, viaDrill, neckWidth, layers,
-  ratsnestColor, ratsnestHidden, nets }`. Empty means POWER (0.635 mm trace, 1.0/0.5 mm via) and
+- `netClasses`: `NetClass { name, traceWidth, viaDiameter, viaDrill, neckWidth, clearance, layers,
+  ratsnestColor, ratsnestHidden, nets }` (`clearance` since issue #39, see the amendment below). Empty means POWER (0.635 mm trace, 1.0/0.5 mm via) and
   SIGNAL (0.3048 mm, 0.8/0.4 mm) (`effectiveNetClasses`).
 - `differentialPairs`: `DifferentialPair { name, positiveNet, negativeNet, width, gap }`. Stored and
   edited only; routing and checks follow later.
@@ -86,15 +86,63 @@ When the dialog returns:
 - Routing defaults, ratsnest colours, pour and CAM mask settings read the same API; they are
   wired by their owners (canvas, `ZoneFill`, `GerberExport`).
 
+## Amendment (2026-09-15, issue #39): net class clearance and routing widths
+
+Net classes decided sizes but not gaps, and routing ignored them. Per-net rules are expressed as a
+class that lists the net.
+
+- **Model:** `NetClass::clearance` (mm, 0 = the clearance rules only).
+  - `netClassClearances(rules, schematic)` maps each net whose class sets a clearance to that
+    value.
+  - `netPairClearance(classClearances, ruleGap, netA, netB)` gives the required gap: the rule
+    gap, raised to the class clearance of either net (unknown nets add nothing).
+  - `largestClearance` includes class clearances, so the DRC search distance covers them.
+  - `validateDesignRules` rejects negative or non-finite class clearances and values above 100 mm.
+- **Storage:** `netClasses[].clearance` is written only when it is greater than 0. It is optional
+  and additive, like the rest of the `rules` object: files without it read as 0, so no
+  `formatVersion` bump.
+  - An older build ignores the key. It then checks and pours with the rule clearances only, just
+    as it ignores net classes altogether before this ADR.
+- **DRC:**
+  - Conductor pairs and pour-to-copper checks require `netPairClearance` of the two groups' single
+    nets.
+  - A gap below the rule stays `drc.clearance`. A gap that meets the rule but not the class
+    clearance is the new `drc.net-class-clearance` (Error).
+- **Pours:**
+  - `ZonePourOptions::netClearances` grows each obstacle by `netPairClearance` of the zone's net
+    and the obstacle's net.
+  - `pourOptionsFor(rules, schematic)` fills it. The canvas, CAM and print layout use this
+    overload, and the DRC sets it too, so they all see the same copper.
+- **Routing:**
+  - `boardRouteClasses(schematic, board, rules)` (BoardCopper.hpp) maps each pad, via
+    (`routeClassKey(itemId, padIndex)`) and track (item id) whose touching group has one net to a
+    `RouteClass { net, netClass, traceWidth, clearance }`. The clearance is the larger of the
+    trace-to-trace rule and the class clearance.
+  - `MainWindow::refreshRouteClasses` hands the map to `DesignCanvas::setRouteClasses` while board
+    track mode is active (on entering the mode, on document edits and after the rules change).
+  - `DesignCanvas::beginBoardRoute` then starts a track on class copper at the class trace width
+    instead of the chosen track style. The width is still capped at 60 % of the pad's narrow side
+    and by a narrower track it branches from. The router keeps the class clearance from other
+    copper.
+  - The canvas caption shows "Net <net> (<class>)" while such a route is drawn. A track started in
+    free space, or on copper without a single known net, keeps the chosen style and the rule
+    clearance.
+- **UI:** the Net Classes tab has `NetClassClearance` ("design rules" at 0).
+
 ## Consequences
 
 - Rules can be tightened per copper layer without touching the others; necked tracks near fine
   pitch pads are allowed down to the class neck width.
-- Differential pair routing/length checks, per-class clearances, inner layers and design rule
-  waivers remain future work.
+- Class clearances apply between different nets in both directions (the larger class wins). They
+  are not per layer and do not change the board edge clearance.
+- Differential pair routing/length checks, class-to-class clearance matrices, inner layers and
+  design rule waivers remain future work.
 - Tests:
   - `DesignChecksTests::clearanceRulesByRegionAndObject`
   - `netClassesAssignPowerSignalAndExplicitNets`
   - `designRulesJsonRoundTrip`
   - `drcUsesRegionRulesAndNetClasses`
+  - `netClassClearanceIsCheckedPouredAndRouted`
+  - `DesignCanvasTests::pcbRouteUsesNetClassWidthAndClearance`
   - `MainWindowTests::designRuleManagerEditsRulesClassesPairsAndDefaults`
+  - `trackModeRoutesWithNetClassWidths`

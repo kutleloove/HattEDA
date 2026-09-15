@@ -50,6 +50,8 @@ struct CheckReport {
 //  drc.annular-ring      Error    copper around a hole narrower than minAnnularRing
 //  drc.clearance         Error    copper of different nets closer than the clearance rule for the
 //                                 shared layers and object kinds (pad-pad, pad-trace, trace-trace, graphic)
+//  drc.net-class-clearance Error  copper of different nets that meets the clearance rule but is closer
+//                                 than the clearance of either net's class
 //  drc.net-class-width   Warning  a track narrower than its net class trace (or neck) width
 //  drc.net-class-layer   Warning  a track on a copper layer its net class does not allow
 //  drc.short             Error    copper joining different schematic nets

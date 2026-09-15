@@ -1,3 +1,4 @@
+#include "hatt/ui/BoardCopper.hpp"
 #include "hatt/ui/DesignCanvas.hpp"
 #include "hatt/ui/SketchCircuit.hpp"
 #include "hatt/ui/Units.hpp"
@@ -154,6 +155,7 @@ private slots:
     void textResizeHandleDragsHeight();
     void doubleClickEditsTextInlineAndEscapeCancels();
     void pcbRouteStartsOnPadLayerAndFitsPad();
+    void pcbRouteUsesNetClassWidthAndClearance();
     void pcbRoutePreviewCompletesToAirwireTarget();
     void pcbAssistedRouteAvoidsCopperObstacles();
     void pcbDoubleClickPlacesViaAndChangesLayer();
@@ -951,6 +953,48 @@ void DesignCanvasTests::pcbRouteStartsOnPadLayerAndFitsPad() {
     QCOMPARE(track.kind, SketchItem::Kind::Wire);
     QCOMPARE(track.layer, BoardLayer::BottomCopper);
     QVERIFY(std::abs(track.width - 0.3) < 1e-9);
+}
+
+void DesignCanvasTests::pcbRouteUsesNetClassWidthAndClearance() {
+    DesignCanvas board(Workspace::Board);
+    board.resize(800, 600);
+    board.setSnapSettings(SnapSettings{});
+    board.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&board));
+    const SketchItem wide = smdPadAt({10.16, 10.16}, BoardLayer::TopCopper, 2.0, 2.0);
+    const SketchItem narrow = smdPadAt({10.16, 30.48}, BoardLayer::TopCopper, 0.8, 0.95);
+    board.applyDocumentEdit(QStringLiteral("Setup"), {wide, narrow});
+    hatt::ui::RouteClass power;
+    power.net = QStringLiteral("GND");
+    power.netClass = QStringLiteral("POWER");
+    power.traceWidth = 0.635;
+    power.clearance = 0.5;
+    board.setRouteClasses({{hatt::ui::routeClassKey(wide.id, 0), power}, {hatt::ui::routeClassKey(narrow.id, 0), power}});
+    board.setTrackWidth(0.3048);
+    board.setTool(CanvasTool::Wire);
+
+    // From class copper: the class width instead of the chosen style.
+    click(board, {10.16, 10.16});
+    QVERIFY(board.activeRouteClass().has_value());
+    QCOMPARE(board.activeRouteClass()->netClass, QStringLiteral("POWER"));
+    click(board, {20.32, 10.16});
+    QTest::keyClick(&board, Qt::Key_Return);
+    QCOMPARE(board.document().size(), 3);
+    QVERIFY(std::abs(board.document().last().width - 0.635) < 1e-9);
+    QVERIFY(!board.activeRouteClass().has_value());
+
+    // A small pad still caps the class width.
+    click(board, {10.16, 30.48});
+    click(board, {20.32, 30.48});
+    QTest::keyClick(&board, Qt::Key_Return);
+    QVERIFY(std::abs(board.document().last().width - 0.48) < 1e-9);
+
+    // Free space keeps the chosen style.
+    click(board, {40.64, 50.8});
+    QVERIFY(!board.activeRouteClass().has_value());
+    click(board, {50.8, 50.8});
+    QTest::keyClick(&board, Qt::Key_Return);
+    QVERIFY(std::abs(board.document().last().width - 0.3048) < 1e-9);
 }
 
 void DesignCanvasTests::pcbRoutePreviewCompletesToAirwireTarget() {

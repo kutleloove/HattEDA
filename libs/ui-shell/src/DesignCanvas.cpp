@@ -1,4 +1,5 @@
 #include "hatt/ui/DesignCanvas.hpp"
+#include "hatt/ui/BoardCopper.hpp"
 #include "hatt/ui/LayerColors.hpp"
 #include "hatt/ui/PadStyles.hpp"
 #include "hatt/ui/StrokeFont.hpp"
@@ -854,6 +855,10 @@ void DesignCanvas::setRoutingClearance(double millimetres) {
     update();
 }
 
+void DesignCanvas::setRouteClasses(const QHash<QString, RouteClass>& classes) {
+    routeClasses_ = classes;
+}
+
 QColor DesignCanvas::layerColor(BoardLayer layer, const QPalette& palette) {
     return boardLayerColor(layer, palette.color(QPalette::Window).lightness() < 128);
 }
@@ -935,6 +940,7 @@ void DesignCanvas::cancelOperation() {
     pending_.clear();
     routePieces_.clear();
     activeRouteWidth_ = 0.0;
+    activeRouteClass_.reset();
     pressGesture_ = false;
     if (drag_ == Drag::Move || drag_ == Drag::RubberBand) {
         drag_ = Drag::None;
@@ -1666,6 +1672,7 @@ std::optional<QVector<QPointF>> DesignCanvas::obstacleAvoidingRoute(QPointF from
     QVector<QRectF> areas;
     QVector<TrackObstacle> tracks;
     const double routeRadius = currentTrackWidth() / 2.0;
+    const double routeClearance = currentRouteClearance();
     const int copperLayer = layerBit(routeLayer());
     for (const auto& item : items_) {
         for (const PlacedPad& pad : itemPads(item)) {
@@ -1674,11 +1681,11 @@ std::optional<QVector<QPointF>> DesignCanvas::obstacleAvoidingRoute(QPointF from
                 continue;
             }
             const QRectF bounds = QPolygonF(padOutline(pad)).boundingRect();
-            const double expansion = routeRadius + routingClearance_;
+            const double expansion = routeRadius + routeClearance;
             areas.append(bounds.adjusted(-expansion, -expansion, expansion, expansion));
         }
         if (item.kind == SketchItem::Kind::Wire && item.layer == routeLayer()) {
-            const double separation = routeRadius + trackWidth(item) / 2.0 + routingClearance_;
+            const double separation = routeRadius + trackWidth(item) / 2.0 + routeClearance;
             for (const QLineF& segment : itemSegments(item)) {
                 // Joining an existing track at either endpoint is intentional. Its other segments
                 // remain obstacles, so the new route cannot casually cross the trace elsewhere.
@@ -1693,7 +1700,7 @@ std::optional<QVector<QPointF>> DesignCanvas::obstacleAvoidingRoute(QPointF from
                     (item.variant == CopperZoneVariant && item.zoneFill != ZoneFillStyle::Empty)) &&
                    item.layer == routeLayer() && item.points.size() >= 3) {
             QRectF bounds = QPolygonF(item.points).boundingRect();
-            const double expansion = routeRadius + routingClearance_;
+            const double expansion = routeRadius + routeClearance;
             areas.append(bounds.adjusted(-expansion, -expansion, expansion, expansion));
         }
     }
@@ -1864,11 +1871,26 @@ double DesignCanvas::currentTrackWidth() const noexcept {
     return activeRouteWidth_ > 0.0 ? activeRouteWidth_ : trackWidth_;
 }
 
+double DesignCanvas::currentRouteClearance() const noexcept {
+    return activeRouteClass_ ? std::max(routingClearance_, activeRouteClass_->clearance) : routingClearance_;
+}
+
 void DesignCanvas::beginBoardRoute(QPointF at) {
     activeRouteWidth_ = trackWidth_;
+    activeRouteClass_.reset();
+    // Copper of a net with a class routes at the class width (issue #39) instead of the chosen style.
+    auto useClass = [this](const QString& key) {
+        const auto found = routeClasses_.constFind(key);
+        if (found == routeClasses_.cend() || found->traceWidth <= 0.0) return;
+        activeRouteClass_ = *found;
+        activeRouteWidth_ = found->traceWidth;
+    };
     for (auto item = items_.crbegin(); item != items_.crend(); ++item) {
-        for (const PlacedPad& pad : itemPads(*item)) {
+        const QVector<PlacedPad> pads = itemPads(*item);
+        for (int index = 0; index < pads.size(); ++index) {
+            const PlacedPad& pad = pads[index];
             if (!samePoint(pad.center, at)) continue;
+            useClass(routeClassKey(item->id, index));
             const int copper = pad.layers & CopperLayerMask;
             if (copper == layerBit(BoardLayer::TopCopper)) setActiveLayer(BoardLayer::TopCopper);
             else if (copper == layerBit(BoardLayer::BottomCopper)) setActiveLayer(BoardLayer::BottomCopper);
@@ -1882,6 +1904,7 @@ void DesignCanvas::beginBoardRoute(QPointF at) {
         for (const QLineF& segment : itemSegments(*item)) {
             if (distanceToSegment(at, segment) > 1e-6) continue;
             setActiveLayer(item->layer);
+            useClass(routeClassKey(item->id));
             activeRouteWidth_ = std::min(activeRouteWidth_, trackWidth(*item));
             return;
         }
@@ -2223,6 +2246,7 @@ void DesignCanvas::finishPath() {
         routePieces_.clear();
         SketchItem track = pendingTrack(points);
         activeRouteWidth_ = 0.0;
+        activeRouteClass_.reset();
         if (track.points.size() >= 2) pieces.append(track);
         if (pieces.isEmpty() || (pieces.size() == 1 && pieces.first().kind == SketchItem::Kind::Via)) {
             update();
@@ -3108,6 +3132,11 @@ void DesignCanvas::paintEvent(QPaintEvent*) {
     painter.drawText(QRectF(12, height() - 26, width() - 24, 18), Qt::AlignLeft | Qt::AlignVCenter,
                      tr("%1  ·  Grid %2  ·  %3%")
                          .arg(!board ? tr("Schematic sheet")
+                              : tool_ == CanvasTool::Wire && activeRouteClass_
+                                  ? tr("PCB layout  ·  %1  ·  Track %2  ·  Net %3 (%4)")
+                                        .arg(boardLayerName(routeLayer()),
+                                             formatLength(currentTrackWidth(), unit_), activeRouteClass_->net,
+                                             activeRouteClass_->netClass)
                               : tool_ == CanvasTool::Wire
                                   ? tr("PCB layout  ·  %1  ·  Track %2")
                                         .arg(boardLayerName(routeLayer()),

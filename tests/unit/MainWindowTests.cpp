@@ -6,6 +6,7 @@
 #include "hatt/ui/LayerColors.hpp"
 #include "hatt/ui/PadStyles.hpp"
 #include "hatt/ui/RoutingStyles.hpp"
+#include "hatt/ui/SketchCircuit.hpp"
 #include "hatt/ui/Theme.hpp"
 
 #include <QAction>
@@ -107,6 +108,7 @@ private slots:
     void designRuleManagerEditsRulesClassesPairsAndDefaults();
     void zoneNetPropertyPoursOnTheCanvas();
     void zoneModeDrawsZonesAndListsThem();
+    void trackModeRoutesWithNetClassWidths();
     void selectionStatesFollowTheme_data();
     void selectionStatesFollowTheme();
 
@@ -1092,6 +1094,10 @@ void MainWindowTests::designRuleManagerEditsRulesClassesPairsAndDefaults() {
     auto* classCombo = dialog.findChild<QComboBox*>(QStringLiteral("NetClassCombo"));
     QCOMPARE(classCombo->count(), 3);
     dialog.findChild<QDoubleSpinBox*>(QStringLiteral("NetClassTraceWidth"))->setValue(0.5);
+    auto* classClearance = dialog.findChild<QDoubleSpinBox*>(QStringLiteral("NetClassClearance"));
+    QVERIFY(classClearance);
+    QCOMPARE(classClearance->value(), 0.0); // new classes follow the design rules
+    classClearance->setValue(0.4);
     dialog.findChild<QCheckBox*>(QStringLiteral("NetClassBottom"))->setChecked(false);
     auto* available = dialog.findChild<QListWidget*>(QStringLiteral("NetClassAvailableNets"));
     for (int row = 0; row < available->count(); ++row) {
@@ -1118,6 +1124,8 @@ void MainWindowTests::designRuleManagerEditsRulesClassesPairsAndDefaults() {
     QCOMPARE(rules.netClasses.size(), 3);
     QCOMPARE(rules.netClasses[2].nets, QStringList{QStringLiteral("N1")});
     QCOMPARE(rules.netClasses[2].traceWidth, 0.5);
+    QCOMPARE(rules.netClasses[2].clearance, 0.4);
+    QCOMPARE(rules.netClasses[0].clearance, 0.0);
     QCOMPARE(rules.netClasses[2].layers, hatt::ui::layerBit(hatt::ui::BoardLayer::TopCopper));
     QCOMPARE(rules.differentialPairs.size(), 1);
     QCOMPARE(rules.differentialPairs.first().gap, 0.18);
@@ -1469,6 +1477,36 @@ void MainWindowTests::zoneModeDrawsZonesAndListsThem() {
     QVERIFY(!zoneMode->isEnabled());
     QVERIFY(action(window, "hatteda.tool.select")->isChecked());
     QVERIFY(zones->isHidden());
+}
+
+void MainWindowTests::trackModeRoutesWithNetClassWidths() {
+    using hatt::ui::SketchItem;
+    hatt::ui::MainWindow window;
+    QVERIFY(showActive(window));
+    activateEditor(window);
+    const hatt::ui::SketchDocument schematic = hatt::ui::dcDividerExample();
+    window.activeCanvas()->applyDocumentEdit(QStringLiteral("Schematic"), schematic);
+    SketchItem outline;
+    outline.kind = SketchItem::Kind::Polyline;
+    outline.variant = hatt::ui::BoardOutlineVariant;
+    outline.closed = true;
+    outline.layer = hatt::ui::BoardLayer::BoardEdge;
+    outline.points = {{0, 0}, {80, 0}, {80, 60}, {0, 60}};
+    const hatt::ui::SketchDocument placed = hatt::ui::transferToBoard(schematic, {outline}).document;
+    window.showKayraWorkspace();
+    auto* board = window.activeCanvas();
+    board->applyDocumentEdit(QStringLiteral("Board"), placed);
+    const auto r2 = *std::find_if(placed.begin(), placed.end(), [](const SketchItem& i) { return i.label == QLatin1String("R2"); });
+    const QPointF ground = hatt::ui::itemPads(r2)[1].center; // net 0: POWER, 0.635 mm
+
+    action(window, "hatteda.tool.connect")->trigger();
+    QCOMPARE(board->tool(), CanvasTool::Wire);
+    clickCanvas(board, ground);
+    QVERIFY(board->activeRouteClass().has_value());
+    QCOMPARE(board->activeRouteClass()->netClass, hatt::ui::PowerNetClass);
+    QCOMPARE(board->activeRouteClass()->traceWidth, 0.635);
+    board->cancelOperation();
+    QVERIFY(!board->activeRouteClass().has_value());
 }
 
 QTEST_MAIN(MainWindowTests)

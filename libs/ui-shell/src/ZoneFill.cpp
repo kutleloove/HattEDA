@@ -125,7 +125,9 @@ QVector<ZoneFillResult> fillZones(const SketchDocument& board, const QVector<Zon
         if (const QPainterPath& keepout = keepouts[static_cast<int>(zone.layer)]; !keepout.isEmpty()) {
             fill = fill.subtracted(keepout);
         }
-        const double reachDistance = std::max(clearance, options.thermalGap) + options.spokeWidth;
+        double largestGap = clearance;
+        for (const double classGap : options.netClearances) largestGap = std::max(largestGap, classGap);
+        const double reachDistance = std::max(largestGap, options.thermalGap) + options.spokeWidth;
         const QRectF reach =
             fill.boundingRect().adjusted(-reachDistance, -reachDistance, reachDistance, reachDistance);
         QPainterPath keepOut;
@@ -137,7 +139,8 @@ QVector<ZoneFillResult> fillZones(const SketchDocument& board, const QVector<Zon
                 ownCopper.append(&obstacle);
                 continue;
             }
-            keepOut = keepOut.united(grown(obstacle.outline, clearance));
+            keepOut = keepOut.united(
+                grown(obstacle.outline, netPairClearance(options.netClearances, clearance, zone.net, obstacle.net)));
         }
         if (!keepOut.isEmpty()) fill = fill.subtracted(keepOut);
 
@@ -268,6 +271,12 @@ ZonePourOptions pourOptionsFor(const DesignRules& rules) {
     options.thermalReliefs = rules.defaults.thermalRelief;
     options.thermalGap = std::max(rules.defaults.thermalGap, options.clearance);
     options.spokeWidth = rules.defaults.spokeWidth;
+    return options;
+}
+
+ZonePourOptions pourOptionsFor(const DesignRules& rules, const SketchDocument& schematic) {
+    ZonePourOptions options = pourOptionsFor(rules);
+    options.netClearances = netClassClearances(rules, schematic);
     return options;
 }
 

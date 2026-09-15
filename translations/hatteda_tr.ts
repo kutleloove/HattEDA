@@ -679,6 +679,18 @@ Son projeler listesinden kaldırılsın mı?</translation></message>
     <message><source>Solder resist guard</source><translation>Lehim maskesi payı</translation></message>
     <message><source>Silkscreen to pad</source><translation>Serigrafi - pad mesafesi</translation></message>
     <message><source>Curve tolerance</source><translation>Eğri toleransı</translation></message>
+    <message><source>design rules</source><translation>tasarım kuralları</translation></message>
+    <message><source>Copper of other nets keeps at least this gap from the nets of this class, on top of the clearance rules. Tracks started on these nets route at the class trace width.</source><translation>Diğer netlerin bakırı, aralık kurallarına ek olarak bu sınıfın netlerinden en az bu kadar uzak durur. Bu netlerden başlatılan yollar sınıfın yol genişliğiyle çizilir.</translation></message>
+    <message><source>Clearance</source><translation>Aralık</translation></message>
+  </context>
+  <context>
+    <name>hatt::ui::DesignChecks</name>
+    <message><source>Clearance between %1 and %2 is below the net class clearance %3.</source><translation>%1 ile %2 arasındaki aralık, net sınıfı aralığı %3 değerinin altında.</translation></message>
+    <message><source>Clearance %1 between %2 and %3 is below the net class clearance %4.</source><translation>%2 ile %3 arasındaki %1 aralık, net sınıfı aralığı %4 değerinin altında.</translation></message>
+  </context>
+  <context>
+    <name>hatt::ui::DesignCanvas</name>
+    <message><source>PCB layout  ·  %1  ·  Track %2  ·  Net %3 (%4)</source><translation>PCB yerleşimi  ·  %1  ·  Yol %2  ·  Net %3 (%4)</translation></message>
   </context>
   <context>
     <name>hatt::ui::ChecksReport</name>

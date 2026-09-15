@@ -243,6 +243,9 @@ CheckReport runDesignRuleCheck(const SketchDocument& schematic, const SketchDocu
     pourOptions.thermalReliefs = rules.defaults.thermalRelief;
     pourOptions.thermalGap = std::max(rules.defaults.thermalGap, pourOptions.clearance);
     pourOptions.spokeWidth = rules.defaults.spokeWidth;
+    // Net class clearances (issue #39) raise the rule gap for the nets of their classes.
+    const QHash<QString, double> classClearances = netClassClearances(rules, schematic);
+    pourOptions.netClearances = classClearances;
     const QVector<ZoneFillResult> pours = pourZones(schematic, board, pourOptions);
     QSet<QString> poured;
     for (const auto& pour : pours) poured.insert(pour.zoneId);
@@ -287,7 +290,10 @@ CheckReport runDesignRuleCheck(const SketchDocument& schematic, const SketchDocu
         QStringList ids{pour.zoneId};
         for (int i = 0; i < count; ++i) {
             if ((copper[i].layers & layer) == 0) continue;
-            const double required = clearanceBetween(rules, layer, ClearanceObject::Graphic, clearanceObject(copper[i].kind));
+            const double rule = clearanceBetween(rules, layer, ClearanceObject::Graphic, clearanceObject(copper[i].kind));
+            const QVector<int> copperNets = groupNets(group[i]);
+            const QString copperNet = copperNets.size() == 1 ? netName(copperNets.first()) : QString();
+            const double required = netPairClearance(classClearances, rule, pour.net, copperNet);
             const double pourTolerance = std::max(0.02, required * 0.1);
             const QRectF reach = copper[i].bounds.adjusted(-required, -required, required, required);
             if (!fillBounds.intersects(reach)) continue;
@@ -302,12 +308,22 @@ CheckReport runDesignRuleCheck(const SketchDocument& schematic, const SketchDocu
             if (touches) {
                 touched.insert(group[i]);
                 if (!ids.contains(copper[i].itemId)) ids << copper[i].itemId;
-            } else if (tooClose) {
-                const QVector<int> nets = groupNets(group[i]);
-                const bool sameNet = nets.size() == 1 && netName(nets.first()) == pour.net;
-                if (!sameNet) {
+            } else if (tooClose && copperNet != pour.net) {
+                // Below the rule gap is a plain clearance error; between the rule and the class gap it
+                // is a net class clearance error.
+                bool belowRule = required <= rule;
+                for (const auto& shape : copper[i].shapes) {
+                    const double ruleTolerance = std::max(0.02, rule * 0.1);
+                    belowRule = belowRule || pour.fill.intersects(copperShapePath(shape, std::max(0.0, rule - ruleTolerance)));
+                }
+                if (belowRule) {
                     add(report, E, B, "drc.clearance",
-                        tr("Clearance between %1 and %2 is below %3.").arg(tr("copper zone"), copper[i].name, millimetres(required)),
+                        tr("Clearance between %1 and %2 is below %3.").arg(tr("copper zone"), copper[i].name, millimetres(rule)),
+                        copper[i].anchor, {pour.zoneId, copper[i].itemId});
+                } else {
+                    add(report, E, B, "drc.net-class-clearance",
+                        tr("Clearance between %1 and %2 is below the net class clearance %3.")
+                            .arg(tr("copper zone"), copper[i].name, millimetres(required)),
                         copper[i].anchor, {pour.zoneId, copper[i].itemId});
                 }
             }
@@ -465,14 +481,24 @@ CheckReport runDesignRuleCheck(const SketchDocument& schematic, const SketchDocu
         const QVector<int> netsA = groupNets(ra);
         // Unrouted pads of the same net may sit close together.
         if (netsA.size() == 1 && netsA == groupNets(rb)) continue;
-        const double required = clearanceBetween(rules, copper[a].layers & copper[b].layers, clearanceObject(copper[a].kind),
-                                                 clearanceObject(copper[b].kind));
+        const double rule = clearanceBetween(rules, copper[a].layers & copper[b].layers, clearanceObject(copper[a].kind),
+                                             clearanceObject(copper[b].kind));
+        const QVector<int> netsB = groupNets(rb);
+        const double required = netPairClearance(classClearances, rule, netsA.size() == 1 ? netName(netsA.first()) : QString(),
+                                                 netsB.size() == 1 ? netName(netsB.first()) : QString());
         QPointF where;
         const double d = conductorGap(copper[a], copper[b], &where);
         if (d + 1e-9 >= required) continue;
-        add(report, E, B, "drc.clearance",
-            tr("Clearance %1 between %2 and %3 is below %4.").arg(millimetres(d), copper[a].name, copper[b].name, millimetres(required)),
-            where, {copper[a].itemId, copper[b].itemId});
+        if (d + 1e-9 < rule) {
+            add(report, E, B, "drc.clearance",
+                tr("Clearance %1 between %2 and %3 is below %4.").arg(millimetres(d), copper[a].name, copper[b].name, millimetres(rule)),
+                where, {copper[a].itemId, copper[b].itemId});
+        } else {
+            add(report, E, B, "drc.net-class-clearance",
+                tr("Clearance %1 between %2 and %3 is below the net class clearance %4.")
+                    .arg(millimetres(d), copper[a].name, copper[b].name, millimetres(required)),
+                where, {copper[a].itemId, copper[b].itemId});
+        }
     }
 
     if (outline != nullptr && outlinePolygon.size() >= 3) {

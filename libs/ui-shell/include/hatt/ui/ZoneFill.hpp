@@ -2,6 +2,7 @@
 
 #include "hatt/ui/SketchModel.hpp"
 
+#include <QHash>
 #include <QPainterPath>
 #include <QPolygonF>
 #include <QString>
@@ -41,6 +42,9 @@ struct ZonePourOptions {
     // Hatched zones: bar pitch and the width of the bars and of the border (mm).
     double hatchPitch = 1.0;
     double hatchWidth = 0.3;
+    // Net class clearances by net name (netClassClearances, issue #39): copper of another net is kept
+    // at netPairClearance of the zone's net and that net, never less than `clearance`.
+    QHash<QString, double> netClearances;
 };
 
 struct DesignRules;
@@ -48,6 +52,8 @@ struct DesignRules;
 // and edge clearance over both copper layers, and the thermal defaults. The canvas, CAM, print
 // layout and DRC all pour with these so they see the same copper.
 [[nodiscard]] ZonePourOptions pourOptionsFor(const DesignRules& rules);
+// Same, plus the net class clearances of the schematic's nets.
+[[nodiscard]] ZonePourOptions pourOptionsFor(const DesignRules& rules, const SketchDocument& schematic);
 
 struct ZoneFillResult {
     QString zoneId;
