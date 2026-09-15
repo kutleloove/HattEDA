@@ -134,6 +134,14 @@ struct SketchItem {
 
 using SketchDocument = QVector<SketchItem>;
 
+// A ratsnest ("airwire") between two unrouted pads of the same schematic net, carrying the net's
+// display name (empty when it could not be determined) so the board canvas can label it and dim
+// or highlight it while a track is being drawn towards it.
+struct Airwire {
+    QLineF line;
+    QString net;
+};
+
 inline constexpr double DefaultTrackWidth = 0.3048; // T12
 inline constexpr double DefaultViaDiameter = 0.8;
 inline constexpr double DefaultViaDrill = 0.4;

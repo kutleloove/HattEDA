@@ -469,6 +469,7 @@ BoardGuidance boardGuidance(const SketchDocument& schematic, const SketchDocumen
         QVector<int> pads;
         for (int p = 0; p < expected.size(); ++p) if (expected[p] == n) pads.append(p);
         if (pads.size() < 2) continue;
+        const QString netName = QString::fromStdString(circuit.connectivity.nets[n].name);
         QSet<int> joined;
         joined.insert(routed.pinNets[pads.first()]);
         for (;;) {
@@ -480,7 +481,7 @@ BoardGuidance boardGuidance(const SketchDocument& schematic, const SketchDocumen
                     if (d < best) { best = d; from = a; to = b; }
                 }
             if (to < 0) break;
-            result.airwires.append(QLineF(locations[from], locations[to]));
+            result.airwires.append({QLineF(locations[from], locations[to]), netName});
             joined.insert(routed.pinNets[to]);
         }
     }

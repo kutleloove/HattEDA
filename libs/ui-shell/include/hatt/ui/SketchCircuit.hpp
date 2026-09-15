@@ -57,7 +57,7 @@ SketchDocument autoPlaceParts(const SketchDocument& board, const SketchDocument&
 // Plain-text netlist (one line per net: name and component.pin members) for export.
 QString netlistText(const SketchDocument& schematic, QStringList* errors = nullptr);
 struct BoardGuidance {
-    QVector<QLineF> airwires;
+    QVector<Airwire> airwires;
     QStringList errors;
 };
 BoardGuidance boardGuidance(const SketchDocument& schematic, const SketchDocument& board);

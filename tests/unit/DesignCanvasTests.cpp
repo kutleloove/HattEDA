@@ -16,6 +16,7 @@
 #include <QtTest>
 
 using hatt::ui::AlignOperation;
+using hatt::ui::Airwire;
 using hatt::ui::CanvasTool;
 using hatt::ui::DesignCanvas;
 using hatt::ui::BoardLayer;
@@ -151,6 +152,7 @@ private slots:
     void pcbRouteStartsOnPadLayerAndFitsPad();
     void pcbRoutePreviewCompletesToAirwireTarget();
     void pcbAssistedRouteAvoidsCopperObstacles();
+    void pcbRouteNetLabelTracksClosestAirwire();
     void pcbDoubleClickPlacesViaAndChangesLayer();
 
 private:
@@ -959,7 +961,7 @@ void DesignCanvasTests::pcbRoutePreviewCompletesToAirwireTarget() {
     board.applyDocumentEdit(QStringLiteral("Setup"),
                             {smdPadAt(from, BoardLayer::BottomCopper),
                              smdPadAt(to, BoardLayer::BottomCopper)});
-    board.setAirwires({QLineF(from, to)});
+    board.setAirwires({Airwire{QLineF(from, to), QStringLiteral("NET1")}});
     board.setTool(CanvasTool::Wire);
 
     click(board, from);
@@ -968,6 +970,8 @@ void DesignCanvasTests::pcbRoutePreviewCompletesToAirwireTarget() {
     QVERIFY(preview.size() >= 3);
     QVERIFY(samePoint(preview.first(), from));
     QVERIFY(samePoint(preview.last(), to));
+    // The route being drawn continues to the airwire's endpoint, so it picks up that net's name.
+    QCOMPARE(board.currentRouteNet(), QStringLiteral("NET1"));
 }
 
 void DesignCanvasTests::pcbAssistedRouteAvoidsCopperObstacles() {
@@ -986,7 +990,7 @@ void DesignCanvasTests::pcbAssistedRouteAvoidsCopperObstacles() {
                              smdPadAt(to, BoardLayer::BottomCopper),
                              smdPadAt({20.32, 10.16}, BoardLayer::BottomCopper, 3.0, 3.0),
                              barrier});
-    board.setAirwires({QLineF(from, to)});
+    board.setAirwires({Airwire{QLineF(from, to), QStringLiteral("NET2")}});
     board.setActiveLayer(BoardLayer::BottomCopper);
     board.setTool(CanvasTool::Wire);
 
@@ -1003,6 +1007,34 @@ void DesignCanvasTests::pcbAssistedRouteAvoidsCopperObstacles() {
                 samePoint(point, from) || samePoint(point, to));
     }
     QVERIFY(detoured);
+}
+
+void DesignCanvasTests::pcbRouteNetLabelTracksClosestAirwire() {
+    // Two ratsnest lines leave the same pad towards different nets; the ghost route (and its net
+    // name label) should follow whichever one the cursor is aimed at, Proteus style, while the
+    // other stays a dim, unrelated ghost (see DesignCanvas::currentRouteNet/assistedRoute).
+    DesignCanvas board(Workspace::Board);
+    board.resize(900, 600);
+    board.setSnapSettings(SnapSettings{});
+    board.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&board));
+    const QPointF from(10.16, 10.16);
+    const QPointF targetA(40.64, 10.16);
+    const QPointF targetB(10.16, 40.64);
+    board.applyDocumentEdit(QStringLiteral("Setup"),
+                            {smdPadAt(from, BoardLayer::TopCopper),
+                             smdPadAt(targetA, BoardLayer::TopCopper),
+                             smdPadAt(targetB, BoardLayer::TopCopper)});
+    board.setAirwires({Airwire{QLineF(from, targetA), QStringLiteral("NETA")},
+                       Airwire{QLineF(from, targetB), QStringLiteral("NETB")}});
+    board.setTool(CanvasTool::Wire);
+
+    QVERIFY(board.currentRouteNet().isEmpty());
+    click(board, from);
+    sendMouse(board, QEvent::MouseMove, {25.4, 10.16}, Qt::NoButton, Qt::NoButton);
+    QCOMPARE(board.currentRouteNet(), QStringLiteral("NETA"));
+    sendMouse(board, QEvent::MouseMove, {10.16, 25.4}, Qt::NoButton, Qt::NoButton);
+    QCOMPARE(board.currentRouteNet(), QStringLiteral("NETB"));
 }
 
 void DesignCanvasTests::pcbDoubleClickPlacesViaAndChangesLayer() {

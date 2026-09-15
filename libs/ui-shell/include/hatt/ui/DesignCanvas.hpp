@@ -136,11 +136,14 @@ public:
     // Replaces document and selection without creating an undo entry. Used by undo commands.
     void restore(const SketchDocument& document, const QList<int>& selection);
     void applyDocumentEdit(const QString& title, const SketchDocument& document);
-    void setAirwires(const QVector<QLineF>& lines);
-    [[nodiscard]] QVector<QLineF> airwires() const { return airwires_; }
+    void setAirwires(const QVector<Airwire>& wires);
+    [[nodiscard]] QVector<Airwire> airwires() const { return airwires_; }
     // Complete ghost route currently shown by the interactive PCB router. When a route starts on
     // an unrouted pad this includes the assisted continuation to the matching airwire endpoint.
     [[nodiscard]] QVector<QPointF> currentRoutePreview() const;
+    // Net name of the airwire the route being drawn continues towards (see assistedRouteTarget),
+    // or an empty string when the route is not currently aimed at one. Kayra only.
+    [[nodiscard]] QString currentRouteNet() const;
     // Read-only overlay labels such as simulated probe voltages; not part of the document.
     void setAnnotations(const QVector<CanvasAnnotation>& annotations);
     [[nodiscard]] QVector<CanvasAnnotation> annotations() const { return annotations_; }
@@ -236,9 +239,19 @@ private:
                                      const QVector<QPointF>& targets) const;
     [[nodiscard]] static QVector<QLineF> guideLines(const QVector<QPointF>& points, QPointF offset,
                                                     const QVector<QPointF>& targets);
+    // Target pin/airwire endpoint the route being drawn should continue to, the net name of the
+    // airwire it matched (empty when the net name could not be determined), and that airwire's
+    // index in `airwires_` (so the paint code can highlight it and dim the rest).
+    struct RouteAssist {
+        QPointF target;
+        QString net;
+        int airwireIndex = -1;
+    };
+
     [[nodiscard]] bool routesWire() const;
     [[nodiscard]] QVector<QPointF> routeTo(QPointF point) const;
     [[nodiscard]] QVector<QPointF> routePreviewTo(QPointF point) const;
+    [[nodiscard]] std::optional<RouteAssist> assistedRoute(QPointF cursor) const;
     [[nodiscard]] std::optional<QPointF> assistedRouteTarget(QPointF cursor) const;
     [[nodiscard]] std::optional<QVector<QPointF>> obstacleAvoidingRoute(QPointF from,
                                                                         QPointF to) const;
@@ -276,7 +289,7 @@ private:
     Workspace workspace_;
     QUndoStack* undoStack_;
     SketchDocument items_;
-    QVector<QLineF> airwires_;
+    QVector<Airwire> airwires_;
     QVector<CanvasAnnotation> annotations_;
     QHash<QString, QPainterPath> zoneFills_;
     QList<int> selection_;
