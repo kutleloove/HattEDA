@@ -37,6 +37,12 @@ struct ZonePourOptions {
     double minimumWidth = 0.25;
 };
 
+struct DesignRules;
+// Pour settings from the project's design rules (DesignRules.hpp, ADR-0010): graphic-to-pad clearance
+// and edge clearance over both copper layers, and the thermal defaults. The canvas, CAM, print
+// layout and DRC all pour with these so they see the same copper.
+[[nodiscard]] ZonePourOptions pourOptionsFor(const DesignRules& rules);
+
 struct ZoneFillResult {
     QString zoneId;
     BoardLayer layer = BoardLayer::TopCopper;

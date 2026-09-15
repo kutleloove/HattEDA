@@ -1,6 +1,7 @@
 #include "hatt/ui/ZoneFill.hpp"
 
 #include "hatt/ui/BoardCopper.hpp"
+#include "hatt/ui/DesignRules.hpp"
 
 #include <QPainterPathStroker>
 
@@ -244,6 +245,16 @@ QVector<ZoneFillResult> pourZones(const SketchDocument& schematic, const SketchD
     });
     if (!anyNet) return {};
     return fillZones(board, netCopperObstacles(schematic, board), options);
+}
+
+ZonePourOptions pourOptionsFor(const DesignRules& rules) {
+    ZonePourOptions options;
+    options.clearance = clearanceBetween(rules, CopperLayerMask, ClearanceObject::Graphic, ClearanceObject::Pad);
+    options.boardEdgeClearance = edgeClearance(rules, CopperLayerMask);
+    options.thermalReliefs = rules.defaults.thermalRelief;
+    options.thermalGap = std::max(rules.defaults.thermalGap, options.clearance);
+    options.spokeWidth = rules.defaults.spokeWidth;
+    return options;
 }
 
 QVector<ZoneFillResult> pourZones(const SketchDocument& schematic, const SketchDocument& board, double clearance,

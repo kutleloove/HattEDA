@@ -7,6 +7,7 @@
 #include "hatt/ui/CamPreview.hpp"
 #include "hatt/ui/BoardCopper.hpp"
 #include "hatt/ui/GerberExport.hpp"
+#include "hatt/ui/PrintLayoutDialog.hpp"
 #include "hatt/ui/ZoneFill.hpp"
 #include "hatt/ui/LibraryDialogs.hpp"
 #include "hatt/ui/ManufacturingExport.hpp"
@@ -1005,6 +1006,11 @@ void MainWindow::createActions() {
     placement->setEnabled(false);
     placement->setToolTip(tr("Write footprint centres, rotations and sides as CSV for assembly"));
     connect(placement, &QAction::triggered, this, [this] { exportPlacement(); });
+    auto* printLayout = makeAction(QStringLiteral("hatteda.action.print-layout"), tr("Print layout..."), QString());
+    printLayout->setEnabled(false);
+    printLayout->setShortcut(QKeySequence::Print);
+    printLayout->setToolTip(tr("Print or save the board artwork as PDF, repeated to fill the page"));
+    connect(printLayout, &QAction::triggered, this, &MainWindow::showPrintLayout);
 
     auto* checks = makeAction(QStringLiteral("hatteda.action.run-checks"), tr("Run design checks"),
                               QStringLiteral("check"));
@@ -1339,12 +1345,22 @@ void MainWindow::createMenus() {
     fileMenu->addAction(actions_.value(QStringLiteral("hatteda.action.export-fabrication")));
     fileMenu->addAction(actions_.value(QStringLiteral("hatteda.action.export-bom")));
     fileMenu->addAction(actions_.value(QStringLiteral("hatteda.action.export-pick-place")));
+    fileMenu->addAction(actions_.value(QStringLiteral("hatteda.action.print-layout")));
     fileMenu->addSeparator();
     // Quitting closes the window, so closeEvent asks about unsaved changes.
     auto* quit = fileMenu->addAction(tr("Quit"));
     quit->setObjectName(QStringLiteral("hatteda.action.quit"));
     quit->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_Q));
     connect(quit, &QAction::triggered, this, &QWidget::close);
+
+    // Proteus ARES keeps fabrication and printing together in an Output menu.
+    auto* outputMenu = menuBar()->addMenu(tr("&Output"));
+    outputMenu->setObjectName(QStringLiteral("OutputMenu"));
+    outputMenu->addAction(actions_.value(QStringLiteral("hatteda.action.print-layout")));
+    outputMenu->addSeparator();
+    outputMenu->addAction(actions_.value(QStringLiteral("hatteda.action.export-fabrication")));
+    outputMenu->addAction(actions_.value(QStringLiteral("hatteda.action.export-bom")));
+    outputMenu->addAction(actions_.value(QStringLiteral("hatteda.action.export-pick-place")));
 
     auto* editMenu = menuBar()->addMenu(tr("&Edit"));
     editMenu->addAction(actions_.value(QStringLiteral("hatteda.action.undo")));
@@ -2563,9 +2579,20 @@ void MainWindow::updateProjectState() {
         fabrication->setEnabled(open);
     }
     for (const auto* name : {"hatteda.action.run-checks", "hatteda.action.design-rules", "hatteda.action.export-bom",
-                             "hatteda.action.export-pick-place"}) {
+                             "hatteda.action.export-pick-place", "hatteda.action.print-layout"}) {
         if (auto* action = actions_.value(QString::fromLatin1(name))) action->setEnabled(open);
     }
+}
+
+void MainWindow::showPrintLayout() {
+    if (projectPath_.isEmpty()) return;
+    CamOptions options;
+    options.zoneFills = pourZones(canvases_.value(0)->document(), canvases_.value(1)->document(), pourOptionsFor(rules_));
+    options.maskExpansion = rules_.defaults.solderResistGuard;
+    const CamOutput output = buildCamOutput(canvases_.value(1)->document(), options);
+    PrintLayoutDialog dialog(output, QFileInfo(projectPath_).completeBaseName(), this);
+    dialog.resize(1100, 720);
+    dialog.exec();
 }
 
 void MainWindow::exportFabricationFiles() {
@@ -2602,8 +2629,8 @@ void MainWindow::exportFabricationFiles() {
     if (directory.isEmpty()) return;
 
     CamOptions options;
-    options.zoneFills = pourZones(canvases_.value(0)->document(), canvases_.value(1)->document(), rules_.clearance,
-                                  rules_.boardEdgeClearance);
+    options.zoneFills = pourZones(canvases_.value(0)->document(), canvases_.value(1)->document(), pourOptionsFor(rules_));
+    options.maskExpansion = rules_.defaults.solderResistGuard;
     const CamOutput output = buildCamOutput(canvases_.value(1)->document(), options);
     const QString baseName = QFileInfo(projectPath_).completeBaseName();
     const QString version = QCoreApplication::applicationVersion().isEmpty()
@@ -2844,8 +2871,7 @@ void MainWindow::refreshZoneFills() {
     auto* board = canvases_.value(1, nullptr);
     if (board == nullptr) return;
     QHash<QString, QPainterPath> fills;
-    for (const ZoneFillResult& fill : pourZones(canvases_.value(0)->document(), board->document(), rules_.clearance,
-                                                rules_.boardEdgeClearance)) {
+    for (const ZoneFillResult& fill : pourZones(canvases_.value(0)->document(), board->document(), pourOptionsFor(rules_))) {
         fills.insert(fill.zoneId, fill.fill);
     }
     board->setZoneFills(fills);

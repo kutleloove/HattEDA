@@ -14,7 +14,8 @@ if(HATTEDA_WERROR)
 endif()
 
 include(CTest)
-find_package(Qt6 6.11 REQUIRED COMPONENTS Widgets LinguistTools)
+# PrintSupport: Kayra print layout to printers (ADR-0011); part of Qt Base, no extra install.
+find_package(Qt6 6.11 REQUIRED COMPONENTS Widgets PrintSupport LinguistTools)
 
 add_subdirectory(libs/electrical)
 add_subdirectory(libs/ui-shell)

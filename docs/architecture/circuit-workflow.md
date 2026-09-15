@@ -86,6 +86,18 @@ edilir ve tüm delikler kaplamalıdır.
   - Karttaki her kılıf için şunları yazar: etiket, değer, kılıf, pad sınırlarının merkezi (mm, Y yukarı), üstten bakışla saat yönünün tersine dönüş ve yüz (Top/Bottom).
 - İki dosya da UTF-8 CSV'dir (RFC 4180 tırnaklama, CRLF). Montaj servisleri sütunları adıyla okuduğu için başlıklar İngilizcedir.
 
+### Baskı düzeni: kağıda veya PDF'e (ADR-0011)
+
+**Output → Print layout...** (Ctrl+P, `hatteda.action.print-layout`; File menüsünde de var) evde üretim
+için kart çizimini gerçek ölçüde kağıda basar (`PrintLayoutDialog`):
+
+- **Kağıt:** A3, A4, A5, Letter veya elle en/boy (Custom), yatay/dikey, kenar boşluğu.
+- **Katmanlar:** her Gerber katmanı ayrı seçilir. "Üst üste" hepsini tek çizimde birleştirir, "Yan yana" her katmanı ayrı kutuya koyar (örneğin üst ve alt bakır aynı sayfada). Delikler açık bırakılabilir.
+- **Çizim:** siyah bakır, negatif (siyah üstüne beyaz bakır) veya kart renkleri; ayna (toner transfer), 90° döndürme, ölçek ve yazıcı düzeltmesi (X/Y, örn. 100 mm 99.5 mm basılıyorsa 1.005).
+- **Kopya:** yan yana × alt alta kopya sayısı ve aralık. **Fit as many as possible** sayfaya en çok kaç kart sığıyorsa (gerekirse kartı çevirerek) onu seçer. Tasarım değişmez; kopyalar yalnız sayfada tekrarlanır, bir hata düzeltilince baskı yeniden alınır.
+- Sağdaki önizleme sayfayı olduğu gibi gösterir. **Save PDF...** vektör PDF yazar, **Print...** yazıcı penceresini açar. Ayarlar uygulama tercihidir (`print/*`).
+- Çizim Gerber çıktısıyla aynı geometriden (dökülmüş zone'lar dahil) üretilir.
+
 ## Tasarım denetimi: ERC ve DRC (#31)
 
 Komut çubuğundaki denetim düğmesi veya **Design › Run design checks** (`hatteda.action.run-checks`) şemaya ERC, karta DRC uygular. Sonuçlar **Design checks** sekmesinde (`hatteda.tool.design-checks`) listelenir: önce hatalar, sonra uyarılar. Satıra tıklayınca ilgili çalışma alanına geçilir, sorunlu nesneler seçilir ve görünüm oraya ortalanır. **Run again** listeyi yeniler. Kurallar ve kimlikleri ADR-0008'dedir.

@@ -40,6 +40,10 @@ add_executable(hatt-zone-fill-tests ZoneFillTests.cpp)
 target_link_libraries(hatt-zone-fill-tests PRIVATE HattEDA::UiShell Qt6::Test)
 hatt_add_qt_test(hatt-zone-fill-tests)
 
+add_executable(hatt-print-layout-tests PrintLayoutTests.cpp)
+target_link_libraries(hatt-print-layout-tests PRIVATE HattEDA::UiShell Qt6::Test)
+hatt_add_qt_test(hatt-print-layout-tests)
+
 add_executable(hatt-package-from-selection-tests PackageFromSelectionTests.cpp)
 target_link_libraries(hatt-package-from-selection-tests PRIVATE HattEDA::UiShell Qt6::Test)
 hatt_add_qt_test(hatt-package-from-selection-tests)

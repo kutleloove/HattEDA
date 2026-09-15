@@ -1,4 +1,5 @@
 #include "hatt/ui/BoardCopper.hpp"
+#include "hatt/ui/DesignRules.hpp"
 #include "hatt/ui/GerberExport.hpp"
 #include "hatt/ui/ProjectFile.hpp"
 #include "hatt/ui/SketchCircuit.hpp"
@@ -50,6 +51,7 @@ private slots:
     void gerberWritesPourBeforeCopperWithClearPolarity();
     void schematicNetsDecideWhatThePourJoins();
     void zoneNetRoundTripsThroughProjectFile();
+    void pourSettingsFollowDesignRules();
 };
 
 void ZoneFillTests::otherNetsAreKeptClear() {
@@ -235,6 +237,24 @@ void ZoneFillTests::zoneNetRoundTripsThroughProjectFile() {
     broken.replace("\"net\": \"GND\"", "\"net\": 5");
     QVERIFY(broken.contains("\"net\": 5"));
     QVERIFY(!parseProject(broken).ok());
+}
+
+void ZoneFillTests::pourSettingsFollowDesignRules() {
+    DesignRules rules;
+    ClearanceRule rule;
+    rule.padTrace = 0.35;
+    rule.graphic = 0.45;
+    rule.edge = 0.6;
+    rules.clearanceRules = {rule};
+    rules.defaults.thermalRelief = false;
+    rules.defaults.spokeWidth = 0.55;
+    const ZonePourOptions options = pourOptionsFor(rules);
+    QCOMPARE(options.clearance, clearanceBetween(rules, CopperLayerMask, ClearanceObject::Graphic, ClearanceObject::Pad));
+    QVERIFY(options.clearance >= 0.45 - 1e-9);
+    QCOMPARE(options.boardEdgeClearance, edgeClearance(rules, CopperLayerMask));
+    QVERIFY(!options.thermalReliefs);
+    QCOMPARE(options.spokeWidth, 0.55);
+    QVERIFY(options.thermalGap >= options.clearance);
 }
 
 QTEST_GUILESS_MAIN(ZoneFillTests)

@@ -70,6 +70,8 @@ struct CamOptions {
     bool includeZones = false;
     // Footprint designators (item labels) on the footprint's silkscreen, above the footprint.
     bool designators = true;
+    // Solder mask opening beyond each pad, per side (design rules: defaults.solderResistGuard).
+    double maskExpansion = 0.05;
 };
 
 inline constexpr double CamDesignatorHeight = 1.0; // mm

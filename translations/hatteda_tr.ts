@@ -749,5 +749,54 @@ Son projeler listesinden kaldırılsın mı?</translation></message>
   <context>
     <name>hatt::ui::MainWindow</name>
     <message><source>Text height</source><translation>Metin yüksekliği</translation></message>
+    <message><source>Print layout...</source><translation>Baskı düzeni...</translation></message>
+    <message><source>Print or save the board artwork as PDF, repeated to fill the page</source><translation>Kart çizimini yazdır veya PDF olarak kaydet; sayfayı dolduracak kadar tekrarla</translation></message>
+    <message><source>&amp;Output</source><translation>Çı&amp;ktı</translation></message>
+  </context>
+  <context>
+    <name>hatt::ui::PrintLayout</name>
+    <message><source>Custom</source><translation>Özel</translation></message>
+  </context>
+  <context>
+    <name>hatt::ui::PrintLayoutDialog</name>
+    <message><source>Print layout</source><translation>Baskı düzeni</translation></message>
+    <message><source>Layers / artwork</source><translation>Katmanlar / çizim</translation></message>
+    <message><source>Drill holes</source><translation>Delikler</translation></message>
+    <message><source>Leave the holes open so they can guide the drill</source><translation>Delikleri açık bırak, matkaba kılavuz olsun</translation></message>
+    <message><source>Overlay the layers</source><translation>Katmanlar üst üste</translation></message>
+    <message><source>Each layer side by side</source><translation>Her katman yan yana</translation></message>
+    <message><source>Side by side puts, for example, top and bottom copper on the same sheet</source><translation>Yan yana, örneğin üst ve alt bakırı aynı sayfaya koyar</translation></message>
+    <message><source>Paper</source><translation>Kağıt</translation></message>
+    <message><source>Size</source><translation>Boyut</translation></message>
+    <message><source>Width</source><translation>En</translation></message>
+    <message><source>Height</source><translation>Boy</translation></message>
+    <message><source>Landscape</source><translation>Yatay</translation></message>
+    <message><source>Margin</source><translation>Kenar boşluğu</translation></message>
+    <message><source>Artwork</source><translation>Çizim</translation></message>
+    <message><source>Scale</source><translation>Ölçek</translation></message>
+    <message><source>Printer correction: 1.005 when 100 mm prints as 99.5 mm</source><translation>Yazıcı düzeltmesi: 100 mm, 99.5 mm basılıyorsa 1.005</translation></message>
+    <message><source>Compensation X</source><translation>Düzeltme X</translation></message>
+    <message><source>Compensation Y</source><translation>Düzeltme Y</translation></message>
+    <message><source>Monochrome (black copper)</source><translation>Tek renk (siyah bakır)</translation></message>
+    <message><source>Negative (white copper on black)</source><translation>Negatif (siyah üstüne beyaz bakır)</translation></message>
+    <message><source>Board colours</source><translation>Kart renkleri</translation></message>
+    <message><source>Colours</source><translation>Renkler</translation></message>
+    <message><source>Mirror (toner transfer)</source><translation>Ayna (toner transfer)</translation></message>
+    <message><source>Rotate 90°</source><translation>90° döndür</translation></message>
+    <message><source>Copies on the page</source><translation>Sayfadaki kopyalar</translation></message>
+    <message><source>Across</source><translation>Yan yana</translation></message>
+    <message><source>Down</source><translation>Alt alta</translation></message>
+    <message><source>Spacing</source><translation>Aralık</translation></message>
+    <message><source>Fit as many as possible</source><translation>Sığdığı kadar yerleştir</translation></message>
+    <message><source>Fill the page with copies, turning the board when more fit that way</source><translation>Sayfayı kopyalarla doldur; daha çok sığıyorsa kartı çevir</translation></message>
+    <message><source>Save PDF...</source><translation>PDF kaydet...</translation></message>
+    <message><source>Print...</source><translation>Yazdır...</translation></message>
+    <message><source>Nothing to print: choose layers that have artwork.</source><translation>Basılacak bir şey yok: çizimi olan katmanları seçin.</translation></message>
+    <message numerus="yes"><source>Board %1 × %2 mm; %n artwork(s) on the page</source><translation><numerusform>Kart %1 × %2 mm; sayfada %n çizim</numerusform></translation></message>
+    <message numerus="yes"><source>%n artwork(s) do not fit and are left out</source><translation><numerusform>%n çizim sığmıyor ve dışarıda kalıyor</numerusform></translation></message>
+    <message><source>Cannot write %1.</source><translation>%1 yazılamıyor.</translation></message>
+    <message><source>Save print layout as PDF</source><translation>Baskı düzenini PDF olarak kaydet</translation></message>
+    <message><source>PDF files (*.pdf)</source><translation>PDF dosyaları (*.pdf)</translation></message>
+    <message><source>The printer could not be started.</source><translation>Yazıcı başlatılamadı.</translation></message>
   </context>
 </TS>

@@ -66,6 +66,8 @@ public slots:
     void newFootprint();
     // Generates Gerber X2 and Excellon files from the Kayra board.
     void exportFabricationFiles();
+    // PrintLayoutDialog for the Kayra board: paper, copies per page, PDF or printer.
+    void showPrintLayout();
     // Runs ERC and DRC and shows the results in the `hatteda.tool.design-checks` workspace.
     void runDesignChecks();
     // DesignRulesDialog for the project's rules.

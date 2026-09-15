@@ -185,7 +185,7 @@ CamOutput buildCamOutput(const SketchDocument& board, const CamOptions& options)
                 if (!(side ? bottom : top)) continue;
                 flash(copperLayer(side), pad, 0.0);
                 if (via) continue; // vias are tented
-                flash(side ? CamLayerKind::BottomMask : CamLayerKind::TopMask, pad, CamMaskExpansion);
+                flash(side ? CamLayerKind::BottomMask : CamLayerKind::TopMask, pad, options.maskExpansion);
                 if (pad.drill <= 0.0) flash(side ? CamLayerKind::BottomPaste : CamLayerKind::TopPaste, pad, 0.0);
             }
             if (pad.drill > 0.0) output.drills.append({camPoint(pad.center), pad.drill});

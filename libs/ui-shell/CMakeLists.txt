@@ -50,12 +50,16 @@ add_library(hatt-ui-shell STATIC
     src/CamPreview.cpp
     include/hatt/ui/ZoneFill.hpp
     src/ZoneFill.cpp
+    include/hatt/ui/PrintLayout.hpp
+    src/PrintLayout.cpp
+    include/hatt/ui/PrintLayoutDialog.hpp
+    src/PrintLayoutDialog.cpp
 )
 
 add_library(HattEDA::UiShell ALIAS hatt-ui-shell)
 
 target_include_directories(hatt-ui-shell PUBLIC include)
-target_link_libraries(hatt-ui-shell PUBLIC Qt6::Widgets HattEDA::Electrical)
+target_link_libraries(hatt-ui-shell PUBLIC Qt6::Widgets HattEDA::Electrical PRIVATE Qt6::PrintSupport)
 
 if(MSVC)
     target_compile_options(hatt-ui-shell PRIVATE /W4 /permissive-)
