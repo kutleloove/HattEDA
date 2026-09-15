@@ -1230,6 +1230,11 @@ QWidget* MainWindow::createEditor() {
     contextLayout->addWidget(zonesLabel_);
     zoneList_ = new QListWidget(contextPanel);
     zoneList_->setObjectName(QStringLiteral("ZoneList"));
+    // Long summaries are elided in the narrow panel; the row tooltip has the full text.
+    zoneList_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    zoneList_->setTextElideMode(Qt::ElideRight);
+    // At least one row; on short windows the layer panel below keeps its room.
+    zoneList_->setMinimumHeight(48);
     zoneList_->setToolTip(tr("Click a zone to select it on the board; double-click to edit its net, layer and fill"));
     connect(zoneList_, &QListWidget::itemClicked, this, [this](QListWidgetItem* row) {
         if (auto* board = canvases_.value(1, nullptr)) {
@@ -1722,6 +1727,17 @@ void MainWindow::rebuildObjectSelector() {
         const bool zoneMode = toolMode_ == ToolMode::Zone && workspace == Workspace::Board;
         zonesLabel_->setVisible(zoneMode);
         zoneList_->setVisible(zoneMode);
+        // Zone mode shows two lists: the three zone kinds get compact rows at their exact height, and
+        // the zone list below takes the rest of the panel.
+        objectSelector_->setIconSize(zoneMode ? QSize(22, 22) : QSize(32, 32));
+        if (zoneMode) {
+            int kindsHeight = 2 * objectSelector_->frameWidth();
+            for (int row = 0; row < objectSelector_->count(); ++row) kindsHeight += objectSelector_->sizeHintForRow(row);
+            objectSelector_->setFixedHeight(kindsHeight);
+        } else {
+            objectSelector_->setMinimumHeight(0);
+            objectSelector_->setMaximumHeight(QWIDGETSIZE_MAX);
+        }
         refreshZoneList();
         boardLayerPanel_->setVisible(workspace == Workspace::Board);
         if (hasObjects) {
@@ -3036,14 +3052,12 @@ void MainWindow::refreshZoneList() {
             const QString icon = zone.variant == KeepoutZoneVariant ? QStringLiteral("keepout")
                                  : zone.variant == AreaZoneVariant  ? QStringLiteral("area")
                                                                     : QStringLiteral("zone");
-            const QString layer = boardLayerName(zone.layer);
-            auto* row = new QListWidgetItem(
-                makeIcon(icon, color),
-                QStringLiteral("%1  ·  %2").arg(zoneSummary(zone, rules_, canvases_.value(0)->document()), layer),
-                zoneList_);
+            const QString text = QStringLiteral("%1  ·  %2").arg(zoneSummary(zone, rules_, canvases_.value(0)->document()),
+                                                                  boardLayerName(zone.layer));
+            auto* row = new QListWidgetItem(makeIcon(icon, color), text, zoneList_);
             row->setData(ZoneIdRole, zone.id);
             row->setData(IconRole, icon);
-            row->setToolTip(QStringLiteral("%1 · %2").arg(zoneKindName(zone.variant), layer));
+            row->setToolTip(QStringLiteral("%1\n%2").arg(zoneKindName(zone.variant), text));
         }
     }
     syncZoneListSelection();

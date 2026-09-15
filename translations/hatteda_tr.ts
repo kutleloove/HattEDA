@@ -974,8 +974,8 @@ Son projeler listesinden kaldırılsın mı?</translation></message>
     <message><source>Draw copper zone</source><translation>Bakır alan çiz</translation></message>
     <message><source>Draw keepout zone</source><translation>Yasak alan çiz</translation></message>
     <message><source>Draw area zone</source><translation>Bakır olmayan alan çiz</translation></message>
-    <message><source>Click the corners of the area on the active silk, resist or paste layer. Clicking the first corner, double-click or Enter closes it; right-click cancels.</source><translation>Alanın köşelerine etkin serigrafi, lehim maskesi veya pasta katmanında tıklayın. İlk köşeye tıklamak, çift tık veya Enter alanı kapatır; sağ tık iptal eder.</translation></message>
-    <message><source>Click the corners of the zone on the active copper layer. Clicking the first corner, double-click or Enter closes it; right-click cancels. Backspace removes the last corner.</source><translation>Alanın köşelerine etkin bakır katmanında tıklayın. İlk köşeye tıklamak, çift tık veya Enter alanı kapatır; sağ tık iptal eder. Backspace son köşeyi siler.</translation></message>
+    <message><source>Click the area&apos;s corners on the active silk, resist or paste layer; click the first corner or press Enter to close it.</source><translation>Alanın köşelerine etkin serigrafi, lehim maskesi veya pasta katmanında tıklayın; kapatmak için ilk köşeye tıklayın veya Enter&apos;a basın.</translation></message>
+    <message><source>Click the zone&apos;s corners on the active copper layer; click the first corner or press Enter to close it.</source><translation>Alanın köşelerine etkin bakır katmanında tıklayın; kapatmak için ilk köşeye tıklayın veya Enter&apos;a basın.</translation></message>
   </context>
   <context>
     <name>hatt::ui::DesignChecks</name>

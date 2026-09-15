@@ -744,11 +744,11 @@ QString DesignCanvas::toolHint() const {
                   "removes the last vertex.");
     case CanvasTool::Zone:
         if (variant_ == AreaZoneVariant) {
-            return tr("Click the corners of the area on the active silk, resist or paste layer. Clicking the "
-                      "first corner, double-click or Enter closes it; right-click cancels.");
+            return tr("Click the area's corners on the active silk, resist or paste layer; click the first "
+                      "corner or press Enter to close it.");
         }
-        return tr("Click the corners of the zone on the active copper layer. Clicking the first corner, "
-                  "double-click or Enter closes it; right-click cancels. Backspace removes the last corner.");
+        return tr("Click the zone's corners on the active copper layer; click the first corner or press Enter "
+                  "to close it.");
     case CanvasTool::Arc:
         return tr("Click the start point, the end point, then a point the arc passes through.");
     case CanvasTool::Text:
