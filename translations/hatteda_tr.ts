@@ -6,6 +6,7 @@
     <message><source>New project</source><translation>Yeni proje</translation></message>
     <message><source>Open project</source><translation>Proje aç</translation></message>
     <message><source>Open project…</source><translation>Proje aç…</translation></message>
+    <message><source>Open recent project</source><translation>Son projeyi aç</translation></message>
     <message><source>Save</source><translation>Kaydet</translation></message>
     <message><source>Select</source><translation>Seç</translation></message>
     <message><source>Place</source><translation>Yerleştir</translation></message>
