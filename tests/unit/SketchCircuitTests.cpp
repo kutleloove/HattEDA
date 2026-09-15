@@ -171,9 +171,10 @@ private slots:
         const auto guide = boardGuidance(schematic, board);
         QVERIFY2(guide.errors.isEmpty(), qPrintable(guide.errors.join("; ")));
         QCOMPARE(guide.airwires.size(), 3);
+        QVERIFY(!guide.airwires[0].net.isEmpty());
         SketchItem track;
         track.kind = SketchItem::Kind::Wire;
-        track.points = {guide.airwires[0].p1(), guide.airwires[0].p2()};
+        track.points = {guide.airwires[0].line.p1(), guide.airwires[0].line.p2()};
         board.append(track);
         const auto routed = boardGuidance(schematic, board);
         QVERIFY(routed.airwires.size() < guide.airwires.size());

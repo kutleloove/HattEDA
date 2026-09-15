@@ -163,6 +163,30 @@ void drawRouteGhost(QPainter& painter, const QVector<QPointF>& points, double wi
     }
 }
 
+// Boşluk halkası: a dotted halo drawn `clearance` outside the route corridor plus a ring at every
+// vertex (start, bends and the cursor tip), showing the keep-out margin required from the active
+// board's design rules (DesignRules::clearance) while a track is being drawn.
+void drawRouteClearance(QPainter& painter, const QVector<QPointF>& points, double trackWidth,
+                        double clearance, double scale, const QColor& base,
+                        const WorldToScreen& map) {
+    if (points.size() < 2 || clearance <= 0.0) return;
+    QColor halo = base;
+    halo.setAlpha(120);
+    const double radius = std::max(2.0, (trackWidth / 2.0 + clearance) * scale);
+    painter.setBrush(Qt::NoBrush);
+    painter.setPen(QPen(halo, 1.0, Qt::DotLine, Qt::RoundCap, Qt::RoundJoin));
+    for (qsizetype i = 1; i < points.size(); ++i) {
+        QLineF segment(map(points[i - 1]), map(points[i]));
+        if (segment.length() < 1e-6) continue;
+        QLineF normal = segment.normalVector();
+        normal.setLength(radius);
+        const QPointF shift = normal.p2() - normal.p1();
+        painter.drawLine(segment.translated(shift));
+        painter.drawLine(segment.translated(-shift));
+    }
+    for (const QPointF& point : points) painter.drawEllipse(map(point), radius, radius);
+}
+
 // Same size as the explicit junction symbol (0.5 mm radius), never smaller than the wire.
 void drawJunctionDots(QPainter& painter, const QVector<QPointF>& points, const QColor& color,
                       double scale, const WorldToScreen& map) {
@@ -1039,8 +1063,8 @@ void DesignCanvas::applyDocumentEdit(const QString& title, const SketchDocument&
     pushEdit(title, document, {});
 }
 
-void DesignCanvas::setAirwires(const QVector<QLineF>& lines) {
-    airwires_ = lines;
+void DesignCanvas::setAirwires(const QVector<Airwire>& wires) {
+    airwires_ = wires;
     update();
 }
 
@@ -1603,7 +1627,7 @@ QVector<QPointF> DesignCanvas::routeTo(QPointF point) const {
     return orthogonalRoute(from, point, leaving, pinDirectionAt(items_, point), gridSize());
 }
 
-std::optional<QPointF> DesignCanvas::assistedRouteTarget(QPointF cursor) const {
+std::optional<DesignCanvas::RouteAssist> DesignCanvas::assistedRoute(QPointF cursor) const {
     if (workspace_ != Workspace::Board || tool_ != CanvasTool::Wire || pending_.isEmpty() ||
         airwires_.isEmpty() || freeAngle_) {
         return std::nullopt;
@@ -1616,15 +1640,16 @@ std::optional<QPointF> DesignCanvas::assistedRouteTarget(QPointF cursor) const {
         }
     }
     const double endpointTolerance = std::max(gridSize() * 0.51, 10.0 / scale_);
-    std::optional<QPointF> best;
+    std::optional<RouteAssist> best;
     double bestScore = std::numeric_limits<double>::max();
     const QPointF motion = cursor - origin;
-    for (const QLineF& airwire : airwires_) {
+    for (qsizetype i = 0; i < airwires_.size(); ++i) {
+        const Airwire& airwire = airwires_[i];
         QPointF target;
-        if (QLineF(origin, airwire.p1()).length() <= endpointTolerance) {
-            target = airwire.p2();
-        } else if (QLineF(origin, airwire.p2()).length() <= endpointTolerance) {
-            target = airwire.p1();
+        if (QLineF(origin, airwire.line.p1()).length() <= endpointTolerance) {
+            target = airwire.line.p2();
+        } else if (QLineF(origin, airwire.line.p2()).length() <= endpointTolerance) {
+            target = airwire.line.p1();
         } else {
             continue;
         }
@@ -1649,10 +1674,22 @@ std::optional<QPointF> DesignCanvas::assistedRouteTarget(QPointF cursor) const {
         }
         if (score < bestScore) {
             bestScore = score;
-            best = target;
+            best = RouteAssist{target, airwire.net, static_cast<int>(i)};
         }
     }
     return best;
+}
+
+std::optional<QPointF> DesignCanvas::assistedRouteTarget(QPointF cursor) const {
+    const auto assist = assistedRoute(cursor);
+    if (!assist) return std::nullopt;
+    return assist->target;
+}
+
+QString DesignCanvas::currentRouteNet() const {
+    if (!hoverValid_) return {};
+    if (const auto assist = assistedRoute(hover_.point)) return assist->net;
+    return {};
 }
 
 std::optional<QVector<QPointF>> DesignCanvas::obstacleAvoidingRoute(QPointF from,
@@ -2797,8 +2834,24 @@ void DesignCanvas::paintEvent(QPaintEvent*) {
     painter.drawLine(QLineF(offset_.x(), offset_.y() - 8, offset_.x(), offset_.y() + 8));
 
     painter.setRenderHint(QPainter::Antialiasing);
-    painter.setPen(strokePen(colors.airwire, 1.0));
-    for (const auto& line : airwires_) painter.drawLine(QLineF(map(line.p1()), map(line.p2())));
+    // While a track is actively being routed, the ratsnest line it continues stays bright and the
+    // rest fade to a ghost so the target net reads clearly against the others (Proteus style).
+    const bool routingGhosts = board && tool_ == CanvasTool::Wire && !pending_.isEmpty() &&
+                               hoverValid_ && drag_ == Drag::None && !airwires_.isEmpty();
+    const auto routeAssist = routingGhosts ? assistedRoute(hover_.point) : std::nullopt;
+    for (qsizetype i = 0; i < airwires_.size(); ++i) {
+        QColor color = colors.airwire;
+        double width = 1.0;
+        if (routingGhosts) {
+            if (routeAssist && routeAssist->airwireIndex == i) {
+                width = 2.0;
+            } else {
+                color.setAlpha(60);
+            }
+        }
+        painter.setPen(strokePen(color, width));
+        painter.drawLine(QLineF(map(airwires_[i].line.p1()), map(airwires_[i].line.p2())));
+    }
     const bool dragging = drag_ == Drag::Move && moveDocument_.size() == items_.size();
     const SketchDocument& shown = dragging ? moveDocument_ : items_;
     const LayerView view{visibleLayers_, activeLayer_};
@@ -2930,15 +2983,34 @@ void DesignCanvas::paintEvent(QPaintEvent*) {
                     // never the copper-layer colour used by committed tracks.
                     preview.layer = routeLayer();
                     preview.width = currentTrackWidth();
+                    drawRouteClearance(painter, preview.points, preview.width, routingClearance_,
+                                       scale_, colors.guide, map);
                     drawRouteGhost(painter, preview.points, preview.width, scale_, colors.stroke,
                                    map);
-                    if (const auto target = assistedRouteTarget(hover_.point)) {
-                        const QPointF centre = map(*target);
+                    if (routeAssist) {
+                        const QPointF centre = map(routeAssist->target);
                         painter.setPen(strokePen(colors.stroke, 1.5));
                         painter.setBrush(Qt::NoBrush);
                         painter.drawEllipse(centre, 9, 9);
                         painter.drawLine(centre - QPointF(5, 0), centre + QPointF(5, 0));
                         painter.drawLine(centre - QPointF(0, 5), centre + QPointF(0, 5));
+                    }
+                    if (routeAssist && !routeAssist->net.isEmpty()) {
+                        // Net name label beside the route tip, Proteus style.
+                        QFont font = painter.font();
+                        font.setPixelSize(11);
+                        painter.setFont(font);
+                        const QFontMetricsF metrics(font);
+                        const QString text = routeAssist->net;
+                        const QSizeF size(metrics.horizontalAdvance(text) + 10, metrics.height() + 4);
+                        const QPointF anchor = map(hover_.point) + QPointF(12, -size.height() - 6);
+                        const QRectF label(anchor, size);
+                        painter.setPen(Qt::NoPen);
+                        painter.setBrush(colors.guide);
+                        painter.drawRoundedRect(label, 3, 3);
+                        painter.setBrush(Qt::NoBrush);
+                        painter.setPen(colors.background);
+                        painter.drawText(label, Qt::AlignCenter, text);
                     }
                 } else {
                     hasPreview = true;
