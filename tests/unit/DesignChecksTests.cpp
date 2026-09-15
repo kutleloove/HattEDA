@@ -1,6 +1,7 @@
 #include "hatt/ui/BoardCopper.hpp"
 #include "hatt/ui/DesignChecks.hpp"
 #include "hatt/ui/SketchCircuit.hpp"
+#include "hatt/ui/ZoneFill.hpp"
 
 #include <QJsonArray>
 #include <QJsonObject>
@@ -166,6 +167,9 @@ private slots:
         rules.netClasses[2].viaDrill = 0.4;
         rules.netClasses[2].ratsnestColor = QStringLiteral("not a colour");
         QVERIFY(!validateDesignRules(rules).isEmpty());
+        rules.netClasses[2].ratsnestColor.clear();
+        rules.netClasses[2].clearance = -0.1;
+        QVERIFY(!validateDesignRules(rules).isEmpty()); // negative class clearance
     }
 
     void drcUsesRegionRulesAndNetClasses() {
@@ -212,6 +216,87 @@ private slots:
         QCOMPARE(withRule(report, "drc.net-class-layer").size(), 1);
     }
 
+    void netClassClearanceIsCheckedPouredAndRouted() {
+        const SketchDocument schematic = dcDividerExample();
+        const SketchDocument placed = transferToBoard(schematic, {outline(80, 60)}).document;
+        const auto find = [&placed](const char* label) {
+            return *std::find_if(placed.begin(), placed.end(), [label](const SketchItem& i) { return i.label == QLatin1String(label); });
+        };
+        const SketchItem r1 = find("R1");
+        const SketchItem r2 = find("R2");
+        const QPointF ground = itemPads(r2)[1].center;   // net 0: POWER
+        const QPointF midpoint = itemPads(r1)[1].center; // divider midpoint: SIGNAL
+
+        DesignRules rules;
+        rules.netClasses = effectiveNetClasses(rules);
+        rules.netClasses[0].clearance = 0.5; // POWER
+        QVERIFY2(validateDesignRules(rules).isEmpty(), qPrintable(validateDesignRules(rules)));
+        QCOMPARE(largestClearance(rules), 0.5);
+        const QHash<QString, double> classGaps = netClassClearances(rules, schematic);
+        QCOMPARE(classGaps.value(QStringLiteral("0")), 0.5);
+        QCOMPARE(classGaps.size(), 1);
+        QCOMPARE(netPairClearance(classGaps, 0.2, QStringLiteral("0"), QString()), 0.5);
+        QCOMPARE(netPairClearance(classGaps, 0.2, QString(), QString()), 0.2);
+
+        // A ground track and a midpoint track run side by side `gap` apart (edge to edge).
+        auto parallelTracks = [&](double gap) {
+            SketchDocument board = placed;
+            const double groundWidth = 0.635;
+            const double signalWidth = 0.3048;
+            const double side = (midpoint.x() >= ground.x() ? 1.0 : -1.0) * (gap + (groundWidth + signalWidth) / 2.0);
+            board.append(track({ground, {ground.x(), 50}}, groundWidth));
+            board.append(track({midpoint, {midpoint.x(), 45}, {ground.x() + side, 45}, {ground.x() + side, 55}}, signalWidth));
+            return board;
+        };
+        const auto classRules = [](const CheckReport& report) {
+            return QStringLiteral("%1/%2").arg(withRule(report, "drc.clearance").size()).arg(withRule(report, "drc.net-class-clearance").size());
+        };
+        CheckReport report = runDesignRuleCheck(schematic, parallelTracks(0.3), DesignRules{});
+        QCOMPARE(classRules(report), QStringLiteral("0/0"));
+        report = runDesignRuleCheck(schematic, parallelTracks(0.3), rules);
+        QVERIFY2(classRules(report) == QStringLiteral("0/1"), qPrintable(::rules(report).join(QLatin1Char(' '))));
+        QVERIFY(withRule(report, "drc.net-class-clearance").first().message.contains(QStringLiteral("0.500")));
+        report = runDesignRuleCheck(schematic, parallelTracks(0.1), rules);
+        QCOMPARE(classRules(report), QStringLiteral("1/0"));
+
+        // Routing starts on class copper with the class width and clearance.
+        const QHash<QString, RouteClass> routes = boardRouteClasses(schematic, placed, rules);
+        const RouteClass power = routes.value(routeClassKey(r2.id, 1));
+        QCOMPARE(power.net, QStringLiteral("0"));
+        QCOMPARE(power.netClass, PowerNetClass);
+        QCOMPARE(power.traceWidth, 0.635);
+        QCOMPARE(power.clearance, 0.5);
+        const RouteClass signal = routes.value(routeClassKey(r1.id, 1));
+        QCOMPARE(signal.netClass, SignalNetClass);
+        QCOMPARE(signal.clearance, 0.2);
+
+        // A midpoint pour keeps the class clearance from the ground pad.
+        SketchItem zone;
+        zone.kind = SketchItem::Kind::Polyline;
+        zone.variant = CopperZoneVariant;
+        zone.closed = true;
+        const BoardCopperModel model = buildBoardCopperModel(schematic, placed);
+        for (const BoardConductor& conductor : model.conductors) {
+            if (conductor.itemId == r1.id && conductor.padIndex == 1) zone.net = model.netNames.value(conductor.net);
+        }
+        QVERIFY(!zone.net.isEmpty());
+        const QRectF area = QRectF(ground, midpoint).normalized().adjusted(-4, -4, 4, 4);
+        zone.points = {area.topLeft(), area.topRight(), area.bottomRight(), area.bottomLeft()};
+        SketchDocument poured = placed;
+        poured.append(zone);
+        const PlacedPad groundPad = itemPads(r2)[1];
+        QPointF away = groundPad.center - itemPads(r2)[0].center;
+        away /= QLineF(QPointF(), away).length();
+        const double halfExtent = std::abs(away.x()) > std::abs(away.y()) ? groundPad.width / 2.0 : groundPad.height / 2.0;
+        const QPointF probe = groundPad.center + away * (halfExtent + 0.35);
+        const auto plainFill = pourZones(schematic, poured, pourOptionsFor(DesignRules{}, schematic));
+        const auto classFill = pourZones(schematic, poured, pourOptionsFor(rules, schematic));
+        QCOMPARE(plainFill.size(), 1);
+        QCOMPARE(classFill.size(), 1);
+        QVERIFY(plainFill.first().fill.contains(probe));
+        QVERIFY(!classFill.first().fill.contains(probe));
+    }
+
     void designRulesJsonRoundTrip() {
         DesignRules rules;
         QJsonObject plain = designRulesToJson(rules);
@@ -226,6 +311,7 @@ private slots:
         netClass.viaDiameter = 1.2;
         netClass.viaDrill = 0.6;
         netClass.neckWidth = 0.5;
+        netClass.clearance = 0.45;
         netClass.layers = layerBit(BoardLayer::BottomCopper);
         netClass.ratsnestHidden = true;
         netClass.nets = {QStringLiteral("VCC"), QStringLiteral("0")};

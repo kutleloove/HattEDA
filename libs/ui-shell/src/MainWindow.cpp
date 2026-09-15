@@ -478,6 +478,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
                 Qt::QueuedConnection);
         // Pours depend on both documents (nets come from the schematic) and on the design rules.
         connect(canvas, &DesignCanvas::documentChanged, this, &MainWindow::refreshZoneFills);
+        connect(canvas, &DesignCanvas::documentChanged, this, &MainWindow::refreshRouteClasses);
         connect(canvas, &DesignCanvas::selectionChanged, this, &MainWindow::syncZoneListSelection);
         connect(canvas, &DesignCanvas::contextMenuRequested, this,
                 [this, canvas](QPoint position, int index) {
@@ -1903,6 +1904,7 @@ void MainWindow::applyObjectSelection() {
             rememberedObjectRows_.insert(rememberKey(static_cast<int>(toolMode_), workspace),
                                          objectSelector_->currentRow());
         }
+        if (workspace == Workspace::Board) refreshRouteClasses();
         break;
     case ToolMode::Measure:
         tool = CanvasTool::Measure;
@@ -2884,7 +2886,8 @@ void MainWindow::updateProjectState() {
 void MainWindow::showPrintLayout() {
     if (projectPath_.isEmpty()) return;
     CamOptions options;
-    options.zoneFills = pourZones(canvases_.value(0)->document(), canvases_.value(1)->document(), pourOptionsFor(rules_));
+    options.zoneFills = pourZones(canvases_.value(0)->document(), canvases_.value(1)->document(),
+                                  pourOptionsFor(rules_, canvases_.value(0)->document()));
     options.maskExpansion = rules_.defaults.solderResistGuard;
     const CamOutput output = buildCamOutput(canvases_.value(1)->document(), options);
     PrintLayoutDialog dialog(output, QFileInfo(projectPath_).completeBaseName(), this);
@@ -2926,7 +2929,8 @@ void MainWindow::exportFabricationFiles() {
     if (directory.isEmpty()) return;
 
     CamOptions options;
-    options.zoneFills = pourZones(canvases_.value(0)->document(), canvases_.value(1)->document(), pourOptionsFor(rules_));
+    options.zoneFills = pourZones(canvases_.value(0)->document(), canvases_.value(1)->document(),
+                                  pourOptionsFor(rules_, canvases_.value(0)->document()));
     options.maskExpansion = rules_.defaults.solderResistGuard;
     const CamOutput output = buildCamOutput(canvases_.value(1)->document(), options);
     const QString baseName = QFileInfo(projectPath_).completeBaseName();
@@ -3133,6 +3137,7 @@ void MainWindow::editDesignRules() {
     if (canvases_.size() > 1) canvases_[1]->setRoutingClearance(rules_.clearance);
     rulesModified_ = true;
     refreshZoneFills();
+    refreshRouteClasses();
     updateProjectState();
 }
 
@@ -3169,8 +3174,9 @@ void MainWindow::refreshZoneFills() {
     auto* board = canvases_.value(1, nullptr);
     if (board == nullptr) return;
     QHash<QString, QPainterPath> fills;
-    const ZonePourOptions options = pourOptionsFor(rules_);
-    for (const ZoneFillResult& fill : pourZones(canvases_.value(0)->document(), board->document(), options)) {
+    const SketchDocument& schematic = canvases_.value(0)->document();
+    const ZonePourOptions options = pourOptionsFor(rules_, schematic);
+    for (const ZoneFillResult& fill : pourZones(schematic, board->document(), options)) {
         fills.insert(fill.zoneId, fill.fill);
     }
     for (const ZoneFillResult& fill : areaZoneFills(board->document(), options)) fills.insert(fill.zoneId, fill.fill);
@@ -3216,6 +3222,12 @@ void MainWindow::syncZoneListSelection() {
             zoneList_->setCurrentRow(row);
         }
     }
+}
+
+void MainWindow::refreshRouteClasses() {
+    auto* board = canvases_.value(1, nullptr);
+    if (board == nullptr || toolMode_ != ToolMode::Connect || activeCanvas() != board) return;
+    board->setRouteClasses(boardRouteClasses(canvases_.value(0)->document(), board->document(), rules_));
 }
 
 } // namespace hatt::ui

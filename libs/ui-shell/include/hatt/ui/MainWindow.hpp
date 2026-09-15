@@ -97,6 +97,9 @@ public slots:
     // Re-pours the board's copper zones and fills its area zones (ZoneFill.hpp), hands the result to
     // the board canvas and refreshes the zone list.
     void refreshZoneFills();
+    // Net class track widths and clearances of the board copper (boardRouteClasses, issue #39) for
+    // the board canvas router. Only computed while board track mode is active.
+    void refreshRouteClasses();
 
 protected:
     void changeEvent(QEvent* event) override;

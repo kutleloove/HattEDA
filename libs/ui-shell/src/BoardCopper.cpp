@@ -1,5 +1,6 @@
 #include "hatt/ui/BoardCopper.hpp"
 
+#include "hatt/ui/DesignRules.hpp"
 #include "hatt/ui/SketchCircuit.hpp"
 
 #include <QCoreApplication>
@@ -260,6 +261,37 @@ BoardCopperModel buildBoardCopperModel(const SketchDocument& schematic, const Sk
     model.groups.resize(count);
     for (int i = 0; i < count; ++i) model.groups[i] = groups.root(i);
     return model;
+}
+
+QString routeClassKey(const QString& itemId, int padIndex) {
+    return padIndex < 0 ? itemId : itemId + QLatin1Char(':') + QString::number(padIndex);
+}
+
+QHash<QString, RouteClass> boardRouteClasses(const SketchDocument& schematic, const SketchDocument& board,
+                                             const DesignRules& rules) {
+    QHash<QString, RouteClass> result;
+    const BoardCopperModel model = buildBoardCopperModel(schematic, board);
+    if (!model.netsKnown) return result;
+    const QHash<QString, QString> classOfNet = netClassAssignments(rules, schematic);
+    const QVector<NetClass> classes = effectiveNetClasses(rules);
+    for (int index = 0; index < model.conductors.size(); ++index) {
+        const BoardConductor& conductor = model.conductors[index];
+        if (conductor.kind == ConductorKind::Zone) continue;
+        const QVector<int> nets = model.groupNets(model.groups.value(index, index));
+        if (nets.size() != 1) continue;
+        RouteClass route;
+        route.net = model.netNames.value(nets.first());
+        route.netClass = classOfNet.value(route.net);
+        const auto netClass = std::find_if(classes.cbegin(), classes.cend(),
+                                           [&route](const NetClass& candidate) { return candidate.name == route.netClass; });
+        if (netClass == classes.cend()) continue;
+        route.traceWidth = netClass->traceWidth;
+        const double rule = clearanceBetween(rules, conductor.layers, ClearanceObject::Trace, ClearanceObject::Trace);
+        route.clearance = std::max(rule, netClass->clearance);
+        result.insert(routeClassKey(conductor.itemId, conductor.kind == ConductorKind::Track ? -1 : conductor.padIndex),
+                      route);
+    }
+    return result;
 }
 
 } // namespace hatt::ui

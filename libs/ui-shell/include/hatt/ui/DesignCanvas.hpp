@@ -1,5 +1,6 @@
 #pragma once
 
+#include "hatt/ui/DesignRules.hpp"
 #include "hatt/ui/SketchModel.hpp"
 #include "hatt/ui/Units.hpp"
 
@@ -179,6 +180,13 @@ public:
     void setTrackWidth(double millimetres);
     void setViaSize(double diameter, double drill);
     void setRoutingClearance(double millimetres);
+    // Net class routing of existing copper by routeClassKey (BoardCopper.hpp, issue #39), set by the
+    // host. A track started on such a pad, via or track uses the class trace width (still capped by
+    // the pad and by a narrower track) and keeps the class clearance while routing; elsewhere the
+    // chosen track style and the rule clearance apply.
+    void setRouteClasses(const QHash<QString, RouteClass>& classes);
+    // Class of the track being routed, when it started on class copper.
+    [[nodiscard]] std::optional<RouteClass> activeRouteClass() const { return activeRouteClass_; }
     // Layer colour for the palette's theme (dark or light).
     [[nodiscard]] static QColor layerColor(BoardLayer layer, const QPalette& palette);
 
@@ -288,6 +296,7 @@ private:
     [[nodiscard]] BoardLayer zoneLayer() const noexcept;
     void beginBoardRoute(QPointF at);
     [[nodiscard]] double currentTrackWidth() const noexcept;
+    [[nodiscard]] double currentRouteClearance() const noexcept;
     [[nodiscard]] SketchItem pendingTrack(const QVector<QPointF>& points) const;
     [[nodiscard]] SketchItem pendingVia(QPointF at) const;
     // Undoes the last layer change of the route being drawn; false when there was none.
@@ -329,6 +338,8 @@ private:
     double trackWidth_ = DefaultTrackWidth;
     double activeRouteWidth_ = 0.0;
     double routingClearance_ = 0.2;
+    QHash<QString, RouteClass> routeClasses_;
+    std::optional<RouteClass> activeRouteClass_;
     double viaDiameter_ = DefaultViaDiameter;
     double viaDrill_ = DefaultViaDrill;
     double textHeight_ = TextHeightMm; // last board text height, mm

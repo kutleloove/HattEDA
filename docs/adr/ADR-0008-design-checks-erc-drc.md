@@ -37,6 +37,8 @@ for the board, rules stored with the project and a click on a problem that shows
   - `drc.short`: a group with more than one schematic net;
   - `drc.clearance`: copper of different groups closer than `clearance` on a shared layer, except
     unrouted pads of the same single net;
+  - `drc.net-class-clearance`: copper that meets the clearance rule but is closer than the net
+    class clearance of either net (ADR-0010 amendment, issue #39);
   - `drc.unrouted`: a net whose pads are in more than one group;
   - `drc.track-width`, `drc.drill`, `drc.annular-ring` from the rules;
   - `drc.board-edge`: copper outside the closed outline or nearer than `boardEdgeClearance`;

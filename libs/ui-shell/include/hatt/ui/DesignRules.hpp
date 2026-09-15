@@ -35,13 +35,16 @@ struct ClearanceRule {
 // A net class: the track and via used when routing its nets, the narrowest allowed neck near pads,
 // the copper layers its tracks may use and how its ratsnest is shown. `nets` lists explicitly
 // assigned nets; unassigned nets fall back to POWER (nets with a ground or power rail symbol) or
-// SIGNAL (see netClassForNet).
+// SIGNAL (see netClassForNet). Tracks routed from copper of a class net start at `traceWidth`, and
+// `clearance` (issue #39) keeps copper of other nets at least that far from the class's copper on
+// top of the clearance rules.
 struct NetClass {
     QString name;
     double traceWidth = 0.3048;
     double viaDiameter = 0.8;
     double viaDrill = 0.4;
     double neckWidth = 0.0; // 0 = no necking below traceWidth
+    double clearance = 0.0; // 0 = only the clearance rules
     int layers = CopperLayerMask;
     QString ratsnestColor;  // "#rrggbb", empty = the theme colour
     bool ratsnestHidden = false;
@@ -110,6 +113,23 @@ enum class ClearanceObject { Pad, Trace, Graphic };
 // first class).
 [[nodiscard]] QHash<QString, QString> netClassAssignments(const DesignRules& rules, const SketchDocument& schematic);
 [[nodiscard]] NetClass netClassForNet(const DesignRules& rules, const SketchDocument& schematic, const QString& net);
+// Class clearance of every net whose class sets one (NetClass::clearance > 0).
+[[nodiscard]] QHash<QString, double> netClassClearances(const DesignRules& rules, const SketchDocument& schematic);
+// Gap required between copper of nets `a` and `b` (empty = unknown net): the rule gap, raised to the
+// class clearance of either net.
+[[nodiscard]] double netPairClearance(const QHash<QString, double>& classClearances, double ruleClearance,
+                                      const QString& a, const QString& b);
+
+// How a track started on existing board copper is routed (issue #39): the net, its class, the class
+// trace width and the gap the router keeps from other copper.
+struct RouteClass {
+    QString net;
+    QString netClass;
+    double traceWidth = 0.0;
+    double clearance = 0.0; // the larger of the rule clearance and the class clearance
+
+    friend bool operator==(const RouteClass&, const RouteClass&) = default;
+};
 
 [[nodiscard]] QString ruleRegionToken(RuleRegion region);
 [[nodiscard]] QString ruleRegionName(RuleRegion region); // translated

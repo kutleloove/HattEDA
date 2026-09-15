@@ -23,7 +23,8 @@ namespace hatt::ui {
 //    `RuleRegion`, `RulePadPad`, `RulePadTrace`, `RuleTraceTrace`, `RuleGraphic`, `RuleEdge`) and
 //    the global minimums (`RulesTrackWidth`, `RulesDrill`, `RulesAnnularRing`).
 //  - Net Classes (`NetClassCombo`, `NetClassNew`/`NetClassDelete`, `NetClassTraceWidth`,
-//    `NetClassViaDiameter`, `NetClassViaDrill`, `NetClassNeckWidth`, `NetClassTop`/`NetClassBottom`,
+//    `NetClassViaDiameter`, `NetClassViaDrill`, `NetClassNeckWidth`, `NetClassClearance`,
+//    `NetClassTop`/`NetClassBottom`,
 //    `NetClassRatsnestColor`, `NetClassRatsnestHidden`, `NetClassAvailableNets`, `NetClassNets`,
 //    `NetClassAssign`/`NetClassUnassign`).
 //  - Differential Pairs (`PairTable`: name, positive net, negative net, width, gap; `PairAdd`,
@@ -83,6 +84,7 @@ private:
     QDoubleSpinBox* viaDiameter_ = nullptr;
     QDoubleSpinBox* viaDrill_ = nullptr;
     QDoubleSpinBox* neckWidth_ = nullptr;
+    QDoubleSpinBox* classClearance_ = nullptr;
     QCheckBox* classTop_ = nullptr;
     QCheckBox* classBottom_ = nullptr;
     QLineEdit* ratsnestColor_ = nullptr;

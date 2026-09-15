@@ -143,7 +143,8 @@ QString validateDesignRules(const DesignRules& rules) {
         if (names.contains(netClass.name)) return tr("The net class name %1 is used twice.").arg(netClass.name);
         names.insert(netClass.name);
         if (!validLength(netClass.traceWidth, false) || !validLength(netClass.viaDiameter, false) ||
-            !validLength(netClass.viaDrill, false) || !validLength(netClass.neckWidth, true)) {
+            !validLength(netClass.viaDrill, false) || !validLength(netClass.neckWidth, true) ||
+            !validLength(netClass.clearance, true)) {
             return tr("Sizes of the net class %1 must be between 0 and 100 mm.").arg(netClass.name);
         }
         if (netClass.viaDrill >= netClass.viaDiameter) return tr("The via drill of the net class %1 must be smaller than the via.").arg(netClass.name);
@@ -228,6 +229,7 @@ double largestClearance(const DesignRules& rules) {
     for (const auto& rule : effectiveClearanceRules(rules)) {
         result = std::max({result, rule.padPad, rule.padTrace, rule.traceTrace, rule.graphic});
     }
+    for (const auto& netClass : rules.netClasses) result = std::max(result, netClass.clearance);
     return result;
 }
 
@@ -280,6 +282,25 @@ NetClass netClassForNet(const DesignRules& rules, const SketchDocument& schemati
     return classes.isEmpty() ? NetClass{} : classes.first();
 }
 
+QHash<QString, double> netClassClearances(const DesignRules& rules, const SketchDocument& schematic) {
+    QHash<QString, double> byClass;
+    for (const auto& netClass : effectiveNetClasses(rules)) {
+        if (netClass.clearance > 0.0) byClass.insert(netClass.name, netClass.clearance);
+    }
+    QHash<QString, double> result;
+    if (byClass.isEmpty()) return result; // skips the netlist when no class sets a clearance
+    const QHash<QString, QString> assignments = netClassAssignments(rules, schematic);
+    for (auto it = assignments.cbegin(); it != assignments.cend(); ++it) {
+        if (const auto found = byClass.constFind(it.value()); found != byClass.cend()) result.insert(it.key(), *found);
+    }
+    return result;
+}
+
+double netPairClearance(const QHash<QString, double>& classClearances, double ruleClearance, const QString& a,
+                        const QString& b) {
+    return std::max({ruleClearance, classClearances.value(a, 0.0), classClearances.value(b, 0.0)});
+}
+
 QJsonObject designRulesToJson(const DesignRules& rules) {
     QJsonObject object{{QStringLiteral("clearance"), rules.clearance},
                        {QStringLiteral("minTrackWidth"), rules.minTrackWidth},
@@ -309,6 +330,7 @@ QJsonObject designRulesToJson(const DesignRules& rules) {
                               {QStringLiteral("layers"), layerTokens(netClass.layers)},
                               {QStringLiteral("nets"), QJsonArray::fromStringList(netClass.nets)}};
             if (netClass.neckWidth > 0) entry[QStringLiteral("neckWidth")] = netClass.neckWidth;
+            if (netClass.clearance > 0) entry[QStringLiteral("clearance")] = netClass.clearance;
             if (!netClass.ratsnestColor.isEmpty()) entry[QStringLiteral("ratsnestColor")] = netClass.ratsnestColor;
             if (netClass.ratsnestHidden) entry[QStringLiteral("ratsnestHidden")] = true;
             list.append(entry);
@@ -375,7 +397,8 @@ QString designRulesFromJson(const QJsonValue& value, DesignRules& rules) {
         NetClass netClass;
         valid = entry.isObject() && readText(o, "name", netClass.name) && readNumber(o, "traceWidth", netClass.traceWidth) &&
                 readNumber(o, "viaDiameter", netClass.viaDiameter) && readNumber(o, "viaDrill", netClass.viaDrill) &&
-                readNumber(o, "neckWidth", netClass.neckWidth) && readText(o, "ratsnestColor", netClass.ratsnestColor) &&
+                readNumber(o, "neckWidth", netClass.neckWidth) && readNumber(o, "clearance", netClass.clearance) &&
+                readText(o, "ratsnestColor", netClass.ratsnestColor) &&
                 readBool(o, "ratsnestHidden", netClass.ratsnestHidden);
         const QJsonValue layers = o.value(QStringLiteral("layers"));
         if (!layers.isUndefined()) {
