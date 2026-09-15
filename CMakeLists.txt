@@ -14,9 +14,10 @@ if(HATTEDA_WERROR)
 endif()
 
 include(CTest)
-find_package(Qt6 6.11 REQUIRED COMPONENTS Widgets LinguistTools)
+find_package(Qt6 6.11 REQUIRED COMPONENTS Widgets Network LinguistTools)
 
 add_subdirectory(libs/electrical)
+add_subdirectory(libs/agentic-mcp)
 add_subdirectory(libs/ui-shell)
 add_subdirectory(apps/hatteda-desktop)
 

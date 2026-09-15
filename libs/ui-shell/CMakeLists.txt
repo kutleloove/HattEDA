@@ -38,12 +38,14 @@ add_library(hatt-ui-shell STATIC
     src/LayerColors.cpp
     include/hatt/ui/GerberExport.hpp
     src/GerberExport.cpp
+    include/hatt/ui/AgenticGateway.hpp
+    src/AgenticGateway.cpp
 )
 
 add_library(HattEDA::UiShell ALIAS hatt-ui-shell)
 
 target_include_directories(hatt-ui-shell PUBLIC include)
-target_link_libraries(hatt-ui-shell PUBLIC Qt6::Widgets HattEDA::Electrical)
+target_link_libraries(hatt-ui-shell PUBLIC Qt6::Widgets HattEDA::Electrical HattEDA::AgenticMcp)
 
 if(MSVC)
     target_compile_options(hatt-ui-shell PRIVATE /W4 /permissive-)

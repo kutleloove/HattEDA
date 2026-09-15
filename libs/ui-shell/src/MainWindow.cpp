@@ -1,4 +1,6 @@
 #include "hatt/ui/MainWindow.hpp"
+#include "hatt/ui/AgenticGateway.hpp"
+#include "hatt/agentic/AgenticMcpServer.hpp"
 #include "hatt/ui/BoardLayerPanel.hpp"
 #include "hatt/ui/ChecksReport.hpp"
 #include "hatt/ui/CircuitWorkflow.hpp"
@@ -21,6 +23,7 @@
 #include <QApplication>
 #include <QButtonGroup>
 #include <QCheckBox>
+#include <QCoreApplication>
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QDoubleSpinBox>
@@ -462,6 +465,15 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     workspaceChanged();
     updateProjectState();
     statusBar()->showMessage(tr("Start by creating or opening a project"));
+
+    // Local MCP server for agentic use (ADR-0009), off by default: the app's core function must
+    // not depend on it. The pid keeps the pipe name unique when more than one window is running.
+    if (QSettings().value(QStringLiteral("agentic/mcpEnabled"), false).toBool()) {
+        agenticGateway_ = std::make_unique<MainWindowAgenticGateway>(this);
+        agenticServer_ = new hatt::agentic::AgenticMcpServer(*agenticGateway_, this);
+        agenticServer_->start(
+            QStringLiteral("hatteda-agentic-mcp-%1").arg(QCoreApplication::applicationPid()));
+    }
 }
 
 void MainWindow::showCanvasContextMenu(DesignCanvas* canvas, QPoint position, int index) {
@@ -750,6 +762,11 @@ void MainWindow::editItemProperties(DesignCanvas* canvas, int index) {
 }
 
 MainWindow::~MainWindow() {
+    // Stop serving agentic requests before anything else is torn down: a request handled mid-
+    // teardown must not call back into a partially destroyed window.
+    if (agenticServer_ != nullptr) {
+        agenticServer_->stop();
+    }
     // Child widgets outlive this destructor body; their teardown signals (e.g. QUndoStack::clear
     // emitting indexChanged) must not reach the partially destroyed window.
     for (auto* canvas : canvases_) {
@@ -1279,9 +1296,15 @@ QWidget* MainWindow::createEditor() {
 void MainWindow::createMenus() {
     auto* fileMenu = menuBar()->addMenu(tr("&File"));
     auto* newProject = fileMenu->addAction(tr("New project"));
+    // Block-listed for agentic callers (ADR-0009): routes through the blocking
+    // Save/Discard/Cancel dialog in `maybeSaveChanges` whenever the project has unsaved changes.
+    newProject->setObjectName(QStringLiteral("hatteda.action.new-project"));
     newProject->setShortcut(QKeySequence::New);
     connect(newProject, &QAction::triggered, this, &MainWindow::createNewProject);
     auto* open = fileMenu->addAction(tr("Open project…"));
+    // Block-listed for agentic callers (ADR-0009): same blocking Save/Discard/Cancel dialog as
+    // New project, plus `ProjectGuard::confirmLock`'s blocking "Open anyway" dialog.
+    open->setObjectName(QStringLiteral("hatteda.action.open-project"));
     open->setShortcut(QKeySequence::Open);
     connect(open, &QAction::triggered, this, &MainWindow::openProject);
     fileMenu->addSeparator();
@@ -2497,6 +2520,16 @@ ProjectData MainWindow::currentProjectData(const QString& path) const {
     project.rules = rules_;
     return project;
 }
+
+ProjectData MainWindow::currentProjectData() const {
+    return projectPath_.isEmpty() ? ProjectData{} : currentProjectData(projectPath_);
+}
+
+QVector<CheckViolation> MainWindow::lastCheckViolations() const {
+    return checksReport_ ? checksReport_->violations() : QVector<CheckViolation>{};
+}
+
+bool MainWindow::hasDesignChecksReport() const { return !checksReport_.isNull(); }
 
 bool MainWindow::writeProject(const QString& path) {
     const ProjectData project = currentProjectData(path);

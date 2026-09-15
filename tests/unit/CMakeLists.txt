@@ -53,3 +53,11 @@ add_test(NAME hatt-dc-solver-tests COMMAND hatt-dc-solver-tests)
 add_executable(hatt-sketch-circuit-tests SketchCircuitTests.cpp)
 target_link_libraries(hatt-sketch-circuit-tests PRIVATE HattEDA::UiShell Qt6::Test)
 hatt_add_qt_test(hatt-sketch-circuit-tests)
+
+add_executable(hatt-agentic-mcp-tests AgenticMcpTests.cpp)
+target_link_libraries(hatt-agentic-mcp-tests PRIVATE HattEDA::AgenticMcp Qt6::Test Qt6::Network)
+hatt_add_qt_test(hatt-agentic-mcp-tests)
+
+add_executable(hatt-agentic-gateway-tests AgenticGatewayTests.cpp)
+target_link_libraries(hatt-agentic-gateway-tests PRIVATE HattEDA::UiShell Qt6::Test)
+hatt_add_qt_test(hatt-agentic-gateway-tests)
