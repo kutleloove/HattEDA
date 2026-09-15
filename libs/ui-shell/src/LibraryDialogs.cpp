@@ -1,6 +1,7 @@
 #include "hatt/ui/LibraryDialogs.hpp"
 
 #include "hatt/ui/ComponentLibrary.hpp"
+#include "hatt/ui/ComponentCatalog.hpp"
 
 #include <QCheckBox>
 #include <QComboBox>
@@ -376,6 +377,14 @@ DeviceEditorDialog::DeviceEditorDialog(const ProjectLibrary& library, QWidget* p
     pinNames_->setObjectName(QStringLiteral("DevicePinNames"));
     pinNames_->setPlaceholderText(tr("optional, comma-separated: OUT1, IN1-, IN1+, GND"));
     form->addRow(tr("Pin names"), pinNames_);
+    simulation_ = new QComboBox(this);
+    simulation_->setObjectName(QStringLiteral("DeviceSimulationModel"));
+    for (const auto& model : simulationModelCatalog()) {
+        QString label = model.name;
+        if (!model.limitation.isEmpty()) label += tr(" — not supported by the current solver");
+        simulation_->addItem(label, model.id);
+    }
+    form->addRow(tr("Simulation model"), simulation_);
     footprint_ = new QComboBox(this);
     footprint_->setObjectName(QStringLiteral("DeviceFootprint"));
     form->addRow(tr("Footprint"), footprint_);
@@ -442,6 +451,14 @@ DeviceEditorDialog::DeviceEditorDialog(const ProjectLibrary& library, QWidget* p
     connect(pinCount_, &QSpinBox::valueChanged, this, &DeviceEditorDialog::refreshFootprints);
     connect(footprint_, &QComboBox::currentIndexChanged, this, &DeviceEditorDialog::refreshPinMap);
     connect(pinNames_, &QLineEdit::textChanged, this, &DeviceEditorDialog::refreshPinMap);
+    auto suggestModel = [this] {
+        const QString suggested = suggestedSimulationModel(name_->text(), pinCount_->value());
+        const int current = simulation_->findData(suggested);
+        if (current >= 0 && simulation_->currentData().toString() == QLatin1String("none"))
+            simulation_->setCurrentIndex(current);
+    };
+    connect(name_, &QLineEdit::textChanged, this, suggestModel);
+    connect(pinCount_, &QSpinBox::valueChanged, this, suggestModel);
     for (auto* field : {name_, prefix_, pinNames_}) connect(field, &QLineEdit::textChanged, this, &DeviceEditorDialog::validate);
     refreshFootprints();
 }
@@ -534,6 +551,7 @@ DeviceDefinition DeviceEditorDialog::device() const {
     device.defaultValue = value_->text().trimmed();
     device.footprint = footprint_->currentData().toString();
     device.pinCount = pinCount_->value();
+    device.simulationModel = simulation_->currentData().toString();
     if (!device.footprint.isEmpty()) device.pinPadMap = pinPadMap();
     if (!pinNames_->text().trimmed().isEmpty()) {
         for (const auto& name : pinNames_->text().split(QLatin1Char(','))) device.pinNames << name.trimmed();

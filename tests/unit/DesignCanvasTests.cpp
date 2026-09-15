@@ -18,6 +18,7 @@
 using hatt::ui::AlignOperation;
 using hatt::ui::CanvasTool;
 using hatt::ui::DesignCanvas;
+using hatt::ui::BoardLayer;
 using hatt::ui::SketchItem;
 using hatt::ui::SnapSettings;
 using hatt::ui::Workspace;
@@ -67,6 +68,18 @@ SketchItem wireThrough(std::initializer_list<QPointF> points) {
     SketchItem item;
     item.kind = SketchItem::Kind::Wire;
     item.points = points;
+    return item;
+}
+
+SketchItem smdPadAt(QPointF point, BoardLayer layer, double width = 1.0,
+                    double height = 1.8) {
+    SketchItem item;
+    item.kind = SketchItem::Kind::Pad;
+    item.points = {point};
+    item.layer = layer;
+    item.pad.width = width;
+    item.pad.height = height;
+    item.pad.drillDiameter = 0.0;
     return item;
 }
 
@@ -135,6 +148,10 @@ private slots:
     void equalSpacingSnapsWhileMovingAndPlacing();
     void createArrayCopiesInRowOrder();
     void textToolPlacesBoardTextWithHeight();
+    void pcbRouteStartsOnPadLayerAndFitsPad();
+    void pcbRoutePreviewCompletesToAirwireTarget();
+    void pcbAssistedRouteAvoidsCopperObstacles();
+    void pcbDoubleClickPlacesViaAndChangesLayer();
 
 private:
     DesignCanvas* canvas_ = nullptr;
@@ -905,6 +922,115 @@ void DesignCanvasTests::wiresBetweenPinsAreRoutedAtRightAngles() {
     click(*canvas_, {45.72, 30.48}, Qt::ControlModifier);
     QCOMPARE(canvas_->document().size(), 4);
     QVERIFY(samePoints(canvas_->document().at(3).points, {{25.4, 20.32}, {45.72, 30.48}}));
+}
+
+void DesignCanvasTests::pcbRouteStartsOnPadLayerAndFitsPad() {
+    DesignCanvas board(Workspace::Board);
+    board.resize(800, 600);
+    board.setSnapSettings(SnapSettings{});
+    board.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&board));
+    board.applyDocumentEdit(QStringLiteral("Setup"),
+                            {smdPadAt({10.16, 10.16}, BoardLayer::BottomCopper, 0.5, 1.5)});
+    board.setActiveLayer(BoardLayer::TopCopper);
+    board.setTrackWidth(1.0);
+    board.setTool(CanvasTool::Wire);
+
+    click(board, {10.16, 10.16});
+    QCOMPARE(board.activeLayer(), BoardLayer::BottomCopper);
+    click(board, {20.32, 10.16});
+    QTest::keyClick(&board, Qt::Key_Return);
+
+    QCOMPARE(board.document().size(), 2);
+    const SketchItem& track = board.document().last();
+    QCOMPARE(track.kind, SketchItem::Kind::Wire);
+    QCOMPARE(track.layer, BoardLayer::BottomCopper);
+    QVERIFY(std::abs(track.width - 0.3) < 1e-9);
+}
+
+void DesignCanvasTests::pcbRoutePreviewCompletesToAirwireTarget() {
+    DesignCanvas board(Workspace::Board);
+    board.resize(800, 600);
+    board.setSnapSettings(SnapSettings{});
+    board.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&board));
+    const QPointF from(10.16, 10.16);
+    const QPointF to(40.64, 30.48);
+    board.applyDocumentEdit(QStringLiteral("Setup"),
+                            {smdPadAt(from, BoardLayer::BottomCopper),
+                             smdPadAt(to, BoardLayer::BottomCopper)});
+    board.setAirwires({QLineF(from, to)});
+    board.setTool(CanvasTool::Wire);
+
+    click(board, from);
+    sendMouse(board, QEvent::MouseMove, {25.4, 15.24}, Qt::NoButton, Qt::NoButton);
+    const QVector<QPointF> preview = board.currentRoutePreview();
+    QVERIFY(preview.size() >= 3);
+    QVERIFY(samePoint(preview.first(), from));
+    QVERIFY(samePoint(preview.last(), to));
+}
+
+void DesignCanvasTests::pcbAssistedRouteAvoidsCopperObstacles() {
+    DesignCanvas board(Workspace::Board);
+    board.resize(900, 600);
+    board.setSnapSettings(SnapSettings{});
+    board.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&board));
+    const QPointF from(5.08, 10.16);
+    const QPointF to(45.72, 10.16);
+    SketchItem barrier = wireThrough({{25.4, 0.0}, {25.4, 20.32}});
+    barrier.layer = BoardLayer::BottomCopper;
+    barrier.width = 1.0;
+    board.applyDocumentEdit(QStringLiteral("Setup"),
+                            {smdPadAt(from, BoardLayer::BottomCopper),
+                             smdPadAt(to, BoardLayer::BottomCopper),
+                             smdPadAt({20.32, 10.16}, BoardLayer::BottomCopper, 3.0, 3.0),
+                             barrier});
+    board.setAirwires({QLineF(from, to)});
+    board.setActiveLayer(BoardLayer::BottomCopper);
+    board.setTool(CanvasTool::Wire);
+
+    click(board, from);
+    sendMouse(board, QEvent::MouseMove, {12.7, 10.16}, Qt::NoButton, Qt::NoButton);
+    const QVector<QPointF> preview = board.currentRoutePreview();
+    QVERIFY(preview.size() >= 4);
+    QVERIFY(samePoint(preview.last(), to));
+    const QLineF copperBarrier({25.4, 0.0}, {25.4, 20.32});
+    bool detoured = false;
+    for (const QPointF& point : preview) {
+        if (point.y() < -0.85 || point.y() > 21.17) detoured = true;
+        QVERIFY(hatt::ui::distanceToSegment(point, copperBarrier) >= 0.85 - 1e-6 ||
+                samePoint(point, from) || samePoint(point, to));
+    }
+    QVERIFY(detoured);
+}
+
+void DesignCanvasTests::pcbDoubleClickPlacesViaAndChangesLayer() {
+    DesignCanvas board(Workspace::Board);
+    board.resize(800, 600);
+    board.setSnapSettings(SnapSettings{});
+    board.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&board));
+    board.setActiveLayer(BoardLayer::BottomCopper);
+    board.setTool(CanvasTool::Wire);
+
+    click(board, {5.08, 5.08});
+    const QPointF transition(15.24, 5.08);
+    click(board, transition);
+    sendMouse(board, QEvent::MouseButtonDblClick, transition, Qt::LeftButton, Qt::LeftButton);
+    sendMouse(board, QEvent::MouseButtonRelease, transition, Qt::LeftButton, Qt::NoButton);
+    QCOMPARE(board.activeLayer(), BoardLayer::TopCopper);
+    QVERIFY(board.hasPendingOperation());
+    click(board, {25.4, 15.24});
+    QTest::keyClick(&board, Qt::Key_Return);
+
+    QCOMPARE(board.document().size(), 3);
+    QCOMPARE(board.document()[0].kind, SketchItem::Kind::Wire);
+    QCOMPARE(board.document()[0].layer, BoardLayer::BottomCopper);
+    QCOMPARE(board.document()[1].kind, SketchItem::Kind::Via);
+    QVERIFY(samePoint(board.document()[1].points.first(), transition));
+    QCOMPARE(board.document()[2].kind, SketchItem::Kind::Wire);
+    QCOMPARE(board.document()[2].layer, BoardLayer::TopCopper);
 }
 
 void DesignCanvasTests::placementGuidesAlignAndPinsJoin() {

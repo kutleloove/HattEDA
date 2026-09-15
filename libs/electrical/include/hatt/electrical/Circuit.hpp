@@ -38,7 +38,7 @@ std::vector<Point> junctionPoints(const ConnectivityInput& input);
 // DC operating point models: a capacitor is open (no current), an inductor is a short (a 0 V
 // source whose current is reported). Nets reached from ground only through capacitors get a
 // 1e-12 S tie to ground (SPICE GMIN) so they solve instead of being singular.
-enum class DcKind { Resistor, VoltageSource, Capacitor, Inductor };
+enum class DcKind { Resistor, VoltageSource, CurrentSource, Capacitor, Inductor };
 struct DcElement {
     std::string reference;
     DcKind kind = DcKind::Resistor;

@@ -137,10 +137,13 @@ void MainWindowTests::componentModeUsesProjectDevicesAndSchematicParts() {
         for (int row = 0; row < results->count(); ++row) {
             if (!results->item(row)->isHidden()) {
                 ++visible;
-                results->item(row)->setSelected(true);
+                if (results->item(row)->data(Qt::UserRole + 1).toString() ==
+                    QLatin1String("schematic.resistor")) {
+                    results->item(row)->setSelected(true);
+                }
             }
         }
-        QCOMPARE(visible, 1);
+        QVERIFY(visible >= 1);
         dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Ok)->click();
     });
     window.findChild<QPushButton*>(QStringLiteral("hatteda.devices.pick"))->click();

@@ -390,6 +390,7 @@ private slots:
         device.pinCount = 8;
         device.footprint = generated.id;
         device.pinNames = {QStringLiteral("OUT1"), QStringLiteral("IN1-")};
+        device.simulationModel = QStringLiteral("none");
         device.pinPadMap = {8, 7, 6, 5, 4, 3, 2, 1};
         device.spec.manufacturer = QStringLiteral("Texas Instruments");
         device.spec.package = PackageStyle::DualRow;
@@ -431,6 +432,7 @@ private slots:
         QVERIFY(readDrawn.shapes[0].closed && readDrawn.shapes[1].filled);
         QCOMPARE(read.customDevices[0].pinPadMap, device.pinPadMap);
         QCOMPARE(read.customDevices[0].pinNames, device.pinNames);
+        QCOMPARE(read.customDevices[0].simulationModel, device.simulationModel);
         QCOMPARE(read.customDevices[0].spec.manufacturer, device.spec.manufacturer);
         QCOMPARE(read.customDevices[0].spec.package, PackageStyle::DualRow);
         QVERIFY(read.customDevices[0].spec.pinCurrent == 0.04);

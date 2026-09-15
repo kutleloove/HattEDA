@@ -84,6 +84,7 @@ private:
     QLineEdit* value_ = nullptr;
     QSpinBox* pinCount_ = nullptr;
     QLineEdit* pinNames_ = nullptr;
+    QComboBox* simulation_ = nullptr;
     QLineEdit* manufacturer_ = nullptr;
     QLineEdit* partNumber_ = nullptr;
     QLineEdit* datasheet_ = nullptr;

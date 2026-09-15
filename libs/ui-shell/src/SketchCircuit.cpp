@@ -1,4 +1,5 @@
 #include "hatt/ui/SketchCircuit.hpp"
+#include "hatt/ui/ComponentCatalog.hpp"
 
 #include <QCoreApplication>
 #include <QHash>
@@ -11,6 +12,13 @@
 namespace hatt::ui {
 namespace {
 QString tr(const char* text) { return QCoreApplication::translate("hatt::ui::CircuitWorkflow", text); }
+[[maybe_unused]] const char* SimulationTranslationSources[] = {
+    QT_TRANSLATE_NOOP("hatt::ui::CircuitWorkflow", "unknown simulation model '%1'"),
+    QT_TRANSLATE_NOOP("hatt::ui::CircuitWorkflow", "%1: %2"),
+    QT_TRANSLATE_NOOP("hatt::ui::CircuitWorkflow", "%1: the DC model requires exactly two pins."),
+    QT_TRANSLATE_NOOP("hatt::ui::CircuitWorkflow", "%1 pin %2 is not connected to another component or terminal."),
+    QT_TRANSLATE_NOOP("hatt::ui::CircuitWorkflow", "The DC section at %1 pin %2 has no path to Ground."),
+};
 electrical::Point point(QPointF p) { return {p.x(), p.y()}; }
 bool component(const SketchItem& item) {
     const auto* s = findSymbol(item.variant);
@@ -97,6 +105,7 @@ void collectSchematicInput(const SketchDocument& document, CircuitSnapshot& resu
 }
 
 CircuitSnapshot analyzeSchematic(const SketchDocument& document) {
+    registerBuiltInCatalog();
     CircuitSnapshot result;
     collectSchematicInput(document, result);
     result.connectivity = electrical::buildConnectivity(result.input);
@@ -112,21 +121,93 @@ CircuitSnapshot analyzeSchematic(const SketchDocument& document) {
             result.probes.append({item.id, symbolToWorld(item, probe->pins.value(0)), nets.value(pinKey(item.id, 1), -1)});
         }
         if (!component(item)) continue;
-        electrical::DcElement e;
-        if (item.variant == QLatin1String("schematic.resistor")) e.kind = electrical::DcKind::Resistor;
-        else if (item.variant == QLatin1String("schematic.vdc")) e.kind = electrical::DcKind::VoltageSource;
-        else if (item.variant == QLatin1String("schematic.capacitor")) e.kind = electrical::DcKind::Capacitor;
-        else if (item.variant == QLatin1String("schematic.inductor")) e.kind = electrical::DcKind::Inductor;
-        else {
-            result.simulationErrors << tr("%1: DC simulation does not support this component.").arg(item.label);
+        const auto* symbol = findSymbol(item.variant);
+        QString model = symbol != nullptr ? symbol->simulationModel : QString();
+        // Compatibility for the original four built-in symbols, whose stable ids predate the
+        // explicit catalog contract.
+        if (model.isEmpty() && item.variant == QLatin1String("schematic.resistor")) model = QStringLiteral("dc.resistor");
+        if (model.isEmpty() && item.variant == QLatin1String("schematic.vdc")) model = QStringLiteral("dc.voltage-source");
+        if (model.isEmpty() && item.variant == QLatin1String("schematic.capacitor")) model = QStringLiteral("dc.capacitor");
+        if (model.isEmpty() && item.variant == QLatin1String("schematic.inductor")) model = QStringLiteral("dc.inductor");
+        const auto* definition = findSimulationModel(model.isEmpty() ? QStringLiteral("none") : model);
+        if (definition == nullptr || definition->support != AnalysisSupport::DcOperatingPoint) {
+            const QString reason = definition == nullptr
+                                       ? tr("unknown simulation model '%1'").arg(model)
+                                       : definition->limitation;
+            result.simulationErrors << tr("%1: %2").arg(item.label, reason);
             continue;
+        }
+        if (symbol == nullptr || symbol->pins.size() != 2) {
+            result.simulationErrors << tr("%1: the DC model requires exactly two pins.").arg(item.label);
+            continue;
+        }
+        electrical::DcElement e;
+        if (model == QLatin1String("dc.resistor")) e.kind = electrical::DcKind::Resistor;
+        else if (model == QLatin1String("dc.voltage-source")) e.kind = electrical::DcKind::VoltageSource;
+        else if (model == QLatin1String("dc.current-source")) e.kind = electrical::DcKind::CurrentSource;
+        else if (model == QLatin1String("dc.capacitor")) e.kind = electrical::DcKind::Capacitor;
+        else if (model == QLatin1String("dc.inductor")) e.kind = electrical::DcKind::Inductor;
+        else if (model == QLatin1String("dc.switch-open") || model == QLatin1String("dc.switch-closed")) {
+            e.kind = electrical::DcKind::Resistor;
+            e.value = definition->parameters.value(QStringLiteral("resistance"));
         }
         e.reference = item.label.toStdString();
         e.positive = nets.value(pinKey(item.id, 1), -1);
         e.negative = nets.value(pinKey(item.id, 2), -1);
-        if (!electrical::parseSpiceValue(item.value.toStdString(), e.value))
+        const bool fixedValue = model.startsWith(QLatin1String("dc.switch-"));
+        if (!fixedValue && !electrical::parseSpiceValue(item.value.toStdString(), e.value))
             result.simulationErrors << tr("%1: invalid value '%2'.").arg(item.label, item.value);
         result.dc.elements.push_back(e);
+    }
+    if (!result.dc.elements.empty()) {
+        // Proteus-style convenience: a closed circuit does not need an explicit Ground symbol.
+        // Prefer the negative terminal of the first independent voltage source as the 0 V
+        // reference; for source-less networks any element's negative terminal is deterministic.
+        // This changes only the reported absolute node voltages, never voltage differences or
+        // currents. An explicit Ground terminal always wins.
+        if (result.dc.ground < 0) {
+            const auto source = std::find_if(result.dc.elements.begin(), result.dc.elements.end(),
+                                             [](const electrical::DcElement& element) {
+                                                 return element.kind == electrical::DcKind::VoltageSource;
+                                             });
+            result.dc.ground = source != result.dc.elements.end()
+                                   ? source->negative
+                                   : result.dc.elements.front().negative;
+        }
+        if (result.dc.ground >= 0) {
+            QVector<QVector<int>> adjacent(result.dc.netCount);
+            for (const auto& e : result.dc.elements) {
+                if (e.positive < 0 || e.negative < 0 || e.positive >= result.dc.netCount ||
+                    e.negative >= result.dc.netCount) continue;
+                adjacent[e.positive].append(e.negative);
+                adjacent[e.negative].append(e.positive);
+            }
+            QVector<bool> reachable(result.dc.netCount, false);
+            QVector<int> pending{result.dc.ground};
+            reachable[result.dc.ground] = true;
+            for (qsizetype i = 0; i < pending.size(); ++i) {
+                for (int net : adjacent[pending[i]]) if (!reachable[net]) {
+                    reachable[net] = true;
+                    pending.append(net);
+                }
+            }
+            bool reportedFloating = false;
+            for (const auto& e : result.dc.elements) {
+                for (int pin = 1; pin <= 2; ++pin) {
+                    const int net = pin == 1 ? e.positive : e.negative;
+                    if (net < 0 || net >= result.dc.netCount) continue;
+                    const QString reference = QString::fromStdString(e.reference);
+                    if (!reportedFloating && !reachable[net]) {
+                        result.simulationErrors << tr("The DC section at %1 pin %2 has no path to Ground.")
+                                                       .arg(reference).arg(pin);
+                        reportedFloating = true;
+                    }
+                    if (result.connectivity.nets[net].pins.size() <= 1)
+                        result.simulationErrors << tr("%1 pin %2 is not connected to another component or terminal.")
+                                                       .arg(reference).arg(pin);
+                }
+            }
+        }
     }
     // Nets no element touches (a lone probe, an unused port) are left out of the solve.
     QVector<int> dcIndex(result.dc.netCount, -1);

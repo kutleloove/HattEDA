@@ -1,4 +1,4 @@
-# ADR-0004: Interim `.hatt` project file (format version 1)
+# ADR-0004: Interim `.hatt` project file (format version 3)
 
 Status: Accepted for the interim editor implementation; refs #6, #9, #10, #11. Supersedes the "in-memory only" note for identities and electrical metadata in ADR-0003.
 
@@ -6,7 +6,7 @@ Projects could not be saved: New project created no file, Open only changed the 
 
 ## Decision
 
-- A `.hatt` file is UTF-8 JSON written with Qt Core's `QJsonDocument`. This adds no new dependency. The root holds `format: "hatteda-project"`, an integer `formatVersion` (currently `1`), the project `name`, and `schematic` and `board` sections. Each section holds `items`, a list of `SketchItem`s.
+- A `.hatt` file is UTF-8 JSON written with Qt Core's `QJsonDocument`. This adds no new dependency. The root holds `format: "hatteda-project"`, an integer `formatVersion` (currently `3`), the project `name`, and `schematic` and `board` sections. Each section holds `items`, a list of `SketchItem`s.
 - Each item stores `id` (UUID), `kind` (`symbol`, `wire`, `line`, `polyline`, `rectangle`, `circle`, `arc` or `text`) and `points` as `[x, y]` pairs. The optional fields `variant`, `label`, `quarterTurns`, `closed`, `value`, `footprint`, `pinPadMap` and `sourceId` are written only when they differ from their defaults. Kind names are part of the format and are never renamed or reused.
 - Coordinates are floating-point millimetres, exactly as the interim model holds them. Doubles use Qt's shortest round-trip representation, so saving an unchanged project reproduces the file byte for byte. Keys are sorted.
 - Readers:
@@ -27,10 +27,10 @@ Projects could not be saved: New project created no file, Open only changed the 
 ## Consequences and remaining work
 
 - Designs survive restarts, and UUID links between schematic and PCB (`sourceId`) persist.
-- HATT-003 will introduce `formatVersion: 2` with fixed-point units and a v1 converter. Until then, files carry floating-point rounding exactly as the editor does.
+- Versions 1 and 2 remain readable. Version 2 introduced layers/pads and project library data; version 3 adds the optional stable `simulationModel` id to custom device records. Missing ids keep the explicit “no model assigned” behavior. The future fixed-point migration will use a later version and converter.
 - The symbol library is compiled in. A file that references a symbol removed from a later build is rejected rather than silently dropping parts. Library versioning is future work.
 - Autosave, crash recovery, the `.bak` backup and the project lock file are in ADR-0005. They do not change the format.
-- Later additive sections: format version 2 layers/pads and the `library` object (ADR-0006), project devices and footprints in `library.customDevices|customFootprints` (ADR-0007), and design rules in `rules` (ADR-0008). They are read before the documents where documents depend on them.
+- Later sections: format version 2 layers/pads and the `library` object (ADR-0006), project devices and footprints in `library.customDevices|customFootprints` (ADR-0007), design rules in `rules` (ADR-0008), and version 3 custom-device simulation model ids. Built-in catalog definitions are referenced by stable id and are not copied into the file.
 - Not covered yet: embedded schematic symbol drawings, and project-level editor settings (units, grid) inside the file.
 
 ## Validation

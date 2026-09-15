@@ -113,6 +113,8 @@
     <message><source>The example requires an empty schematic. Existing objects were preserved.</source><translation>Örnek için boş şema gerekir. Mevcut nesneler korundu.</translation></message>
     <message><source>Load DC divider example</source><translation>DC gerilim bölücü örneğini yükle</translation></message>
     <message><source>DC operating point</source><translation>DC çalışma noktası</translation></message>
+    <message><source>%1 pin %2 is not connected to another component or terminal.</source><translation>%1 pin %2 başka bir elemana veya terminale bağlı değil.</translation></message>
+    <message><source>The DC section at %1 pin %2 has no path to Ground.</source><translation>%1 pin %2 üzerindeki DC bölümünün Ground'a bağlantı yolu yok.</translation></message>
     <message><source>Supported: resistors and independent DC voltage sources. Values use SI/SPICE suffixes (1k, 5, 1meg); unit labels are omitted.</source><translation>Desteklenenler: dirençler ve bağımsız DC gerilim kaynakları. Değerlerde SI/SPICE ekleri kullanın (1k, 5, 1meg); birim adı eklemeyin.</translation></message>
     <message><source>Running…</source><translation>Hesaplanıyor…</translation></message>
     <message><source>Simulation cancelled.</source><translation>Simülasyon iptal edildi.</translation></message>
@@ -798,5 +800,158 @@ Son projeler listesinden kaldırılsın mı?</translation></message>
     <message><source>Save print layout as PDF</source><translation>Baskı düzenini PDF olarak kaydet</translation></message>
     <message><source>PDF files (*.pdf)</source><translation>PDF dosyaları (*.pdf)</translation></message>
     <message><source>The printer could not be started.</source><translation>Yazıcı başlatılamadı.</translation></message>
+  </context>
+  <context>
+    <name>hatt::ui</name>
+    <message><source>Resistor</source><translation>Direnç</translation></message>
+    <message><source>General resistor</source><translation>Genel direnç</translation></message>
+    <message><source>Potentiometer</source><translation>Potansiyometre</translation></message>
+    <message><source>Three-terminal variable resistor</source><translation>Üç uçlu ayarlı direnç</translation></message>
+    <message><source>LDR / photoresistor</source><translation>LDR / fotodirenç</translation></message>
+    <message><source>Light-dependent resistor</source><translation>Işığa bağlı direnç</translation></message>
+    <message><source>NTC thermistor</source><translation>NTC termistör</translation></message>
+    <message><source>Negative-temperature-coefficient thermistor</source><translation>Negatif sıcaklık katsayılı termistör</translation></message>
+    <message><source>PTC thermistor</source><translation>PTC termistör</translation></message>
+    <message><source>Positive-temperature-coefficient thermistor</source><translation>Pozitif sıcaklık katsayılı termistör</translation></message>
+    <message><source>Capacitor, non-polarized</source><translation>Kondansatör, kutupsuz</translation></message>
+    <message><source>General non-polarized capacitor</source><translation>Genel kutupsuz kondansatör</translation></message>
+    <message><source>Capacitor, polarized</source><translation>Kondansatör, kutuplu</translation></message>
+    <message><source>Polarized electrolytic capacitor</source><translation>Kutuplu elektrolitik kondansatör</translation></message>
+    <message><source>Inductor</source><translation>Bobin</translation></message>
+    <message><source>General inductor</source><translation>Genel bobin</translation></message>
+    <message><source>Transformer</source><translation>Transformatör</translation></message>
+    <message><source>Two-winding transformer</source><translation>İki sargılı transformatör</translation></message>
+    <message><source>Standard diode</source><translation>Standart diyot</translation></message>
+    <message><source>General silicon diode</source><translation>Genel silisyum diyot</translation></message>
+    <message><source>Schottky diode</source><translation>Schottky diyot</translation></message>
+    <message><source>Low-forward-voltage Schottky diode</source><translation>Düşük ileri gerilimli Schottky diyot</translation></message>
+    <message><source>Zener diode</source><translation>Zener diyot</translation></message>
+    <message><source>Voltage-reference Zener diode</source><translation>Gerilim referanslı Zener diyot</translation></message>
+    <message><source>Light-emitting diode</source><translation>Işık yayan diyot</translation></message>
+    <message><source>Photodiode</source><translation>Fotodiyot</translation></message>
+    <message><source>Light-sensitive diode</source><translation>Işığa duyarlı diyot</translation></message>
+    <message><source>Bridge rectifier</source><translation>Köprü doğrultucu</translation></message>
+    <message><source>Full-wave diode bridge</source><translation>Tam dalga diyot köprüsü</translation></message>
+    <message><source>NPN transistor</source><translation>NPN transistör</translation></message>
+    <message><source>PNP transistor</source><translation>PNP transistör</translation></message>
+    <message><source>N-channel MOSFET</source><translation>N-kanal MOSFET</translation></message>
+    <message><source>P-channel MOSFET</source><translation>P-kanal MOSFET</translation></message>
+    <message><source>N-channel JFET</source><translation>N-kanal JFET</translation></message>
+    <message><source>Three-terminal transistor</source><translation>Üç uçlu transistör</translation></message>
+    <message><source>Ideal operational amplifier</source><translation>İdeal işlemsel yükselteç</translation></message>
+    <message><source>Ideal voltage operational amplifier</source><translation>İdeal gerilim işlemsel yükselteci</translation></message>
+    <message><source>Comparator</source><translation>Karşılaştırıcı</translation></message>
+    <message><source>Voltage comparator</source><translation>Gerilim karşılaştırıcısı</translation></message>
+    <message><source>555 timer</source><translation>555 zamanlayıcı</translation></message>
+    <message><source>General-purpose 555 timer</source><translation>Genel amaçlı 555 zamanlayıcı</translation></message>
+    <message><source>Fixed linear regulator</source><translation>Sabit lineer regülatör</translation></message>
+    <message><source>Three-terminal fixed regulator</source><translation>Üç uçlu sabit regülatör</translation></message>
+    <message><source>Adjustable linear regulator</source><translation>Ayarlanabilir lineer regülatör</translation></message>
+    <message><source>Three-terminal adjustable regulator</source><translation>Üç uçlu ayarlanabilir regülatör</translation></message>
+    <message><source>AND gate</source><translation>VE kapısı</translation></message>
+    <message><source>OR gate</source><translation>VEYA kapısı</translation></message>
+    <message><source>NOT gate</source><translation>DEĞİL kapısı</translation></message>
+    <message><source>NAND gate</source><translation>VE DEĞİL kapısı</translation></message>
+    <message><source>NOR gate</source><translation>VEYA DEĞİL kapısı</translation></message>
+    <message><source>XOR gate</source><translation>ÖZEL VEYA kapısı</translation></message>
+    <message><source>Buffer</source><translation>Tampon</translation></message>
+    <message><source>Tri-state buffer</source><translation>Üç durumlu tampon</translation></message>
+    <message><source>Digital clock</source><translation>Dijital saat</translation></message>
+    <message><source>Generic digital logic function</source><translation>Genel dijital mantık işlevi</translation></message>
+    <message><source>DC voltage source</source><translation>DC gerilim kaynağı</translation></message>
+    <message><source>Independent DC voltage source</source><translation>Bağımsız DC gerilim kaynağı</translation></message>
+    <message><source>DC current source</source><translation>DC akım kaynağı</translation></message>
+    <message><source>Independent DC current source</source><translation>Bağımsız DC akım kaynağı</translation></message>
+    <message><source>Sine voltage source</source><translation>Sinüs gerilim kaynağı</translation></message>
+    <message><source>Independent sine source (transient required)</source><translation>Bağımsız sinüs kaynağı (geçici rejim gerekir)</translation></message>
+    <message><source>Pulse / clock source</source><translation>Darbe / saat kaynağı</translation></message>
+    <message><source>Independent pulse source (transient required)</source><translation>Bağımsız darbe kaynağı (geçici rejim gerekir)</translation></message>
+    <message><source>Push button</source><translation>Buton</translation></message>
+    <message><source>Momentary normally-open push button</source><translation>Anlık normalde açık buton</translation></message>
+    <message><source>SPST switch</source><translation>SPST anahtar</translation></message>
+    <message><source>Single-pole switch</source><translation>Tek kutuplu anahtar</translation></message>
+    <message><source>Relay</source><translation>Röle</translation></message>
+    <message><source>Generic SPDT relay</source><translation>Genel SPDT röle</translation></message>
+    <message><source>Fuse</source><translation>Sigorta</translation></message>
+    <message><source>Replaceable over-current fuse</source><translation>Değiştirilebilir aşırı akım sigortası</translation></message>
+    <message><source>Crystal</source><translation>Kristal</translation></message>
+    <message><source>Quartz crystal</source><translation>Kuvars kristal</translation></message>
+    <message><source>Battery</source><translation>Batarya</translation></message>
+    <message><source>Battery represented by an ideal DC source</source><translation>İdeal DC kaynakla modellenen batarya</translation></message>
+    <message><source>Pin header</source><translation>Pin header</translation></message>
+    <message><source>Generic pin header</source><translation>Genel pin header</translation></message>
+    <message><source>Terminal block</source><translation>Klemens</translation></message>
+    <message><source>Screw terminal block</source><translation>Vidalı klemens</translation></message>
+    <message><source>Common real component</source><translation>Yaygın gerçek eleman</translation></message>
+    <message><source>SMD passive %1</source><translation>SMD pasif %1</translation></message>
+    <message><source>Axial DO-35, 10.16 mm</source><translation>Eksenel DO-35, 10,16 mm</translation></message>
+    <message><source>Axial DO-41, 12.70 mm</source><translation>Eksenel DO-41, 12,70 mm</translation></message>
+    <message><source>TO-92 inline</source><translation>TO-92 sıralı</translation></message>
+    <message><source>TO-220-3 vertical</source><translation>TO-220-3 dikey</translation></message>
+    <message><source>QFN-%1 (perimeter pads)</source><translation>QFN-%1 (çevre padleri)</translation></message>
+    <message><source>Pin header 1x%1, 2.54 mm</source><translation>Pin header 1x%1, 2,54 mm</translation></message>
+    <message><source>Pin header 2x%1, 2.54 mm</source><translation>Pin header 2x%1, 2,54 mm</translation></message>
+    <message><source>Terminal block %1 pin, 5.08 mm</source><translation>Klemens %1 pin, 5,08 mm</translation></message>
+    <message><source>Radial capacitor, %1 mm pitch</source><translation>Radyal kondansatör, %1 mm aralık</translation></message>
+    <message><source>LED %1 mm, 2.54 mm pitch</source><translation>LED %1 mm, 2,54 mm aralık</translation></message>
+    <message><source>Trimmer potentiometer, 3 pin</source><translation>Trimmer potansiyometre, 3 pin</translation></message>
+    <message><source>Relay, generic 5 pin</source><translation>Röle, genel 5 pin</translation></message>
+    <message><source>Bridge rectifier, 4 pin</source><translation>Köprü doğrultucu, 4 pin</translation></message>
+    <message><source>Wiper</source><translation>Sürgü</translation></message>
+    <message><source>No simulation model</source><translation>Simülasyon modeli yok</translation></message>
+    <message><source>DC simulation does not support this component because it has no model.</source><translation>Bu elemanın modeli olmadığından DC simülasyonu desteklenmiyor.</translation></message>
+    <message><source>Linear resistor</source><translation>Lineer direnç</translation></message>
+    <message><source>Capacitor (open at DC)</source><translation>Kondansatör (DC&apos;de açık devre)</translation></message>
+    <message><source>Inductor (short at DC)</source><translation>Bobin (DC&apos;de kısa devre)</translation></message>
+    <message><source>Open switch (DC)</source><translation>Açık anahtar (DC)</translation></message>
+    <message><source>Closed switch (DC)</source><translation>Kapalı anahtar (DC)</translation></message>
+    <message><source>Diode</source><translation>Diyot</translation></message>
+    <message><source>Nonlinear DC analysis is not implemented yet.</source><translation>Doğrusal olmayan DC analiz henüz uygulanmadı.</translation></message>
+    <message><source>BJT operating-point analysis is not implemented yet.</source><translation>BJT çalışma noktası analizi henüz uygulanmadı.</translation></message>
+    <message><source>MOSFET operating-point analysis is not implemented yet.</source><translation>MOSFET çalışma noktası analizi henüz uygulanmadı.</translation></message>
+    <message><source>JFET operating-point analysis is not implemented yet.</source><translation>JFET çalışma noktası analizi henüz uygulanmadı.</translation></message>
+    <message><source>Ideal op-amp</source><translation>İdeal op-amp</translation></message>
+    <message><source>Controlled sources are not implemented yet.</source><translation>Kontrollü kaynaklar henüz uygulanmadı.</translation></message>
+    <message><source>General op-amp</source><translation>Genel op-amp</translation></message>
+    <message><source>Macromodel simulation is not implemented yet.</source><translation>Makromodel simülasyonu henüz uygulanmadı.</translation></message>
+    <message><source>Comparator simulation is not implemented yet.</source><translation>Karşılaştırıcı simülasyonu henüz uygulanmadı.</translation></message>
+    <message><source>Sine source</source><translation>Sinüs kaynağı</translation></message>
+    <message><source>Pulse source</source><translation>Darbe kaynağı</translation></message>
+    <message><source>Transient analysis is not implemented yet.</source><translation>Geçici rejim analizi henüz uygulanmadı.</translation></message>
+    <message><source>Passives</source><translation>Pasifler</translation></message>
+    <message><source>Diodes</source><translation>Diyotlar</translation></message>
+    <message><source>Transistors</source><translation>Transistörler</translation></message>
+    <message><source>Digital</source><translation>Dijital</translation></message>
+    <message><source>Sources and simulation</source><translation>Kaynaklar ve simülasyon</translation></message>
+    <message><source>Electromechanical</source><translation>Elektromekanik</translation></message>
+    <message><source>Connectors</source><translation>Bağlantı elemanları</translation></message>
+    <message><source>Passive</source><translation>Pasif</translation></message>
+    <message><source>Input</source><translation>Giriş</translation></message>
+    <message><source>Output</source><translation>Çıkış</translation></message>
+    <message><source>Power input</source><translation>Güç girişi</translation></message>
+    <message><source>Power output</source><translation>Güç çıkışı</translation></message>
+    <message><source>Open collector</source><translation>Açık kolektör</translation></message>
+    <message><source>Not connected</source><translation>Bağlı değil</translation></message>
+  </context>
+  <context>
+    <name>hatt::ui::DeviceEditorDialog</name>
+    <message><source>— not supported by the current solver</source><translation> — mevcut çözücü tarafından desteklenmiyor</translation></message>
+    <message><source>Simulation model</source><translation>Simülasyon modeli</translation></message>
+  </context>
+  <context>
+    <name>hatt::ui::MainWindow</name>
+    <message><source>All categories</source><translation>Tüm kategoriler</translation></message>
+    <message><source>Search components in English or Turkish</source><translation>Elemanları Türkçe veya İngilizce ara</translation></message>
+    <message><source>Pins: %1</source><translation>Pinler: %1</translation></message>
+    <message><source>Part number: %1</source><translation>Parça numarası: %1</translation></message>
+    <message><source>Manufacturer: %1</source><translation>Üretici: %1</translation></message>
+    <message><source>Simulation: %1</source><translation>Simülasyon: %1</translation></message>
+    <message><source>Suitable packages: %1</source><translation>Uygun kılıflar: %1</translation></message>
+  </context>
+  <context>
+    <name>hatt::ui::CircuitWorkflow</name>
+    <message><source>unknown simulation model &apos;%1&apos;</source><translation>bilinmeyen simülasyon modeli &apos;%1&apos;</translation></message>
+    <message><source>%1: %2</source><translation>%1: %2</translation></message>
+    <message><source>%1: the DC model requires exactly two pins.</source><translation>%1: DC modeli tam olarak iki pin gerektiriyor.</translation></message>
   </context>
 </TS>

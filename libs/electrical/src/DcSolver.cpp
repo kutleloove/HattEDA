@@ -83,12 +83,12 @@ DcResult solveDc(const DcCircuit& circuit, const std::atomic_bool* cancelled) {
         } else if (element.kind == DcKind::VoltageSource || element.kind == DcKind::Inductor) {
             if (++sources + circuit.netCount - 1 > 256)
                 return failure("DC analysis supports at most 256 unknowns.");
-        } else if (element.kind != DcKind::Capacitor) {
+        } else if (element.kind != DcKind::Capacitor && element.kind != DcKind::CurrentSource) {
             return failure("Unsupported DC element: " + element.reference + ".");
         }
         coupled[element.positive].push_back(element.negative);
         coupled[element.negative].push_back(element.positive);
-        if (element.kind == DcKind::Capacitor) continue;
+        if (element.kind == DcKind::Capacitor || element.kind == DcKind::CurrentSource) continue;
         adjacent[element.positive].push_back(element.negative);
         adjacent[element.negative].push_back(element.positive);
     }
@@ -132,6 +132,9 @@ DcResult solveDc(const DcCircuit& circuit, const std::atomic_bool* cancelled) {
             if (p >= 0) a[p][p] += g;
             if (m >= 0) a[m][m] += g;
             if (p >= 0 && m >= 0) { a[p][m] -= g; a[m][p] -= g; }
+        } else if (element.kind == DcKind::CurrentSource) {
+            if (p >= 0) a[p][n] -= element.value;
+            if (m >= 0) a[m][n] += element.value;
         } else {
             if (p >= 0) { a[p][source] += 1; a[source][p] += 1; }
             if (m >= 0) { a[m][source] -= 1; a[source][m] -= 1; }
@@ -180,6 +183,7 @@ DcResult solveDc(const DcCircuit& circuit, const std::atomic_bool* cancelled) {
     for (const auto& element : circuit.elements) {
         if (stopped()) return failure("DC analysis cancelled.");
         const double current = element.kind == DcKind::Capacitor ? 0.0
+            : element.kind == DcKind::CurrentSource ? element.value
             : element.kind == DcKind::Resistor
             ? (result.voltages[element.positive] - result.voltages[element.negative]) / element.value
             : solution[source++];

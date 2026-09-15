@@ -75,7 +75,8 @@ map, so a part can reach the PCB without editing its properties.
 `formatVersion` is bumped from 1 to 2. The reader accepts both v1 and v2:
 - v1 files parse normally; new fields take their default values (silent upgrade)
 - v2 adds optional fields per item; missing fields are silently skipped
-- Files with `formatVersion > 2` are rejected with a user-visible error
+- Files newer than the reader's current `ProjectFormatVersion` are rejected with a user-visible
+  error (the current version and later additions are tracked by ADR-0004)
 
 ### 7. Layer behaviour, pad tools and Make Package (#28, #30)
 

@@ -1,4 +1,5 @@
 #include "hatt/ui/ComponentLibrary.hpp"
+#include "hatt/ui/ComponentCatalog.hpp"
 
 #include <QtTest>
 
@@ -49,6 +50,68 @@ class ComponentLibraryTests final : public QObject {
     Q_OBJECT
 
 private slots:
+    void builtInCatalogIsConsistentAndSearchable() {
+        registerBuiltInCatalog();
+        QSet<QString> componentIds;
+        QVERIFY(componentCatalog().size() >= 50);
+        for (const auto& entry : componentCatalog()) {
+            QVERIFY2(!componentIds.contains(entry.device.id), qPrintable(entry.device.id));
+            componentIds.insert(entry.device.id);
+            QVERIFY(entry.device.pinCount > 0);
+            QCOMPARE(entry.device.pinNames.size(), entry.device.pinCount);
+            QCOMPARE(entry.pinTypes.size(), entry.device.pinCount);
+            QVERIFY(findSimulationModel(entry.device.simulationModel) != nullptr);
+            const auto* symbol = findSymbol(entry.device.id);
+            QVERIFY(symbol != nullptr);
+            QCOMPARE(symbol->pins.size(), entry.device.pinCount);
+            const auto* package = findSymbol(entry.device.footprint);
+            QVERIFY2(package != nullptr, qPrintable(entry.device.footprint));
+            QCOMPARE(package->pins.size(), entry.device.pinCount);
+            for (const QString& option : entry.footprintOptions) {
+                const auto* candidate = findSymbol(option);
+                QVERIFY2(candidate != nullptr, qPrintable(option));
+                QCOMPARE(candidate->pins.size(), entry.device.pinCount);
+            }
+            QVERIFY(validatePinPadMap(entry.device.pinPadMap, entry.device.pinCount).isEmpty());
+        }
+        QSet<QString> footprintIds;
+        QVERIFY(footprintCatalog().size() >= 70);
+        for (const auto& footprint : footprintCatalog()) {
+            QVERIFY2(!footprintIds.contains(footprint.id), qPrintable(footprint.id));
+            footprintIds.insert(footprint.id);
+            QVERIFY2(validateFootprintParams(footprint.params).isEmpty(),
+                     qPrintable(footprint.id + QStringLiteral(": ") + validateFootprintParams(footprint.params)));
+            const SymbolDefinition symbol = footprintSymbol(footprint);
+            QCOMPARE(symbol.pads.size(), footprint.params.padCount);
+            QCOMPARE(symbol.pins.size(), footprint.params.padCount);
+            for (int i = 0; i < symbol.pads.size(); ++i) QCOMPARE(symbol.pads[i].number, i + 1);
+            QVERIFY(symbol.shapes.size() >= 2); // body plus the structural pin-1 mark
+        }
+        for (const QString& term : {QStringLiteral("resistor"), QStringLiteral("direnç"),
+                                    QStringLiteral("1n4148"), QStringLiteral("npn"),
+                                    QStringLiteral("opamp")}) {
+            QVERIFY2(!searchComponentCatalog(term).isEmpty(), qPrintable(term));
+        }
+        QCOMPARE(findCatalogComponent(QStringLiteral("catalog.device.bc547"))->device.pinNames,
+                 QStringList({QStringLiteral("C"), QStringLiteral("B"), QStringLiteral("E")}));
+        QCOMPARE(findCatalogComponent(QStringLiteral("catalog.device.lm358"))->device.pinNames.size(), 8);
+
+        QSet<QString> pickableIds;
+        for (const auto* symbol : pickableDevices({})) {
+            QVERIFY2(!pickableIds.contains(symbol->id), qPrintable(symbol->id));
+            pickableIds.insert(symbol->id);
+        }
+        QVERIFY(pickableIds.contains(QStringLiteral("catalog.device.1n4148")));
+
+        const auto twoPadFootprints = footprintsWithPads({}, 2);
+        QVERIFY(twoPadFootprints.contains(findSymbol(QStringLiteral("catalog.footprint.passive.0603"))));
+        QSet<QString> twoPadIds;
+        for (const auto* symbol : twoPadFootprints) {
+            QVERIFY2(!twoPadIds.contains(symbol->id), qPrintable(symbol->id));
+            twoPadIds.insert(symbol->id);
+        }
+    }
+
     void dualRowPadsAreNumberedCounterClockwise() {
         FootprintDefinition footprint;
         footprint.id = CustomFootprintPrefix + QStringLiteral("soic8");
