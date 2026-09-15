@@ -114,6 +114,52 @@ ADR only commits to it being a client of the same local MCP server, out-of-proce
    server as external agents? (This ADR assumes out-of-process, for one boundary; flagging it as
    a decision, not a given.)
 
+## Appendix: connecting an external agent (v1)
+
+Practical summary for a tool like Claude Code, OpenAI Codex, Google Antigravity or Hermes that
+wants to drive a running HattEDA instance. This describes what is implemented today
+(`libs/agentic-mcp`, `MainWindowAgenticGateway`), not a future/aspirational API.
+
+1. **Enable it.** The server is off unless the `agentic/mcpEnabled` `QSettings` key is `true`
+   (Preferences UI to flip this is a follow-up; until then it can be set directly, e.g. via the
+   app's `.ini`/registry-backed settings). With it on, `MainWindow` starts an
+   `hatt::agentic::AgenticMcpServer` in its constructor.
+2. **Find the pipe.** The server listens on a local named pipe (`QLocalServer`) named
+   `hatteda-agentic-mcp-<pid>`, where `<pid>` is the running `hatteda.exe` process id (visible in
+   Task Manager or `Get-Process hatteda`). There is no discovery/registry beyond this in v1 — the
+   caller has to know or look up the pid. Only one client is served at a time; a new connection
+   replaces whatever was connected before.
+3. **Speak JSON-RPC 2.0, framed like MCP's stdio transport.** Every message (both directions) is
+   `Content-Length: <N>\r\n\r\n<N bytes of JSON>`, no other headers. This is the same framing MCP
+   clients already use for stdio servers, just carried over a local named pipe instead of
+   stdin/stdout.
+4. **Handshake, then list tools.** Send `initialize` (any/no params are read), then `tools/list`.
+   The server currently answers with these four tools, each taking a plain JSON object of
+   arguments and returning MCP's standard `{content: [{type: "text", text: ...}]}` shape (JSON
+   payloads come back as compact-JSON text in that single text block, not as structured content):
+   - `list_actions` — no arguments; returns the `hatteda.action.*` ids currently enabled and not
+     block-listed, each with its menu label. This is the live "what can I do right now" list —
+     it changes as the UI's enablement state changes (e.g. selection count, open project).
+   - `trigger_action` — `{"actionId": "hatteda.action.save"}`; triggers it exactly as a click
+     would. Returns `"ok"` on success; a block-listed, unknown, or currently-disabled id comes
+     back as a tool-level error (`isError: true`) with a human-readable reason, never a thrown
+     exception or a dialog popping up unattended.
+   - `get_project_snapshot` — no arguments; returns the open project serialized the same way as
+     the `.hatt` file (empty object if no project is open).
+   - `get_last_checks_report` — no arguments; returns the most recent ERC/DRC violations from
+     `hatteda.action.run-checks` (empty object if checks have not been run yet in this session).
+5. **Expect some actions to be refused on purpose.** `hatteda.action.quit`,
+   `hatteda.action.new-project`, `hatteda.action.open-project` and `hatteda.action.open-recent`
+   are block-listed (see Decision 4) because they can open a blocking confirm/discard/lock dialog
+   an unattended caller cannot answer. `trigger_action` on one of these returns a tool error
+   explaining why instead of ever calling the underlying action.
+6. **Try it locally first.** `apps/hatteda-embedded-agent` (built alongside the app) is a minimal
+   scripted client that does exactly steps 3–4 against a given pipe name (`--pipe <name>` or
+   `HATTEDA_AGENTIC_PIPE`) and prints the result — useful as a working reference implementation
+   and for a quick smoke test that the server is reachable, without writing a client from scratch.
+
+None of this requires network access; the pipe is local-machine-only, matching Decision 2.
+
 ## Consequences
 
 - Ships a useful, narrow agentic surface without a new persisted project format (the opt-in flag
