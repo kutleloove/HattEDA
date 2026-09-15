@@ -192,10 +192,15 @@ CamOutput buildCamOutput(const SketchDocument& board, const CamOptions& options)
         }
     };
 
-    // Poured zones first: their clear-polarity knockouts must not erase tracks and pads.
+    // Poured zones and filled area zones (ADR-0012) first: their clear-polarity knockouts must not
+    // erase tracks, pads or silkscreen.
     QSet<QString> poured;
+    QVector<ZoneFillResult> fills;
     for (const ZoneFillResult& fill : options.zoneFills) {
-        if (!isCopperLayer(fill.layer)) continue;
+        if (isCopperLayer(fill.layer)) fills.append(fill);
+    }
+    fills += areaZoneFills(board);
+    for (const ZoneFillResult& fill : fills) {
         poured.insert(fill.zoneId);
         for (const ZoneContour& contour : zoneContours(fill.fill)) {
             QVector<QPointF> points(contour.polygon.begin(), contour.polygon.end());
@@ -279,13 +284,16 @@ CamOutput buildCamOutput(const SketchDocument& board, const CamOptions& options)
             if (item.variant == BoardOutlineVariant) {
                 stroke(CamLayerKind::Outline, outline, true, CamOutlineLineWidth);
             } else if (item.variant == CopperZoneVariant) {
-                if (poured.contains(item.id)) {
-                    // Written above with its clearances.
+                if (poured.contains(item.id) || item.zoneFill == ZoneFillStyle::Empty) {
+                    // Written above with its clearances, or only a boundary without copper.
                 } else if (options.includeZones && isCopperLayer(item.layer)) {
                     region(camLayerFor(item.layer), outline);
                 } else {
                     ++output.skippedZones;
                 }
+            } else if (item.variant == KeepoutZoneVariant || item.variant == AreaZoneVariant) {
+                // Keepouts are a design rule; filled areas were written above and empty ones have
+                // nothing to fabricate.
             } else {
                 const CamLayerKind kind = camLayerFor(item.layer);
                 stroke(kind, outline, closed, strokeWidthFor(kind));

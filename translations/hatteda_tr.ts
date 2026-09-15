@@ -954,4 +954,47 @@ Son projeler listesinden kaldırılsın mı?</translation></message>
     <message><source>%1: %2</source><translation>%1: %2</translation></message>
     <message><source>%1: the DC model requires exactly two pins.</source><translation>%1: DC modeli tam olarak iki pin gerektiriyor.</translation></message>
   </context>
+  <context>
+    <name>hatt::ui::MainWindow</name>
+    <message><source>Zone mode</source><translation>Alan modu</translation></message>
+    <message><source>Copper zone</source><translation>Bakır alan</translation></message>
+    <message><source>Copper pour on the active copper layer; choose its net in the properties</source><translation>Etkin bakır katmanında bakır dökümü; netini özelliklerden seçin</translation></message>
+    <message><source>Keepout zone</source><translation>Yasak alan</translation></message>
+    <message><source>No copper on the active copper layer: pours stay out and the DRC reports tracks, pads and vias inside</source><translation>Etkin bakır katmanında bakır olmaz: dökümler içine girmez, DRC içindeki yolları, padleri ve viaları bildirir</translation></message>
+    <message><source>Area zone (silk, resist, paste)</source><translation>Bakır olmayan alan (serigrafi, maske, pasta)</translation></message>
+    <message><source>Filled area on the active silk, resist or paste layer</source><translation>Etkin serigrafi, lehim maskesi veya pasta katmanında dolu alan</translation></message>
+    <message><source>ZONES</source><translation>ALANLAR</translation></message>
+    <message><source>Click a zone to select it on the board; double-click to edit its net, layer and fill</source><translation>Kartta seçmek için bir alana tıklayın; netini, katmanını ve dolgusunu düzenlemek için çift tıklayın</translation></message>
+    <message><source>Empty zones are only a boundary: they are not poured and do not conduct</source><translation>Boş alanlar yalnızca bir sınırdır: dökülmez ve akım iletmez</translation></message>
+    <message><source>Empty areas are only a boundary and are not fabricated</source><translation>Boş alanlar yalnızca bir sınırdır ve üretim dosyalarına yazılmaz</translation></message>
+    <message><source>Fill</source><translation>Dolgu</translation></message>
+  </context>
+  <context>
+    <name>hatt::ui::DesignCanvas</name>
+    <message><source>Draw copper zone</source><translation>Bakır alan çiz</translation></message>
+    <message><source>Draw keepout zone</source><translation>Yasak alan çiz</translation></message>
+    <message><source>Draw area zone</source><translation>Bakır olmayan alan çiz</translation></message>
+    <message><source>Click the corners of the area on the active silk, resist or paste layer. Clicking the first corner, double-click or Enter closes it; right-click cancels.</source><translation>Alanın köşelerine etkin serigrafi, lehim maskesi veya pasta katmanında tıklayın. İlk köşeye tıklamak, çift tık veya Enter alanı kapatır; sağ tık iptal eder.</translation></message>
+    <message><source>Click the corners of the zone on the active copper layer. Clicking the first corner, double-click or Enter closes it; right-click cancels. Backspace removes the last corner.</source><translation>Alanın köşelerine etkin bakır katmanında tıklayın. İlk köşeye tıklamak, çift tık veya Enter alanı kapatır; sağ tık iptal eder. Backspace son köşeyi siler.</translation></message>
+  </context>
+  <context>
+    <name>hatt::ui::DesignChecks</name>
+    <message><source>The keepout zone on %1 contains copper: %2.</source><translation>%1 üzerindeki yasak alanda bakır var: %2.</translation></message>
+  </context>
+  <context>
+    <name>hatt::ui::ProjectFile</name>
+    <message><source>%1 has an invalid zone fill.</source><translation>%1 geçersiz bir alan dolgusu içeriyor.</translation></message>
+  </context>
+  <context>
+    <name>hatt::ui::ZoneFill</name>
+    <message><source>Solid</source><translation>Dolu</translation></message>
+    <message><source>Hatched</source><translation>Taralı</translation></message>
+    <message><source>Empty</source><translation>Boş</translation></message>
+    <message><source>Copper zone</source><translation>Bakır alan</translation></message>
+    <message><source>Keepout zone</source><translation>Yasak alan</translation></message>
+    <message><source>Area zone</source><translation>Bakır olmayan alan</translation></message>
+    <message><source>Keepout</source><translation>Yasak alan</translation></message>
+    <message><source>Area, %1</source><translation>Alan, %1</translation></message>
+    <message><source>No net, %1</source><translation>Net yok, %1</translation></message>
+  </context>
 </TS>

@@ -3,9 +3,11 @@
 #include "hatt/ui/BoardCopper.hpp"
 #include "hatt/ui/DesignRules.hpp"
 
+#include <QCoreApplication>
 #include <QPainterPathStroker>
 
 #include <algorithm>
+#include <cmath>
 
 namespace hatt::ui {
 namespace {
@@ -82,7 +84,7 @@ QVector<ZoneObstacle> boardCopperObstacles(const SketchDocument& board) {
         case SketchItem::Kind::Line:
         case SketchItem::Kind::Polyline:
         case SketchItem::Kind::Rectangle:
-            if (isCopperLayer(item.layer) && item.variant != CopperZoneVariant && item.variant != BoardOutlineVariant) {
+            if (isCopperLayer(item.layer) && !isZoneVariant(item.variant) && item.variant != BoardOutlineVariant) {
                 obstacles.append({item.id, strokePath(closedOutline(item), 0.254, item.closed), layerBit(item.layer), {}});
             }
             break;
@@ -103,15 +105,26 @@ QVector<ZoneFillResult> fillZones(const SketchDocument& board, const QVector<Zon
         }
     }
     if (!boardArea.isEmpty()) boardArea = shrunk(boardArea, options.boardEdgeClearance);
+    // Keepout zones by copper layer: no pour enters them.
+    QPainterPath keepouts[BoardLayerCount];
+    for (const SketchItem& item : board) {
+        if (item.variant == KeepoutZoneVariant && isCopperLayer(item.layer) && item.points.size() >= 3) {
+            QPainterPath& keepout = keepouts[static_cast<int>(item.layer)];
+            keepout = keepout.united(polygonPath(item.points));
+        }
+    }
 
     QVector<ZoneFillResult> results;
     for (const SketchItem& zone : board) {
-        if (zone.variant != CopperZoneVariant || zone.net.isEmpty() || !isCopperLayer(zone.layer) ||
-            zone.points.size() < 3) {
+        if (zone.variant != CopperZoneVariant || zone.net.isEmpty() || zone.zoneFill == ZoneFillStyle::Empty ||
+            !isCopperLayer(zone.layer) || zone.points.size() < 3) {
             continue;
         }
         QPainterPath fill = polygonPath(zone.points);
         if (!boardArea.isEmpty()) fill = fill.intersected(boardArea);
+        if (const QPainterPath& keepout = keepouts[static_cast<int>(zone.layer)]; !keepout.isEmpty()) {
+            fill = fill.subtracted(keepout);
+        }
         const double reachDistance = std::max(clearance, options.thermalGap) + options.spokeWidth;
         const QRectF reach =
             fill.boundingRect().adjusted(-reachDistance, -reachDistance, reachDistance, reachDistance);
@@ -185,6 +198,7 @@ QVector<ZoneFillResult> fillZones(const SketchDocument& board, const QVector<Zon
             fill = kept.simplified();
             fill.setFillRule(Qt::OddEvenFill);
         }
+        if (zone.zoneFill == ZoneFillStyle::Hatched) fill = hatchedArea(fill, options.hatchPitch, options.hatchWidth);
         results.append({zone.id, zone.layer, zone.net, fill});
     }
     return results;
@@ -206,8 +220,8 @@ QVector<ZoneObstacle> netCopperObstacles(const SketchDocument& schematic, const 
     withoutZones.reserve(board.size());
     bool hasZone = false;
     for (const SketchItem& item : board) {
-        if (item.variant == CopperZoneVariant) {
-            hasZone = true;
+        if (isZoneVariant(item.variant)) {
+            hasZone = hasZone || item.variant == CopperZoneVariant;
             continue;
         }
         withoutZones.append(item);
@@ -241,7 +255,7 @@ QVector<ZoneObstacle> netCopperObstacles(const SketchDocument& schematic, const 
 QVector<ZoneFillResult> pourZones(const SketchDocument& schematic, const SketchDocument& board,
                                   const ZonePourOptions& options) {
     const bool anyNet = std::any_of(board.begin(), board.end(), [](const SketchItem& item) {
-        return item.variant == CopperZoneVariant && !item.net.isEmpty();
+        return item.variant == CopperZoneVariant && !item.net.isEmpty() && item.zoneFill != ZoneFillStyle::Empty;
     });
     if (!anyNet) return {};
     return fillZones(board, netCopperObstacles(schematic, board), options);
@@ -263,6 +277,57 @@ QVector<ZoneFillResult> pourZones(const SketchDocument& schematic, const SketchD
     options.clearance = clearance;
     options.boardEdgeClearance = boardEdgeClearance;
     return pourZones(schematic, board, options);
+}
+
+QPainterPath hatchedArea(const QPainterPath& area, double pitch, double width) {
+    if (area.isEmpty() || pitch <= 0.0 || width <= 0.0) return area;
+    const QRectF bounds = area.boundingRect();
+    const double half = width / 2.0;
+    // Bars of one direction never overlap each other, so each set is a valid path as it is.
+    QPainterPath horizontal;
+    QPainterPath vertical;
+    for (double y = std::floor(bounds.top() / pitch) * pitch; y <= bounds.bottom() + half; y += pitch) {
+        horizontal.addRect(QRectF(bounds.left() - width, y - half, bounds.width() + 2.0 * width, width));
+    }
+    for (double x = std::floor(bounds.left() / pitch) * pitch; x <= bounds.right() + half; x += pitch) {
+        vertical.addRect(QRectF(x - half, bounds.top() - width, width, bounds.height() + 2.0 * width));
+    }
+    const QPainterPath border = area.subtracted(shrunk(area, width));
+    QPainterPath hatch =
+        area.intersected(horizontal).united(area.intersected(vertical)).united(border).simplified();
+    hatch.setFillRule(Qt::OddEvenFill);
+    return hatch;
+}
+
+QVector<ZoneFillResult> areaZoneFills(const SketchDocument& board, const ZonePourOptions& options) {
+    QVector<ZoneFillResult> results;
+    for (const SketchItem& zone : board) {
+        if (zone.variant != AreaZoneVariant || zone.zoneFill == ZoneFillStyle::Empty || isCopperLayer(zone.layer) ||
+            zone.layer == BoardLayer::BoardEdge || zone.points.size() < 3) {
+            continue;
+        }
+        QPainterPath fill = polygonPath(zone.points).simplified();
+        fill.setFillRule(Qt::OddEvenFill);
+        if (zone.zoneFill == ZoneFillStyle::Hatched) fill = hatchedArea(fill, options.hatchPitch, options.hatchWidth);
+        results.append({zone.id, zone.layer, {}, fill});
+    }
+    return results;
+}
+
+QString zoneKindName(const QString& variant) {
+    if (variant == KeepoutZoneVariant) return QCoreApplication::translate("hatt::ui::ZoneFill", "Keepout zone");
+    if (variant == AreaZoneVariant) return QCoreApplication::translate("hatt::ui::ZoneFill", "Area zone");
+    return QCoreApplication::translate("hatt::ui::ZoneFill", "Copper zone");
+}
+
+QString zoneSummary(const SketchItem& zone, const DesignRules& rules, const SketchDocument& schematic) {
+    const QString style = zoneFillStyleName(zone.zoneFill);
+    if (zone.variant == KeepoutZoneVariant) return QCoreApplication::translate("hatt::ui::ZoneFill", "Keepout");
+    if (zone.variant == AreaZoneVariant) return QCoreApplication::translate("hatt::ui::ZoneFill", "Area, %1").arg(style);
+    if (zone.net.isEmpty()) return QCoreApplication::translate("hatt::ui::ZoneFill", "No net, %1").arg(style);
+    const NetClass netClass = netClassForNet(rules, schematic, zone.net);
+    const QString net = netClass.name.isEmpty() ? zone.net : zone.net + QLatin1Char('=') + netClass.name;
+    return QStringLiteral("%1, %2").arg(net, style);
 }
 
 QVector<ZoneContour> zoneContours(const QPainterPath& fill) {

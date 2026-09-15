@@ -69,6 +69,20 @@ olarak çıkar. Netsiz alan dökülmez ve Gerber'e **yazılmaz**, çünkü katı
 kısa devre ederdi; Gerber sekmesinin üstünde `FabricationZonesNotice` uyarısı ve durum satırında sayısı
 görünür (`CamOptions::includeZones` yalnız bilinçli kullanım içindir).
 
+**Alan modu (Zone mode, ADR-0012):** Kayra'da sol raydaki **Alan modu** (`hatteda.tool.zone`, Z) üç alan türü sunar:
+- **Bakır alan:** Etkin bakır katmanına çizilir, netine göre dökülür.
+- **Yasak alan (keepout):** Etkin bakır katmanına çizilir. O katmandaki dökümler bu alana girmez, router onu engel sayar. İçine değen yol, pad veya via için DRC `drc.keepout` hatası verir. Üretime yazılmaz.
+- **Bakır olmayan alan:** Etkin serigrafi, lehim maskesi veya pasta katmanına çizilir. Gerber'de o katmana dolu bölge olarak yazılır; maskede açıklık, pastada stensil açıklığıdır.
+
+Çizim için köşelere tıklanır. İlk köşeye tıklamak, çift tık veya Enter alanı kapatır.
+
+Özelliklerde bakır ve bakır olmayan alanlar için **Dolgu** seçilir (`ItemZoneFill`):
+- **Dolu:** tam döküm ya da tam alan.
+- **Taralı:** 1 mm aralıklı, 0.3 mm'lik yatay ve dikey çubuklar ve kenar boyunca 0.3 mm'lik bir çerçeve.
+- **Boş:** yalnızca sınır. Boş bakır alan dökülmez, iletken sayılmaz ve üretime yazılmaz.
+
+Mod açıkken **ALANLAR** listesi (`ZoneList`) karttaki her alanı özetler, örneğin `GND=POWER, Dolu  ·  Üst bakır`, `Net yok, Boş` veya `Yasak alan`. Satıra tıklamak alanı seçer, çift tıklamak özelliklerini açar. Yasak alan, bakır olmayan alan veya Dolu dışında bir dolgu kullanan projeler `.hatt` formatVersion 4 ile kaydedilir; diğer projeler 3 olarak kalır ve eski sürümlerde açılır.
+
 Kılıf etiketleri (R1, U1) kılıfın serigrafi katmanına 1 mm yüksekliğinde tek çizgili fontla
 (`StrokeFont.hpp`) yazılır; alt yüzdekiler aynalanır. Yerleşim kılıfın dönüşünü izler
 (`designatorPlacement`): 0° ve 180°'de kılıfın üstünde yatay, 90° ve 270°'de kılıfın solunda aşağıdan

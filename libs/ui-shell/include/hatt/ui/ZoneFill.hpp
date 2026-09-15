@@ -15,6 +15,9 @@ namespace hatt::ui {
 // reliefs (a gap ring crossed by four spokes); tracks and vias of the net join solidly. Slivers
 // narrower than the minimum width and pour islands that touch no copper of the net are removed.
 // A zone without a net is not filled.
+// Zone kinds and fill styles (ADR-0012): Empty copper zones are not poured, Hatched pours keep a grid
+// of bars inside a border, keepout zones on the pour's layer are cut out of it, and area zones on
+// silk, resist or paste layers are filled without clearances (areaZoneFills).
 // Coordinates are editor millimetres (Y down).
 
 struct ZoneObstacle {
@@ -35,6 +38,9 @@ struct ZonePourOptions {
     // Pour parts narrower than this are removed (shrink by half, grow back, never beyond the pour),
     // so fabrication never gets copper slivers; 0 keeps them. Spokes must be at least this wide.
     double minimumWidth = 0.25;
+    // Hatched zones: bar pitch and the width of the bars and of the border (mm).
+    double hatchPitch = 1.0;
+    double hatchWidth = 0.3;
 };
 
 struct DesignRules;
@@ -71,6 +77,21 @@ struct ZoneFillResult {
 // Same with the default thermal and island settings and the project's clearances.
 [[nodiscard]] QVector<ZoneFillResult> pourZones(const SketchDocument& schematic, const SketchDocument& board,
                                                 double clearance, double boardEdgeClearance);
+
+// Hatch of a filled shape: horizontal and vertical bars of `width` on a `pitch` grid aligned to the
+// origin, plus a border of `width` along every edge, all clipped to the shape.
+[[nodiscard]] QPainterPath hatchedArea(const QPainterPath& area, double pitch, double width);
+
+// Filled areas of the non-copper area zones (AreaZoneVariant) on their own layer: the zone polygon
+// for Solid, its hatch for Hatched; Empty zones are left out (only their boundary is drawn).
+[[nodiscard]] QVector<ZoneFillResult> areaZoneFills(const SketchDocument& board, const ZonePourOptions& options = {});
+
+// One zone list row (Proteus ARES style): "GND=POWER, Solid" for a copper zone with a net and its
+// net class, "No net, Empty" without one, "Keepout" and "Area, Hatched" for the non-copper kinds.
+// The layer is not part of the summary.
+[[nodiscard]] QString zoneSummary(const SketchItem& zone, const DesignRules& rules, const SketchDocument& schematic);
+// Translated kind of a zone item: copper zone, keepout zone or area zone.
+[[nodiscard]] QString zoneKindName(const QString& variant);
 
 // Contours of a fill with their nesting depth: even depth adds copper, odd depth removes it.
 // Drawing contours in increasing depth reproduces the fill (used for Gerber polarity).

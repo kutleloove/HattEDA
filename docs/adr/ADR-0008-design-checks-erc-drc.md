@@ -55,6 +55,8 @@ for the board, rules stored with the project and a click on a problem that shows
     `drc.short`.
   - Zones are left out of the conductor-to-conductor clearance pairs and the board edge check;
     the pour already keeps the edge clearance.
+  - Copper touching a keepout zone on the keepout's copper layer is `drc.keepout` (Error,
+    ADR-0012). Empty copper zones are only a boundary and are not conductors.
 
 ### 2. Report workspace
 

@@ -79,6 +79,8 @@ constexpr int PartRole = Qt::UserRole + 3;
 constexpr int StyleRole = Qt::UserRole + 4;
 // True for the user's own track and via styles, which can be edited and deleted.
 constexpr int CustomStyleRole = Qt::UserRole + 5;
+// Item id of a ZoneList row.
+constexpr int ZoneIdRole = Qt::UserRole + 6;
 
 const QString TrackStyleKey = QStringLiteral("editor/board/trackStyle");
 const QString ViaStyleKey = QStringLiteral("editor/board/viaStyle");
@@ -238,6 +240,20 @@ QIcon makeIcon(const QString& kind, const QColor& color) {
         fill.setAlpha(90);
         painter.setBrush(fill);
         poly({{4, 6}, {20, 4}, {18, 19}, {6, 18}}, true);
+    } else if (kind == QLatin1String("keepout")) {
+        // Keepout: a boundary crossed by diagonal hatching.
+        poly({{4, 5}, {20, 5}, {20, 19}, {4, 19}}, true);
+        line(4, 11, 10, 5);
+        line(4, 17, 16, 5);
+        line(8, 19, 20, 7);
+        line(14, 19, 20, 13);
+    } else if (kind == QLatin1String("area")) {
+        // Non-copper area: a boundary with a grid fill, like a hatched silkscreen area.
+        poly({{4, 5}, {20, 5}, {20, 19}, {4, 19}}, true);
+        line(9.5, 5, 9.5, 19);
+        line(14.5, 5, 14.5, 19);
+        line(4, 10, 20, 10);
+        line(4, 14.5, 20, 14.5);
     } else if (kind.startsWith(QLatin1String("align-")) ||
                kind.startsWith(QLatin1String("distribute-"))) {
         painter.save();
@@ -437,6 +453,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
                 Qt::QueuedConnection);
         // Pours depend on both documents (nets come from the schematic) and on the design rules.
         connect(canvas, &DesignCanvas::documentChanged, this, &MainWindow::refreshZoneFills);
+        connect(canvas, &DesignCanvas::selectionChanged, this, &MainWindow::syncZoneListSelection);
         connect(canvas, &DesignCanvas::contextMenuRequested, this,
                 [this, canvas](QPoint position, int index) {
                     if (canvas == editingCanvas()) showCanvasContextMenu(canvas, position, index);
@@ -604,6 +621,7 @@ void MainWindow::editItemProperties(DesignCanvas* canvas, int index) {
     QDoubleSpinBox* viaDiameterField = nullptr;
     QDoubleSpinBox* viaDrillField = nullptr;
     QComboBox* zoneNet = nullptr;
+    QComboBox* zoneFill = nullptr;
     QDoubleSpinBox* textHeightField = nullptr;
     auto size = [&](const QString& name, double millimetres, double minimum) {
         auto* field = new QDoubleSpinBox(&dialog);
@@ -686,8 +704,25 @@ void MainWindow::editItemProperties(DesignCanvas* canvas, int index) {
                 zoneNet->setToolTip(tr("The zone is poured for this net and keeps the design rule clearance "
                                        "from other copper"));
                 form->addRow(tr("Net"), zoneNet);
+            } else if (item.variant == KeepoutZoneVariant) {
+                layerChoice(CopperLayerMask);
+            } else if (item.variant == AreaZoneVariant) {
+                layerChoice(AllLayersMask & ~CopperLayerMask & ~layerBit(BoardLayer::BoardEdge));
             } else if (item.variant != BoardOutlineVariant) {
                 layerChoice(AllLayersMask);
+            }
+            if (item.variant == CopperZoneVariant || item.variant == AreaZoneVariant) {
+                // Fill style (ADR-0012): solid, a hatch grid inside a border, or only the boundary.
+                zoneFill = new QComboBox(&dialog);
+                zoneFill->setObjectName(QStringLiteral("ItemZoneFill"));
+                for (const ZoneFillStyle style : {ZoneFillStyle::Solid, ZoneFillStyle::Hatched, ZoneFillStyle::Empty}) {
+                    zoneFill->addItem(zoneFillStyleName(style), static_cast<int>(style));
+                }
+                zoneFill->setCurrentIndex(qMax(0, zoneFill->findData(static_cast<int>(item.zoneFill))));
+                zoneFill->setToolTip(item.variant == CopperZoneVariant
+                                         ? tr("Empty zones are only a boundary: they are not poured and do not conduct")
+                                         : tr("Empty areas are only a boundary and are not fabricated"));
+                form->addRow(tr("Fill"), zoneFill);
             }
             if (item.kind == SketchItem::Kind::Text) {
                 textHeightField = size(QStringLiteral("ItemTextHeight"), item.width > 0.0 ? item.width : TextHeightMm, 0.5);
@@ -782,6 +817,7 @@ void MainWindow::editItemProperties(DesignCanvas* canvas, int index) {
             properties.width = fromDisplayUnit(viaDiameterField->value(), unit);
             properties.drillDiameter = fromDisplayUnit(viaDrillField->value(), unit);
         }
+        if (zoneFill) properties.zoneFill = static_cast<ZoneFillStyle>(zoneFill->currentData().toInt());
         if (zoneNet) {
             const bool listed = zoneNet->currentIndex() >= 0 && zoneNet->currentText() == zoneNet->itemText(zoneNet->currentIndex());
             properties.net = listed ? zoneNet->currentData().toString() : zoneNet->currentText().trimmed();
@@ -799,6 +835,7 @@ MainWindow::~MainWindow() {
         disconnect(canvas->undoStack(), nullptr, this, nullptr);
     }
     disconnect(objectSelector_, nullptr, this, nullptr);
+    disconnect(zoneList_, nullptr, this, nullptr);
     disconnect(toolWorkspaces_, nullptr, this, nullptr);
 }
 
@@ -844,6 +881,7 @@ void MainWindow::createActions() {
         {ToolMode::Connect, "hatteda.tool.connect", tr("Wire and track mode"), "wire", "W"},
         {ToolMode::Via, "hatteda.tool.via", tr("Via mode"), "via", "I"},
         {ToolMode::Pad, "hatteda.tool.pad", tr("Pad mode"), "pad", "O"},
+        {ToolMode::Zone, "hatteda.tool.zone", tr("Zone mode"), "zone", "Z"},
         {ToolMode::Terminal, "hatteda.tool.terminal", tr("Terminal and port mode"), "terminal", "R"},
         {ToolMode::Probe, "hatteda.tool.probe", tr("Probe mode"), "probe", "P"},
         {ToolMode::Draw, "hatteda.tool.draw", tr("2D graphics mode"), "draw", "D"},
@@ -1187,6 +1225,32 @@ QWidget* MainWindow::createEditor() {
     connect(objectSelector_, &QListWidget::currentRowChanged, this,
             [this] { applyObjectSelection(); });
     contextLayout->addWidget(objectSelector_, 1);
+    // Kayra zone mode: the board's zones with their net, class and fill (ADR-0012).
+    zonesLabel_ = label(tr("ZONES"), QStringLiteral("SectionLabel"), contextPanel);
+    contextLayout->addWidget(zonesLabel_);
+    zoneList_ = new QListWidget(contextPanel);
+    zoneList_->setObjectName(QStringLiteral("ZoneList"));
+    zoneList_->setToolTip(tr("Click a zone to select it on the board; double-click to edit its net, layer and fill"));
+    connect(zoneList_, &QListWidget::itemClicked, this, [this](QListWidgetItem* row) {
+        if (auto* board = canvases_.value(1, nullptr)) {
+            board->revealItems({row->data(ZoneIdRole).toString()}, std::nullopt);
+            board->setFocus();
+        }
+    });
+    connect(zoneList_, &QListWidget::itemDoubleClicked, this, [this](QListWidgetItem* row) {
+        auto* board = canvases_.value(1, nullptr);
+        if (board == nullptr) return;
+        const QString id = row->data(ZoneIdRole).toString();
+        for (int index = 0; index < board->document().size(); ++index) {
+            if (board->document().at(index).id == id) {
+                editItemProperties(board, index);
+                return;
+            }
+        }
+    });
+    contextLayout->addWidget(zoneList_, 1);
+    zonesLabel_->hide();
+    zoneList_->hide();
     contextLayout->addStretch();
     // Board layers at the bottom left (Proteus ARES); the panel and the board canvas keep the
     // active layer in sync, including Space / Page Up / Page Down on the canvas.
@@ -1618,10 +1682,25 @@ void MainWindow::rebuildObjectSelector() {
             addTool(CanvasTool::Arc, tr("Arc"), QStringLiteral("arc"));
             addTool(CanvasTool::Text, tr("Text"), QStringLiteral("text"));
             if (workspace == Workspace::Board) {
+                // Zones have their own mode (ToolMode::Zone).
                 addTool(CanvasTool::Polyline, tr("Board outline"), QStringLiteral("outline"),
                         BoardOutlineVariant);
-                addTool(CanvasTool::Polyline, tr("Copper zone"), QStringLiteral("zone"),
-                        CopperZoneVariant);
+            }
+            break;
+        case ToolMode::Zone:
+            if (workspace == Workspace::Board) {
+                // Copper pours first, then the non-copper kinds (ADR-0012).
+                addTool(CanvasTool::Zone, tr("Copper zone"), QStringLiteral("zone"), CopperZoneVariant);
+                objectSelector_->item(objectSelector_->count() - 1)
+                    ->setToolTip(tr("Copper pour on the active copper layer; choose its net in the properties"));
+                addTool(CanvasTool::Zone, tr("Keepout zone"), QStringLiteral("keepout"), KeepoutZoneVariant);
+                objectSelector_->item(objectSelector_->count() - 1)
+                    ->setToolTip(tr("No copper on the active copper layer: pours stay out and the DRC reports "
+                                    "tracks, pads and vias inside"));
+                addTool(CanvasTool::Zone, tr("Area zone (silk, resist, paste)"), QStringLiteral("area"),
+                        AreaZoneVariant);
+                objectSelector_->item(objectSelector_->count() - 1)
+                    ->setToolTip(tr("Filled area on the active silk, resist or paste layer"));
             }
             break;
         case ToolMode::Select:
@@ -1640,6 +1719,10 @@ void MainWindow::rebuildObjectSelector() {
         routingStyleBar_->setVisible(workspace == Workspace::Board &&
                                      (toolMode_ == ToolMode::Connect || toolMode_ == ToolMode::Via ||
                                       toolMode_ == ToolMode::Pad));
+        const bool zoneMode = toolMode_ == ToolMode::Zone && workspace == Workspace::Board;
+        zonesLabel_->setVisible(zoneMode);
+        zoneList_->setVisible(zoneMode);
+        refreshZoneList();
         boardLayerPanel_->setVisible(workspace == Workspace::Board);
         if (hasObjects) {
             int fallback = 0;
@@ -1705,6 +1788,7 @@ void MainWindow::applyObjectSelection() {
     case ToolMode::Component:
     case ToolMode::Package:
     case ToolMode::Pad:
+    case ToolMode::Zone:
     case ToolMode::Terminal:
     case ToolMode::Probe:
     case ToolMode::Draw:
@@ -2162,14 +2246,14 @@ void MainWindow::workspaceChanged() {
     probe->setEnabled(!board);
     probe->setToolTip(board ? tr("Probes are only available in Mergen")
                             : withShortcut(probe->text(), probe->shortcut()));
-    for (const char* id : {"hatteda.tool.package", "hatteda.tool.via", "hatteda.tool.pad"}) {
+    for (const char* id : {"hatteda.tool.package", "hatteda.tool.via", "hatteda.tool.pad", "hatteda.tool.zone"}) {
         auto* boardOnly = actions_.value(QString::fromLatin1(id));
         boardOnly->setEnabled(board);
         boardOnly->setToolTip(board ? withShortcut(boardOnly->text(), boardOnly->shortcut())
                                     : tr("Only available in Kayra"));
     }
-    const bool boardMode =
-        toolMode_ == ToolMode::Package || toolMode_ == ToolMode::Via || toolMode_ == ToolMode::Pad;
+    const bool boardMode = toolMode_ == ToolMode::Package || toolMode_ == ToolMode::Via ||
+                           toolMode_ == ToolMode::Pad || toolMode_ == ToolMode::Zone;
     const bool unavailable = board ? toolMode_ == ToolMode::Probe : boardMode;
     activateToolMode(unavailable ? ToolMode::Select : toolMode_);
     zoomLabel_->setText(tr("Zoom %1%").arg(canvas->zoomPercent()));
@@ -2295,6 +2379,12 @@ void MainWindow::refreshIcons() {
             const QString icon = item->data(IconRole).toString();
             item->setIcon(icon.isEmpty() ? symbolIcon(item->data(VariantRole).toString(), palette())
                                          : makeIcon(icon, color));
+        }
+    }
+    if (zoneList_ != nullptr) {
+        for (int row = 0; row < zoneList_->count(); ++row) {
+            auto* item = zoneList_->item(row);
+            item->setIcon(makeIcon(item->data(IconRole).toString(), color));
         }
     }
     if (objectPreview_ != nullptr) {
@@ -2922,10 +3012,55 @@ void MainWindow::refreshZoneFills() {
     auto* board = canvases_.value(1, nullptr);
     if (board == nullptr) return;
     QHash<QString, QPainterPath> fills;
-    for (const ZoneFillResult& fill : pourZones(canvases_.value(0)->document(), board->document(), pourOptionsFor(rules_))) {
+    const ZonePourOptions options = pourOptionsFor(rules_);
+    for (const ZoneFillResult& fill : pourZones(canvases_.value(0)->document(), board->document(), options)) {
         fills.insert(fill.zoneId, fill.fill);
     }
+    for (const ZoneFillResult& fill : areaZoneFills(board->document(), options)) fills.insert(fill.zoneId, fill.fill);
     board->setZoneFills(fills);
+    // Summaries follow the zones, the schematic nets and the net classes.
+    refreshZoneList();
+}
+
+void MainWindow::refreshZoneList() {
+    auto* board = canvases_.value(1, nullptr);
+    // Summaries resolve net classes, so the list is only kept up to date while zone mode shows it;
+    // rebuildObjectSelector refreshes it when the mode opens.
+    if (zoneList_ == nullptr || zoneList_->isHidden() || board == nullptr) return;
+    const QColor color = iconColor(palette());
+    {
+        const QSignalBlocker blocker(zoneList_);
+        zoneList_->clear();
+        for (const SketchItem& zone : board->document()) {
+            if (!isZoneVariant(zone.variant)) continue;
+            const QString icon = zone.variant == KeepoutZoneVariant ? QStringLiteral("keepout")
+                                 : zone.variant == AreaZoneVariant  ? QStringLiteral("area")
+                                                                    : QStringLiteral("zone");
+            const QString layer = boardLayerName(zone.layer);
+            auto* row = new QListWidgetItem(
+                makeIcon(icon, color),
+                QStringLiteral("%1  ·  %2").arg(zoneSummary(zone, rules_, canvases_.value(0)->document()), layer),
+                zoneList_);
+            row->setData(ZoneIdRole, zone.id);
+            row->setData(IconRole, icon);
+            row->setToolTip(QStringLiteral("%1 · %2").arg(zoneKindName(zone.variant), layer));
+        }
+    }
+    syncZoneListSelection();
+}
+
+void MainWindow::syncZoneListSelection() {
+    auto* board = canvases_.value(1, nullptr);
+    if (zoneList_ == nullptr || board == nullptr) return;
+    const QSignalBlocker blocker(zoneList_);
+    const QList<int> selection = board->selection();
+    const QString selected = selection.size() == 1 ? board->document().value(selection.first()).id : QString();
+    zoneList_->setCurrentRow(-1);
+    for (int row = 0; row < zoneList_->count(); ++row) {
+        if (!selected.isEmpty() && zoneList_->item(row)->data(ZoneIdRole).toString() == selected) {
+            zoneList_->setCurrentRow(row);
+        }
+    }
 }
 
 } // namespace hatt::ui

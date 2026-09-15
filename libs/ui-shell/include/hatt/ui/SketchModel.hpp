@@ -9,6 +9,8 @@
 #include <QUuid>
 #include <QVector>
 
+#include <optional>
+
 namespace hatt::ui {
 
 // Interim editor model for the UI shell. It is intentionally simple (floating point millimetres,
@@ -105,6 +107,11 @@ struct SymbolDefinition {
     QString displayName;
 };
 
+// Zone fill (ADR-0012): Solid pours or fills the whole area, Hatched only a grid of bars inside a
+// border, Empty keeps just the boundary (an Empty copper zone is not poured and does not conduct).
+// Stable file tokens: solid, hatched, empty.
+enum class ZoneFillStyle { Solid, Hatched, Empty };
+
 struct SketchItem {
     enum class Kind { Symbol, Wire, Line, Polyline, Rectangle, Circle, Arc, Text, Pad, Via };
 
@@ -130,6 +137,8 @@ struct SketchItem {
     double width = 0.0;
     // Copper zones: name of the net the zone is poured for (ADR-0009); empty = not poured.
     QString net;
+    // Copper and area zones: how the zone is filled (ADR-0012).
+    ZoneFillStyle zoneFill = ZoneFillStyle::Solid;
 };
 
 using SketchDocument = QVector<SketchItem>;
@@ -187,6 +196,14 @@ struct PlacedPad {
 
 inline const QString BoardOutlineVariant = QStringLiteral("board-outline");
 inline const QString CopperZoneVariant = QStringLiteral("copper-zone");
+// Non-copper zones (ADR-0012), closed polylines like copper zones: a keepout on a copper layer that
+// pours stay out of and copper must not enter, and a filled area on a silk, resist or paste layer.
+inline const QString KeepoutZoneVariant = QStringLiteral("keepout-zone");
+inline const QString AreaZoneVariant = QStringLiteral("area-zone");
+[[nodiscard]] bool isZoneVariant(const QString& variant);
+[[nodiscard]] QString zoneFillStyleToken(ZoneFillStyle style);
+[[nodiscard]] std::optional<ZoneFillStyle> zoneFillStyleFromToken(const QString& token);
+[[nodiscard]] QString zoneFillStyleName(ZoneFillStyle style); // translated
 inline constexpr double TextHeightMm = 2.0;
 
 // Pad arrangement of a generated footprint (ComponentLibrary.hpp, ADR-0007).

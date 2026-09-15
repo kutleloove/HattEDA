@@ -76,7 +76,8 @@ public slots:
     // or writing failed (the error is shown).
     bool exportBom(const QString& path = {});
     bool exportPlacement(const QString& path = {});
-    // Re-pours the board's copper zones (ZoneFill.hpp) and hands the result to the board canvas.
+    // Re-pours the board's copper zones and fills its area zones (ZoneFill.hpp), hands the result to
+    // the board canvas and refreshes the zone list.
     void refreshZoneFills();
 
 protected:
@@ -84,8 +85,13 @@ protected:
     void closeEvent(QCloseEvent* event) override;
 
 private:
-    // Package, Via and Pad are Kayra only (Proteus ARES modes); Probe is Mergen only.
-    enum class ToolMode { Select, Component, Connect, Terminal, Probe, Draw, Measure, Package, Via, Pad };
+    // Package, Via, Pad and Zone are Kayra only (Proteus ARES modes); Probe is Mergen only.
+    enum class ToolMode { Select, Component, Connect, Terminal, Probe, Draw, Measure, Package, Via, Pad, Zone };
+
+    // Kayra zone mode (ADR-0012): one `ZoneList` row per board zone with its summary
+    // ("GND=POWER, Solid") and layer; the selected board zone is the current row.
+    void refreshZoneList();
+    void syncZoneListSelection();
 
     void createActions();
     void createMenus();
@@ -156,6 +162,8 @@ private:
     // Kayra layer visibility and the active layer selector at the bottom left (BoardLayerPanel).
     BoardLayerPanel* boardLayerPanel_ = nullptr;
     QWidget* routingStyleBar_ = nullptr;
+    QLabel* zonesLabel_ = nullptr;
+    QListWidget* zoneList_ = nullptr;
     QPushButton* editStyleButton_ = nullptr;
     QPushButton* deleteStyleButton_ = nullptr;
     QPushButton* removeDeviceButton_ = nullptr;

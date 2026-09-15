@@ -19,7 +19,9 @@ class QTimer;
 
 namespace hatt::ui {
 
-// Pad places a board pad of the PadStyle named by the tool variant; Via places a via.
+// Pad places a board pad of the PadStyle named by the tool variant; Via places a via. Zone draws a
+// closed zone of the kind named by the variant (CopperZoneVariant, KeepoutZoneVariant or
+// AreaZoneVariant, ADR-0012).
 enum class CanvasTool {
     Select,
     Symbol,
@@ -32,7 +34,8 @@ enum class CanvasTool {
     Text,
     Measure,
     Pad,
-    Via
+    Via,
+    Zone
 };
 
 enum class AlignOperation {
@@ -144,8 +147,8 @@ public:
     // Read-only overlay labels such as simulated probe voltages; not part of the document.
     void setAnnotations(const QVector<CanvasAnnotation>& annotations);
     [[nodiscard]] QVector<CanvasAnnotation> annotations() const { return annotations_; }
-    // Poured copper of zones by item id (ZoneFill.hpp), drawn under the board items in the zone's
-    // layer colour; computed by the host because pouring needs the schematic nets.
+    // Poured copper of zones and filled area zones by item id (ZoneFill.hpp), drawn under the board
+    // items in the zone's layer colour; computed by the host because pouring needs the schematic nets.
     void setZoneFills(const QHash<QString, QPainterPath>& fills);
     [[nodiscard]] QHash<QString, QPainterPath> zoneFills() const { return zoneFills_; }
 
@@ -261,6 +264,9 @@ private:
     // Copper layer used for tracks, zones and SMD pads.
     [[nodiscard]] BoardLayer routeLayer() const noexcept;
     [[nodiscard]] BoardLayer graphicsLayer() const noexcept;
+    // Layer of a new zone of the current Zone tool variant: copper for copper and keepout zones, a
+    // silk, resist or paste layer for area zones.
+    [[nodiscard]] BoardLayer zoneLayer() const noexcept;
     void beginBoardRoute(QPointF at);
     [[nodiscard]] double currentTrackWidth() const noexcept;
     [[nodiscard]] SketchItem pendingTrack(const QVector<QPointF>& points) const;

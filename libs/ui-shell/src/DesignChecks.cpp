@@ -405,6 +405,25 @@ CheckReport runDesignRuleCheck(const SketchDocument& schematic, const SketchDocu
         }
     }
 
+    // Keepout zones (ADR-0012): pours already stay out; tracks, pads, vias and unpoured zones must not
+    // enter the keepout on its copper layer.
+    for (const SketchItem& keepout : board) {
+        if (keepout.variant != KeepoutZoneVariant || !isCopperLayer(keepout.layer) || keepout.points.size() < 3) continue;
+        QPainterPath area;
+        area.addPolygon(QPolygonF(keepout.points + QVector<QPointF>{keepout.points.first()}));
+        const QRectF bounds = area.boundingRect();
+        for (int index = 0; index < count; ++index) {
+            const BoardConductor& part = copper[index];
+            if ((part.layers & layerBit(keepout.layer)) == 0 || !part.bounds.intersects(bounds)) continue;
+            const bool inside = std::any_of(part.shapes.begin(), part.shapes.end(),
+                                            [&area](const CopperShape& shape) { return area.intersects(copperShapePath(shape)); });
+            if (inside) {
+                add(report, E, B, "drc.keepout", tr("The keepout zone on %1 contains copper: %2.").arg(boardLayerName(keepout.layer), part.name),
+                    part.anchor, {keepout.id, part.itemId});
+            }
+        }
+    }
+
     // Groups joining several nets.
     if (model.netsKnown) {
         QSet<int> reported;
