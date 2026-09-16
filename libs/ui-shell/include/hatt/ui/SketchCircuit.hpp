@@ -12,6 +12,9 @@ struct CircuitSnapshot {
     electrical::DcCircuit dc;
     // Connectivity net index of each DC net (nets that no element touches are not solved).
     QVector<int> dcNets;
+    // Schematic Wire item id of each entry in input.wires/connectivity.wireNets, same order
+    // (issue #47: wire net labels).
+    QStringList wireIds;
     QStringList errors;
     QStringList simulationErrors;
     // Voltage probes: schematic item id, world position of the probe pin and its net index.
@@ -26,6 +29,9 @@ struct CircuitSnapshot {
 CircuitSnapshot analyzeSchematic(const SketchDocument& document);
 // World positions of the automatic junction dots of a schematic (see electrical::junctionPoints).
 QVector<QPointF> schematicJunctions(const SketchDocument& document);
+// Net name of each schematic Wire item, keyed by item id (issue #47: wire net labels). Empty when
+// the schematic has connectivity errors; a wire whose net has no determinable name is omitted.
+QHash<QString, QString> schematicWireNets(const SketchDocument& document);
 SketchDocument dcDividerExample();
 
 struct BoardTransfer {

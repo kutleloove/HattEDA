@@ -103,6 +103,9 @@ public slots:
     // Net class track widths and clearances of the board copper (boardRouteClasses, issue #39) for
     // the board canvas router. Only computed while board track mode is active.
     void refreshRouteClasses();
+    // Net name of each schematic wire and board track (schematicWireNets/boardTrackNets, issue #47)
+    // for the wire hover/opacity/net-label drawing on both canvases.
+    void refreshWireNets();
 
 protected:
     void changeEvent(QEvent* event) override;

@@ -160,6 +160,10 @@ ConnectivityResult buildConnectivity(const ConnectivityInput& input) {
         result.pinNets[i] = net;
         result.nets[net].pins.push_back(static_cast<int>(i));
     }
+    result.wireNets.assign(input.wires.size(), -1);
+    for (std::size_t i = 0; i < input.wires.size(); ++i) {
+        result.wireNets[i] = netByRoot.at(sets.root(wireOffset + static_cast<int>(i)));
+    }
     return result;
 }
 

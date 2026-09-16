@@ -145,6 +145,11 @@ private slots:
     void gridLevelChangesSnapStep();
     void wireCornerOnAnotherWireJoinsIt();
     void teeJoinsFollowMovedWires();
+
+    // Issue #47: hover picks the wire under the cursor and limits the full-opacity run to the next
+    // junction, even when splitPathAtWires left the crossed wire as one unsplit item.
+    void hoveredWireTracksCursorAndClearsOutsideSelectMode();
+    void hoveredWireRunStopsAtATeeJunctionWithinOneItem();
     void lengthUnitsFormat();
     void spacingShownWhileMovingAndPlacing();
     void equalSpacingSnapsWhileMovingAndPlacing();
@@ -695,6 +700,79 @@ void DesignCanvasTests::wireCornerOnAnotherWireJoinsIt() {
     canvas_->undoStack()->undo();
     canvas_->undoStack()->undo();
     QCOMPARE(canvas_->document().size(), 1);
+}
+
+void DesignCanvasTests::hoveredWireTracksCursorAndClearsOutsideSelectMode() {
+    const SketchItem wireA = wireThrough({{10.0, 10.0}, {30.0, 10.0}});
+    const SketchItem wireB = wireThrough({{10.0, 30.0}, {30.0, 30.0}});
+    canvas_->applyDocumentEdit(QStringLiteral("Setup"), {wireA, wireB});
+    canvas_->setTool(CanvasTool::Select);
+    QCOMPARE(canvas_->hoveredWireIndex(), -1);
+    QVERIFY(canvas_->hoveredWireNet().isEmpty());
+
+    sendMouse(*canvas_, QEvent::MouseMove, {20.0, 10.0}, Qt::NoButton, Qt::NoButton);
+    QCOMPARE(canvas_->hoveredWireIndex(), 0);
+
+    sendMouse(*canvas_, QEvent::MouseMove, {20.0, 30.0}, Qt::NoButton, Qt::NoButton);
+    QCOMPARE(canvas_->hoveredWireIndex(), 1);
+
+    // Empty space between the two wires: nothing hovered.
+    sendMouse(*canvas_, QEvent::MouseMove, {20.0, 20.0}, Qt::NoButton, Qt::NoButton);
+    QCOMPARE(canvas_->hoveredWireIndex(), -1);
+
+    canvas_->setWireNets({{wireA.id, QStringLiteral("VCC")}});
+    sendMouse(*canvas_, QEvent::MouseMove, {20.0, 10.0}, Qt::NoButton, Qt::NoButton);
+    QCOMPARE(canvas_->hoveredWireIndex(), 0);
+    QCOMPARE(canvas_->hoveredWireNet(), QStringLiteral("VCC"));
+
+    // Leaving Select mode clears the highlight.
+    canvas_->setTool(CanvasTool::Wire);
+    QCOMPARE(canvas_->hoveredWireIndex(), -1);
+    QVERIFY(canvas_->hoveredWireRun().isEmpty());
+}
+
+void DesignCanvasTests::hoveredWireRunStopsAtATeeJunctionWithinOneItem() {
+    // A (index 0) is one long, unsplit wire; B (index 1) ends on its middle, forming a T.
+    // splitPathAtWires only ever splits the wire being newly drawn (see
+    // wireCornerOnAnotherWireJoinsIt above), so A itself stays a single item spanning past the
+    // join — the hover run must still stop there instead of showing all of A at once.
+    const hatt::ui::SketchDocument tee{wireThrough({{10.16, 20.32}, {50.8, 20.32}}),
+                                       wireThrough({{30.48, 20.32}, {30.48, 30.48}})};
+    canvas_->applyDocumentEdit(QStringLiteral("Setup"), tee);
+    canvas_->setTool(CanvasTool::Select);
+
+    auto runLength = [](const QVector<QLineF>& run) {
+        double total = 0.0;
+        for (const QLineF& segment : run) total += segment.length();
+        return total;
+    };
+
+    // Left of the T: the run stays on A's left arm only (10.16 to 30.48).
+    sendMouse(*canvas_, QEvent::MouseMove, {20.32, 20.32}, Qt::NoButton, Qt::NoButton);
+    QCOMPARE(canvas_->hoveredWireIndex(), 0);
+    QVector<QLineF> run = canvas_->hoveredWireRun();
+    QVERIFY(std::abs(runLength(run) - 20.32) < 1e-6);
+    for (const QLineF& segment : run) {
+        QVERIFY(segment.x1() <= 30.48 + 1e-6 && segment.x2() <= 30.48 + 1e-6);
+    }
+
+    // Right of the T: the run stays on A's right arm only (30.48 to 50.8).
+    sendMouse(*canvas_, QEvent::MouseMove, {40.64, 20.32}, Qt::NoButton, Qt::NoButton);
+    QCOMPARE(canvas_->hoveredWireIndex(), 0);
+    run = canvas_->hoveredWireRun();
+    QVERIFY(std::abs(runLength(run) - 20.32) < 1e-6);
+    for (const QLineF& segment : run) {
+        QVERIFY(segment.x1() >= 30.48 - 1e-6 && segment.x2() >= 30.48 - 1e-6);
+    }
+
+    // B (the stub) hovers as its own run, unrelated to either side of A.
+    sendMouse(*canvas_, QEvent::MouseMove, {30.48, 25.4}, Qt::NoButton, Qt::NoButton);
+    QCOMPARE(canvas_->hoveredWireIndex(), 1);
+    run = canvas_->hoveredWireRun();
+    QVERIFY(std::abs(runLength(run) - 10.16) < 1e-6);
+    for (const QLineF& segment : run) {
+        QVERIFY(std::abs(segment.x1() - 30.48) < 1e-6 && std::abs(segment.x2() - 30.48) < 1e-6);
+    }
 }
 
 void DesignCanvasTests::teeJoinsFollowMovedWires() {
