@@ -66,7 +66,7 @@ PackageExtraction extractPackage(const SketchDocument& document, const QList<int
                 pads.append(pad);
             }
             result.usedItems.append(index);
-        } else if (isGraphic(item.kind) && isSilkLayer(item.layer) && item.variant != BoardOutlineVariant &&
+        } else if (isGraphic(item.kind) && isSilkLayer(item.layer) && !isBoardOutline(item) &&
                    !isZoneVariant(item.variant)) {
             SymbolShape shape = outlineShape(item);
             if (shape.points.size() < 2) {

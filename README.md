@@ -107,6 +107,10 @@ Geçici şema/PCB editörü, sağ tık özellikleri, netlist, PCB aktarımı/ba�
 
 Hata bildirimleri, öneriler ve pull request'ler memnuniyetle karşılanır. Açık işler [Issues](https://github.com/kutleloove/HattEDA/issues) sekmesinde takip edilir. Büyük değişikliklerden önce ilgili issue üzerinde tartışma açılması ve yukarıdaki mimari kurallara uyulması beklenir.
 
+## Üçüncü taraf araçlar
+
+HattEDA, isteğe bağlı otomatik yol yönlendirme (autorouting) için [Freerouting](https://www.freerouting.org)'i ayrı, harici bir işlem (`java -jar`, Specctra DSN/SES dosya alışverişi) olarak çalıştırabilir. Freerouting GPL-3.0 lisanslıdır ve kaynağı bu depoya gömülmez/link edilmez — bkz. [ADR-0014](docs/adr/ADR-0014-external-autorouter-boundary.md) ve [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
+
 ## Lisans
 
 HattEDA, [GNU General Public License v3.0](LICENSE) altında lisanslanmıştır. Copyright (C) 2026 Murat Çuka.

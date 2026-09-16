@@ -782,6 +782,32 @@ QVector<QLineF> itemSegments(const SketchItem& item) {
     return segments;
 }
 
+bool isBoardOutline(const SketchItem& item) {
+    if (item.variant != BoardOutlineVariant && item.layer != BoardLayer::BoardEdge) return false;
+    switch (item.kind) {
+    case SketchItem::Kind::Polyline:
+        return item.closed && item.points.size() >= 3;
+    case SketchItem::Kind::Rectangle:
+    case SketchItem::Kind::Circle:
+        return item.points.size() >= 2;
+    default:
+        return false;
+    }
+}
+
+QVector<QPointF> boardOutlinePoints(const SketchItem& item) {
+    if (!isBoardOutline(item)) return {};
+    const QVector<QLineF> segments = itemSegments(item);
+    if (segments.size() < 3 ||
+        QLineF(segments.last().p2(), segments.first().p1()).length() > 1e-6) {
+        return {};
+    }
+    QVector<QPointF> points;
+    points.reserve(segments.size());
+    for (const QLineF& segment : segments) points.append(segment.p1());
+    return points;
+}
+
 QVector<QPointF> itemAnchors(const SketchItem& item) {
     switch (item.kind) {
     case SketchItem::Kind::Symbol: {

@@ -8,6 +8,7 @@
 #include <QCoreApplication>
 #include <QHash>
 #include <QLineF>
+#include <QPainterPath>
 #include <QPolygonF>
 #include <QSet>
 
@@ -219,19 +220,18 @@ CheckReport runDesignRuleCheck(const SketchDocument& schematic, const SketchDocu
     const auto B = Workspace::Board;
 
     // Board outline.
-    const SketchItem* outline = nullptr;
-    for (const auto& item : board) {
-        if (item.variant == BoardOutlineVariant && (item.closed || item.kind == SketchItem::Kind::Rectangle)) {
-            outline = &item;
-            break;
-        }
-    }
+    QPainterPath boardArea;
     QVector<QLineF> edges;
-    QPolygonF outlinePolygon;
-    if (outline != nullptr) {
-        edges = itemSegments(*outline);
-        for (const QLineF& edge : edges) outlinePolygon << edge.p1();
-    } else {
+    for (const auto& item : board) {
+        const QVector<QPointF> outline = boardOutlinePoints(item);
+        if (outline.isEmpty()) continue;
+        QPainterPath area;
+        area.addPolygon(QPolygonF(outline));
+        area.closeSubpath();
+        boardArea = boardArea.united(area);
+        edges += itemSegments(item);
+    }
+    if (boardArea.isEmpty()) {
         add(report, W, B, "drc.no-outline", tr("The board has no closed board outline, so board edge clearance is not checked."));
     }
 
@@ -501,11 +501,11 @@ CheckReport runDesignRuleCheck(const SketchDocument& schematic, const SketchDocu
         }
     }
 
-    if (outline != nullptr && outlinePolygon.size() >= 3) {
+    if (!boardArea.isEmpty()) {
         for (const auto& part : copper) {
             // Zones are usually drawn up to the outline; pouring will apply the edge clearance.
             if (part.kind == ConductorKind::Zone) continue;
-            const bool inside = outlinePolygon.containsPoint(part.anchor, Qt::OddEvenFill);
+            const bool inside = boardArea.contains(part.anchor);
             double nearest = std::numeric_limits<double>::infinity();
             for (const auto& shape : part.shapes) {
                 for (const QLineF& edge : edges) {

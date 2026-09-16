@@ -100,9 +100,8 @@ QVector<ZoneFillResult> fillZones(const SketchDocument& board, const QVector<Zon
     const double clearance = options.clearance;
     QPainterPath boardArea;
     for (const SketchItem& item : board) {
-        if (item.variant == BoardOutlineVariant && item.points.size() >= 3) {
-            boardArea = boardArea.united(polygonPath(closedOutline(item)));
-        }
+        const QVector<QPointF> outline = boardOutlinePoints(item);
+        if (!outline.isEmpty()) boardArea = boardArea.united(polygonPath(outline));
     }
     if (!boardArea.isEmpty()) boardArea = shrunk(boardArea, options.boardEdgeClearance);
     // Keepout zones by copper layer: no pour enters them.

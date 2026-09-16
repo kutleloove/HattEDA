@@ -5,12 +5,16 @@
 #include "hatt/ui/Theme.hpp"
 #include <QDialog>
 #include <QDialogButtonBox>
+#include <QComboBox>
 #include <QDir>
 #include <QDoubleSpinBox>
 #include <QPushButton>
+#include <QPolygonF>
 #include <QRegularExpression>
 #include <QFontDatabase>
+#include <QLabel>
 #include <QSettings>
+#include <QSpinBox>
 #include <QTemporaryDir>
 #include <QTimer>
 #include <QMenu>
@@ -319,6 +323,47 @@ private slots:
             QVERIFY(std::abs(origin.x() / 1.27 - std::round(origin.x() / 1.27)) < 1e-6);
         }
     }
+    void autoPlacerUsesOrdinaryBoardEdgeGeometry() {
+        SketchItem outline;
+        outline.kind = SketchItem::Kind::Rectangle;
+        outline.layer = BoardLayer::BoardEdge;
+        outline.points = {{10, 20}, {50, 45}};
+        SketchItem part;
+        part.kind = SketchItem::Kind::Symbol;
+        part.variant = "board.dip8";
+        part.label = "U1";
+
+        const SketchDocument placed = autoPlaceParts({outline}, {part}, 1.27, 2.0);
+        QCOMPARE(placed.size(), 2);
+        const QRectF bounds = itemBounds(placed.last());
+        QVERIFY(QRectF(10, 20, 40, 25).contains(bounds.adjusted(-2, -2, 2, 2)));
+    }
+    void autoPlacerNeverEscapesNonRectangularOutline() {
+        SketchItem outline;
+        outline.kind = SketchItem::Kind::Polyline;
+        outline.layer = BoardLayer::BoardEdge;
+        outline.closed = true;
+        outline.points = {{0, 0}, {40, 0}, {40, 12}, {18, 12}, {18, 35}, {0, 35}};
+        SketchDocument parts;
+        for (int i = 0; i < 4; ++i) {
+            SketchItem part;
+            part.kind = SketchItem::Kind::Symbol;
+            part.variant = "board.r0603";
+            part.label = QString("R%1").arg(i + 1);
+            parts.append(part);
+        }
+
+        const SketchDocument placed = autoPlaceParts({outline}, parts, 1.0, 1.0);
+        QCOMPARE(placed.size(), 5);
+        QPolygonF polygon(outline.points);
+        for (int i = 1; i < placed.size(); ++i) {
+            const QRectF bounds = itemBounds(placed[i]).adjusted(-1, -1, 1, 1);
+            QVERIFY(polygon.containsPoint(bounds.topLeft(), Qt::OddEvenFill));
+            QVERIFY(polygon.containsPoint(bounds.topRight(), Qt::OddEvenFill));
+            QVERIFY(polygon.containsPoint(bounds.bottomLeft(), Qt::OddEvenFill));
+            QVERIFY(polygon.containsPoint(bounds.bottomRight(), Qt::OddEvenFill));
+        }
+    }
     void netlistTextListsPartsAndNets() {
         const auto text = netlistText(dcDividerExample());
         QVERIFY(text.contains("*PARTS"));
@@ -369,6 +414,33 @@ private slots:
         QCOMPARE(board->airwires().size(), 3);
         QCOMPARE(flow->autoPlace(1.27, 2.54), 0);
         QCOMPARE(board->undoStack()->count(), 2);
+    }
+    void autoRouterHasNamedSettingsDialog() {
+        MainWindow window;
+        window.resize(1200, 800);
+        window.show();
+        QTimer::singleShot(0, [] {
+            if (auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget())) dialog->accept();
+        });
+        window.createNewProject();
+        auto* action = window.findChild<QAction*>("hatteda.action.auto-route");
+        QVERIFY(action);
+        QVERIFY(action->text().contains(QStringLiteral("Auto Router")));
+
+        QTimer::singleShot(0, [] {
+            auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+            QVERIFY(dialog);
+            QCOMPARE(dialog->objectName(), QStringLiteral("AutorouterSettingsDialog"));
+            QVERIFY(dialog->windowTitle().contains(QStringLiteral("Auto Router")));
+            QVERIFY(dialog->findChild<QSpinBox*>("AutorouterPasses"));
+            QVERIFY(dialog->findChild<QSpinBox*>("AutorouterTimeout"));
+            QVERIFY(dialog->findChild<QSpinBox*>("AutorouterThreads"));
+            QVERIFY(dialog->findChild<QComboBox*>("AutorouterUpdateStrategy"));
+            QVERIFY(dialog->findChild<QComboBox*>("AutorouterSelectionStrategy"));
+            QVERIFY(dialog->findChild<QLabel*>("AutorouterLayers"));
+            dialog->reject();
+        });
+        action->trigger();
     }
     void liveSimulationShowsProbeVoltagesAndFollowsEdits() {
         MainWindow window;

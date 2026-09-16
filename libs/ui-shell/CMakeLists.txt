@@ -52,6 +52,12 @@ add_library(hatt-ui-shell STATIC
     src/CamPreview.cpp
     include/hatt/ui/ZoneFill.hpp
     src/ZoneFill.cpp
+    include/hatt/ui/SpecctraDsn.hpp
+    src/SpecctraDsn.cpp
+    include/hatt/ui/SpecctraSes.hpp
+    src/SpecctraSes.cpp
+    include/hatt/ui/FreeroutingRunner.hpp
+    src/FreeroutingRunner.cpp
     include/hatt/ui/PrintLayout.hpp
     src/PrintLayout.cpp
     include/hatt/ui/PrintLayoutDialog.hpp
