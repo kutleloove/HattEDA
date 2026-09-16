@@ -226,24 +226,6 @@ Son projeler listesinden kaldırılsın mı?</translation></message>
     <message><source>Auto Router...</source><translation>Auto Router...</translation></message>
     <message><source>Configure and run the PCB Auto Router; HattEDA validates the result with DRC</source><translation>PCB Auto Router ayarlarını yapıp çalıştır; HattEDA sonucu DRC ile doğrular</translation></message>
     <message><source>Auto Router</source><translation>Auto Router</translation></message>
-    <message><source>Auto Router Settings</source><translation>Auto Router Ayarları</translation></message>
-    <message><source>Routing layers (from Design Rules)</source><translation>Yönlendirme katmanları (Tasarım Kurallarından)</translation></message>
-    <message><source>Top copper</source><translation>Üst bakır</translation></message>
-    <message><source>Bottom copper</source><translation>Alt bakır</translation></message>
-    <message><source>Maximum routing passes</source><translation>Azami yönlendirme geçişi</translation></message>
-    <message><source>Time limit</source><translation>Süre sınırı</translation></message>
-    <message><source> s</source><translation> sn</translation></message>
-    <message><source>Worker threads</source><translation>Çalışan iş parçacıkları</translation></message>
-    <message><source>Automatic</source><translation>Otomatik</translation></message>
-    <message><source>Optimization strategy</source><translation>İyileştirme stratejisi</translation></message>
-    <message><source>Greedy (fast)</source><translation>Açgözlü (hızlı)</translation></message>
-    <message><source>Hybrid</source><translation>Karma</translation></message>
-    <message><source>Global (quality)</source><translation>Global (kalite)</translation></message>
-    <message><source>Item selection</source><translation>Öğe seçimi</translation></message>
-    <message><source>Prioritized</source><translation>Öncelikli</translation></message>
-    <message><source>Sequential</source><translation>Sıralı</translation></message>
-    <message><source>Random</source><translation>Rastgele</translation></message>
-    <message><source>Begin Routing</source><translation>Yönlendirmeyi Başlat</translation></message>
     <message><source>Select Freerouting</source><translation>Freerouting'i seç</translation></message>
     <message><source>Freerouting JAR (*.jar);;All files (*.*)</source><translation>Freerouting JAR (*.jar);;Tüm dosyalar (*.*)</translation></message>
     <message><source>Auto Router is routing the PCB...</source><translation>Auto Router PCB yollarını çiziyor...</translation></message>
@@ -716,6 +698,24 @@ Son projeler listesinden kaldırılsın mı?</translation></message>
     <message><source>design rules</source><translation>tasarım kuralları</translation></message>
     <message><source>Copper of other nets keeps at least this gap from the nets of this class, on top of the clearance rules. Tracks started on these nets route at the class trace width.</source><translation>Diğer netlerin bakırı, aralık kurallarına ek olarak bu sınıfın netlerinden en az bu kadar uzak durur. Bu netlerden başlatılan yollar sınıfın yol genişliğiyle çizilir.</translation></message>
     <message><source>Clearance</source><translation>Aralık</translation></message>
+    <message><source>Autorouter</source><translation>Otomatik Yönlendirici</translation></message>
+    <message><source>Route Board</source><translation>Kartı Yönlendir</translation></message>
+    <message><source>Apply these design rules and start the Auto Router with the settings above</source><translation>Bu tasarım kurallarını uygula ve yukarıdaki ayarlarla Auto Router'ı başlat</translation></message>
+    <message><source>Routing layers (from Net Classes)</source><translation>Yönlendirme katmanları (Net Sınıflarından)</translation></message>
+    <message><source>Maximum routing passes</source><translation>Azami yönlendirme geçişi</translation></message>
+    <message><source>Time limit</source><translation>Süre sınırı</translation></message>
+    <message><source> s</source><translation> sn</translation></message>
+    <message><source>Worker threads</source><translation>Çalışan iş parçacıkları</translation></message>
+    <message><source>Automatic</source><translation>Otomatik</translation></message>
+    <message><source>Optimization strategy</source><translation>İyileştirme stratejisi</translation></message>
+    <message><source>Greedy (fast)</source><translation>Açgözlü (hızlı)</translation></message>
+    <message><source>Hybrid</source><translation>Karma</translation></message>
+    <message><source>Global (quality)</source><translation>Global (kalite)</translation></message>
+    <message><source>Item selection</source><translation>Öğe seçimi</translation></message>
+    <message><source>Prioritized</source><translation>Öncelikli</translation></message>
+    <message><source>Sequential</source><translation>Sıralı</translation></message>
+    <message><source>Random</source><translation>Rastgele</translation></message>
+    <message><source>These settings run the external Freerouting engine (see THIRD_PARTY_LICENSES.md); they are a local run preference and are not saved with the project.</source><translation>Bu ayarlar harici Freerouting motorunu çalıştırır (bkz. THIRD_PARTY_LICENSES.md); makine-yerel bir çalışma tercihidir ve projeyle birlikte kaydedilmez.</translation></message>
   </context>
   <context>
     <name>hatt::ui::DesignChecks</name>

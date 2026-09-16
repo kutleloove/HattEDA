@@ -15,6 +15,7 @@
 #include <QLabel>
 #include <QSettings>
 #include <QSpinBox>
+#include <QTabWidget>
 #include <QTemporaryDir>
 #include <QTimer>
 #include <QMenu>
@@ -454,7 +455,10 @@ private slots:
         QCOMPARE(flow->autoPlace(1.27, 2.54), 0);
         QCOMPARE(board->undoStack()->count(), 2);
     }
-    void autoRouterHasNamedSettingsDialog() {
+    // Issue #49: Circuit > Auto Router... no longer opens its own settings dialog; it opens the
+    // Design Rule Manager with the Autorouter tab active, so routing settings live alongside the
+    // rules that constrain them.
+    void autoRouterOpensDesignRulesOnAutorouterTab() {
         MainWindow window;
         window.resize(1200, 800);
         window.show();
@@ -469,14 +473,17 @@ private slots:
         QTimer::singleShot(0, [] {
             auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
             QVERIFY(dialog);
-            QCOMPARE(dialog->objectName(), QStringLiteral("AutorouterSettingsDialog"));
-            QVERIFY(dialog->windowTitle().contains(QStringLiteral("Auto Router")));
+            QCOMPARE(dialog->objectName(), QStringLiteral("DesignRuleManagerDialog"));
+            auto* tabs = dialog->findChild<QTabWidget*>("RuleTabs");
+            QVERIFY(tabs);
+            QCOMPARE(tabs->currentWidget()->objectName(), QStringLiteral("DesignRulesAutorouterTab"));
             QVERIFY(dialog->findChild<QSpinBox*>("AutorouterPasses"));
             QVERIFY(dialog->findChild<QSpinBox*>("AutorouterTimeout"));
             QVERIFY(dialog->findChild<QSpinBox*>("AutorouterThreads"));
             QVERIFY(dialog->findChild<QComboBox*>("AutorouterUpdateStrategy"));
             QVERIFY(dialog->findChild<QComboBox*>("AutorouterSelectionStrategy"));
             QVERIFY(dialog->findChild<QLabel*>("AutorouterLayers"));
+            QVERIFY(dialog->findChild<QPushButton*>("RouteBoard"));
             dialog->reject();
         });
         action->trigger();

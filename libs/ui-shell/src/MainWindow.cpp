@@ -490,11 +490,12 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
 
     auto* circuitMenu = menuBar()->addMenu(tr("Circuit"));
     circuitMenu->setObjectName(QStringLiteral("CircuitMenu"));
-    auto* circuit = new CircuitWorkflow(this, circuitMenu, canvases_[0], canvases_[1],
+    circuit_ = new CircuitWorkflow(this, circuitMenu, canvases_[0], canvases_[1],
         [this](const QString& id, const QString& title, QWidget* content) { openToolWorkspace(id, title, content); },
         [this] { return shellPages_ && shellPages_->currentIndex() == 1; },
-        [this] { showKayraWorkspace(); }, [this] { return rules_; });
-    connect(circuit, &CircuitWorkflow::statusMessage, statusBar(), [this](const QString& message) {
+        [this] { showKayraWorkspace(); }, [this] { return rules_; },
+        [this] { editDesignRules(/*openAutorouterTab=*/true); });
+    connect(circuit_, &CircuitWorkflow::statusMessage, statusBar(), [this](const QString& message) {
         statusBar()->showMessage(message, 5000);
     });
     // Simulation play/stop sit before the design checks, as in Proteus' simulation controls.
@@ -3236,18 +3237,24 @@ void MainWindow::runDesignChecks() {
     statusBar()->showMessage(tr("Design checks: %1 error(s), %2 warning(s)").arg(errors).arg(warnings), 6000);
 }
 
-void MainWindow::editDesignRules() {
+void MainWindow::editDesignRules(bool openAutorouterTab) {
     if (projectPath_.isEmpty()) return;
     const SketchDocument& schematic = canvases_.value(0)->document();
     const QHash<QString, QString> automaticClasses = netClassAssignments(DesignRules{}, schematic);
-    DesignRuleManagerDialog dialog(rules_, automaticClasses.keys(), automaticClasses, this);
-    if (dialog.exec() != QDialog::Accepted || dialog.rules() == rules_) return;
-    rules_ = dialog.rules();
-    if (canvases_.size() > 1) canvases_[1]->setRoutingClearance(rules_.clearance);
-    rulesModified_ = true;
-    refreshZoneFills();
-    refreshRouteClasses();
-    updateProjectState();
+    DesignRuleManagerDialog dialog(rules_, automaticClasses.keys(), automaticClasses, this, openAutorouterTab);
+    if (dialog.exec() != QDialog::Accepted) return;
+    const bool routeRequested = dialog.routeRequested();
+    if (dialog.rules() != rules_) {
+        rules_ = dialog.rules();
+        if (canvases_.size() > 1) canvases_[1]->setRoutingClearance(rules_.clearance);
+        rulesModified_ = true;
+        refreshZoneFills();
+        refreshRouteClasses();
+        updateProjectState();
+    }
+    // Issue #49: Route Board applies the rules above, then starts routing with the pcb/freerouting/*
+    // settings the Autorouter tab just persisted.
+    if (routeRequested && circuit_) circuit_->runAutorouter();
 }
 
 bool MainWindow::writeAssemblyFile(QString path, const QString& title, const QString& suffix, const QByteArray& content) {

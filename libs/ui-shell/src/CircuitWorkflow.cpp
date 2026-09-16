@@ -37,10 +37,12 @@ QString messages(const QStringList& errors) {
 }
 CircuitWorkflow::CircuitWorkflow(QWidget* host, QMenu* menu, DesignCanvas* schematic, DesignCanvas* board,
                                  ShowReport showReport, std::function<bool()> projectOpen,
-                                 std::function<void()> showBoard, std::function<DesignRules()> designRules)
+                                 std::function<void()> showBoard, std::function<DesignRules()> designRules,
+                                 std::function<void()> configureAutorouter)
     : QObject(host), host_(host), schematic_(schematic), board_(board),
       showReport_(std::move(showReport)), projectOpen_(std::move(projectOpen)),
-      showBoard_(std::move(showBoard)), designRules_(std::move(designRules)) {
+      showBoard_(std::move(showBoard)), designRules_(std::move(designRules)),
+      configureAutorouter_(std::move(configureAutorouter)) {
     setObjectName(QStringLiteral("CircuitWorkflow"));
     auto add = [&](const char* id, const QString& title, auto callback) {
         auto* action = new QAction(title, host);
@@ -265,79 +267,17 @@ void CircuitWorkflow::showAutoPlacer() {
 
 void CircuitWorkflow::showAutorouter() {
     if (!projectOpen_() || autorouter_->isRunning()) return;
+    // Issue #49: routing settings live in the Design Rules dialog's Autorouter tab, not a separate
+    // dialog here. The host opens that dialog (Autorouter tab active); its Route Board button applies
+    // any rule edits and then calls runAutorouter() below.
+    configureAutorouter_();
+}
+
+void CircuitWorkflow::runAutorouter() {
+    if (!projectOpen_() || autorouter_->isRunning()) return;
 
     const DesignRules rules = designRules_();
     QSettings settings;
-    QDialog settingsDialog(host_);
-    settingsDialog.setObjectName(QStringLiteral("AutorouterSettingsDialog"));
-    settingsDialog.setWindowTitle(tr("Auto Router Settings"));
-    auto* form = new QFormLayout(&settingsDialog);
-
-    QStringList classLayers;
-    for (const NetClass& netClass : effectiveNetClasses(rules)) {
-        QStringList layers;
-        if (netClass.layers & layerBit(BoardLayer::TopCopper)) layers << tr("Top copper");
-        if (netClass.layers & layerBit(BoardLayer::BottomCopper)) layers << tr("Bottom copper");
-        classLayers << QStringLiteral("%1: %2").arg(netClass.name, layers.join(QStringLiteral(" + ")));
-    }
-    auto* layerSummary = new QLabel(classLayers.join(QLatin1Char('\n')), &settingsDialog);
-    layerSummary->setObjectName(QStringLiteral("AutorouterLayers"));
-    layerSummary->setWordWrap(true);
-    form->addRow(tr("Routing layers (from Design Rules)"), layerSummary);
-
-    auto* passes = new QSpinBox(&settingsDialog);
-    passes->setObjectName(QStringLiteral("AutorouterPasses"));
-    passes->setRange(1, 1000);
-    passes->setValue(settings.value(QStringLiteral("pcb/freerouting/maxPasses"), 100).toInt());
-    form->addRow(tr("Maximum routing passes"), passes);
-
-    auto* timeout = new QSpinBox(&settingsDialog);
-    timeout->setObjectName(QStringLiteral("AutorouterTimeout"));
-    timeout->setRange(10, 3600);
-    timeout->setSuffix(tr(" s"));
-    timeout->setValue(settings.value(QStringLiteral("pcb/freerouting/timeoutMs"), 5 * 60 * 1000).toInt() / 1000);
-    form->addRow(tr("Time limit"), timeout);
-
-    auto* threads = new QSpinBox(&settingsDialog);
-    threads->setObjectName(QStringLiteral("AutorouterThreads"));
-    threads->setRange(0, 64);
-    threads->setSpecialValueText(tr("Automatic"));
-    threads->setValue(settings.value(QStringLiteral("pcb/freerouting/threads"), 0).toInt());
-    form->addRow(tr("Worker threads"), threads);
-
-    auto* updateStrategy = new QComboBox(&settingsDialog);
-    updateStrategy->setObjectName(QStringLiteral("AutorouterUpdateStrategy"));
-    updateStrategy->addItem(tr("Greedy (fast)"), QStringLiteral("greedy"));
-    updateStrategy->addItem(tr("Hybrid"), QStringLiteral("hybrid"));
-    updateStrategy->addItem(tr("Global (quality)"), QStringLiteral("global"));
-    updateStrategy->setCurrentIndex(std::max(
-        0, updateStrategy->findData(settings.value(QStringLiteral("pcb/freerouting/updateStrategy"),
-                                                   QStringLiteral("greedy")))));
-    form->addRow(tr("Optimization strategy"), updateStrategy);
-
-    auto* selectionStrategy = new QComboBox(&settingsDialog);
-    selectionStrategy->setObjectName(QStringLiteral("AutorouterSelectionStrategy"));
-    selectionStrategy->addItem(tr("Prioritized"), QStringLiteral("prioritized"));
-    selectionStrategy->addItem(tr("Sequential"), QStringLiteral("sequential"));
-    selectionStrategy->addItem(tr("Random"), QStringLiteral("random"));
-    selectionStrategy->setCurrentIndex(std::max(
-        0, selectionStrategy->findData(settings.value(QStringLiteral("pcb/freerouting/selectionStrategy"),
-                                                      QStringLiteral("prioritized")))));
-    form->addRow(tr("Item selection"), selectionStrategy);
-
-    auto* settingsButtons =
-        new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &settingsDialog);
-    settingsButtons->button(QDialogButtonBox::Ok)->setText(tr("Begin Routing"));
-    connect(settingsButtons, &QDialogButtonBox::accepted, &settingsDialog, &QDialog::accept);
-    connect(settingsButtons, &QDialogButtonBox::rejected, &settingsDialog, &QDialog::reject);
-    form->addRow(settingsButtons);
-    if (settingsDialog.exec() != QDialog::Accepted) return;
-
-    settings.setValue(QStringLiteral("pcb/freerouting/maxPasses"), passes->value());
-    settings.setValue(QStringLiteral("pcb/freerouting/timeoutMs"), timeout->value() * 1000);
-    settings.setValue(QStringLiteral("pcb/freerouting/threads"), threads->value());
-    settings.setValue(QStringLiteral("pcb/freerouting/updateStrategy"), updateStrategy->currentData());
-    settings.setValue(QStringLiteral("pcb/freerouting/selectionStrategy"), selectionStrategy->currentData());
 
     const SpecctraDsnResult exported =
         exportSpecctraDsn(schematic_->document(), board_->document(), rules, QStringLiteral("HattEDA"));
