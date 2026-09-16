@@ -228,6 +228,35 @@ QIcon makeIcon(const QString& kind, const QColor& color) {
         poly({{7, 7}, {8, 20}, {16, 20}, {17, 7}});
         line(10.5, 10, 10.5, 17);
         line(13.5, 10, 13.5, 17);
+    } else if (kind == QLatin1String("cut")) {
+        // Scissors: two pivot circles, blades crossing to a point.
+        painter.drawEllipse(QPointF(6, 6), 2.5, 2.5);
+        painter.drawEllipse(QPointF(6, 18), 2.5, 2.5);
+        line(8, 7.5, 20, 16.5);
+        line(8, 16.5, 20, 7.5);
+    } else if (kind == QLatin1String("copy")) {
+        rect(5, 3, 10, 13);
+        rect(9, 7, 10, 13);
+    } else if (kind == QLatin1String("paste")) {
+        rect(5, 5, 14, 16);
+        rect(9, 3, 6, 3);
+        line(8, 10, 16, 10);
+        line(8, 14, 16, 14);
+        line(8, 18, 13, 18);
+    } else if (kind == QLatin1String("mirror-x") || kind == QLatin1String("mirror-y")) {
+        // A dashed mirror axis with a shape and its reflection on either side.
+        painter.save();
+        painter.setPen(QPen(color, 1.2, Qt::DashLine, Qt::RoundCap));
+        if (kind == QLatin1String("mirror-x")) line(12, 3, 12, 21);
+        else line(3, 12, 21, 12);
+        painter.restore();
+        if (kind == QLatin1String("mirror-x")) {
+            poly({{4, 7}, {9, 7}, {4, 17}}, true);
+            poly({{20, 7}, {15, 7}, {20, 17}}, true);
+        } else {
+            poly({{7, 4}, {7, 9}, {17, 4}}, true);
+            poly({{7, 20}, {7, 15}, {17, 20}}, true);
+        }
     } else if (kind == QLatin1String("check")) {
         poly({{5, 12.5}, {10, 17.5}, {19, 7}});
     } else if (kind == QLatin1String("play")) {
@@ -612,6 +641,13 @@ void MainWindow::showCanvasContextMenu(DesignCanvas* canvas, QPoint position, in
     } else {
         menu->addAction(actions_.value(QStringLiteral("hatteda.action.undo")));
         menu->addAction(actions_.value(QStringLiteral("hatteda.action.redo")));
+        menu->addSeparator();
+        // Paste at the click position rather than hatteda.action.paste's grid-offset fallback (#8).
+        auto* paste = menu->addAction(tr("Paste"));
+        paste->setObjectName(QStringLiteral("hatteda.context.paste"));
+        paste->setEnabled(canvas->canPaste());
+        const QPointF at = canvas->screenToWorld(canvas->mapFromGlobal(position));
+        connect(paste, &QAction::triggered, canvas, [canvas, at] { canvas->pasteFromClipboard(at); });
         menu->addSeparator();
         menu->addAction(actions_.value(QStringLiteral("hatteda.action.select-all")));
         menu->addAction(actions_.value(QStringLiteral("hatteda.action.fit")));
@@ -1112,6 +1148,22 @@ void MainWindow::createActions() {
     canvasAction("hatteda.action.rotate", tr("Rotate 90°"), "rotate",
                  {QKeySequence(QStringLiteral("Ctrl+R"))},
                  [](DesignCanvas* canvas) { canvas->rotateSelection(); });
+    // #8: system clipboard cut/copy/paste (SketchClipboard.hpp). Paste with no explicit position
+    // (the shortcut, not the context menu) offsets from the copied items like Duplicate.
+    canvasAction("hatteda.action.cut", tr("Cut"), "cut", {QKeySequence::Cut},
+                 [](DesignCanvas* canvas) { canvas->cutSelection(); });
+    canvasAction("hatteda.action.copy", tr("Copy"), "copy", {QKeySequence::Copy},
+                 [](DesignCanvas* canvas) { canvas->copySelection(); });
+    canvasAction("hatteda.action.paste", tr("Paste"), "paste", {QKeySequence::Paste},
+                 [](DesignCanvas* canvas) { canvas->pasteFromClipboard(); });
+    // #8: schematic component mirroring; the board side already mirrors placement on the bottom
+    // side (onBottom, ItemBottomSide). Enablement (updateEditActions) restricts these to Mergen.
+    canvasAction("hatteda.action.mirror-x", tr("Mirror horizontally"), "mirror-x",
+                 {QKeySequence(QStringLiteral("X"))},
+                 [](DesignCanvas* canvas) { canvas->mirrorSelection(true); });
+    canvasAction("hatteda.action.mirror-y", tr("Mirror vertically"), "mirror-y",
+                 {QKeySequence(QStringLiteral("Y"))},
+                 [](DesignCanvas* canvas) { canvas->mirrorSelection(false); });
     canvasAction("hatteda.action.select-all", tr("Select all"), "", {QKeySequence::SelectAll},
                  [](DesignCanvas* canvas) { canvas->selectAll(); });
     canvasAction("hatteda.action.zoom-in", tr("Zoom in"), "zoom-in",
@@ -2609,6 +2661,12 @@ void MainWindow::updateEditActions() {
     enable("hatteda.action.array", selected > 0);
     enable("hatteda.action.rotate", selected > 0 || (canvas != nullptr && (canvas->tool() == CanvasTool::Symbol ||
                                                                             canvas->tool() == CanvasTool::Pad)));
+    enable("hatteda.action.cut", selected > 0);
+    enable("hatteda.action.copy", selected > 0);
+    enable("hatteda.action.paste", canvas != nullptr && canvas->canPaste());
+    const bool schematic = canvas != nullptr && canvas->workspace() == Workspace::Schematic;
+    enable("hatteda.action.mirror-x", schematic && selected > 0);
+    enable("hatteda.action.mirror-y", schematic && selected > 0);
     enable("hatteda.action.select-all", canvas != nullptr && !canvas->document().isEmpty());
     for (const char* id : {"hatteda.action.zoom-in", "hatteda.action.zoom-out", "hatteda.action.fit"}) {
         enable(id, canvas != nullptr);

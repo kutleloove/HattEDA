@@ -2,13 +2,17 @@
 #include "hatt/ui/BoardCopper.hpp"
 #include "hatt/ui/LayerColors.hpp"
 #include "hatt/ui/PadStyles.hpp"
+#include "hatt/ui/SketchClipboard.hpp"
 #include "hatt/ui/StrokeFont.hpp"
 #include "hatt/ui/SketchCircuit.hpp"
 
+#include <QClipboard>
 #include <QFont>
 #include <QFontMetricsF>
 #include <QApplication>
 #include <QContextMenuEvent>
+#include <QGuiApplication>
+#include <QMimeData>
 #include <QTimer>
 #include <QDialog>
 #include <QDialogButtonBox>
@@ -1390,6 +1394,79 @@ void DesignCanvas::rotateSelection() {
         rotateItemQuarterTurn(document[index], pivot);
     }
     pushEdit(tr("Rotate"), document, selection_);
+}
+
+void DesignCanvas::mirrorSelection(bool flipX) {
+    if (selection_.isEmpty()) {
+        return;
+    }
+    QRectF bounds = itemBounds(items_[selection_.first()]);
+    for (int index : selection_) {
+        bounds = bounds.united(itemBounds(items_[index]));
+    }
+    const QPointF pivot = snap_.grid ? snapToGrid(bounds.center()) : bounds.center();
+    SketchDocument document = items_;
+    for (int index : selection_) {
+        mirrorItem(document[index], pivot, flipX);
+    }
+    pushEdit(flipX ? tr("Mirror horizontally") : tr("Mirror vertically"), document, selection_);
+}
+
+void DesignCanvas::copySelection() const {
+    if (selection_.isEmpty()) {
+        return;
+    }
+    SketchDocument items;
+    for (int index : selection_) {
+        items.append(items_[index]);
+    }
+    auto* data = new QMimeData;
+    data->setData(SketchClipboardMimeType, encodeSketchClipboard(items, workspace_));
+    QGuiApplication::clipboard()->setMimeData(data);
+}
+
+void DesignCanvas::cutSelection() {
+    if (selection_.isEmpty()) {
+        return;
+    }
+    copySelection();
+    deleteSelection();
+}
+
+bool DesignCanvas::canPaste() const {
+    const QMimeData* data = QGuiApplication::clipboard()->mimeData();
+    if (data == nullptr || !data->hasFormat(SketchClipboardMimeType)) {
+        return false;
+    }
+    const auto payload = decodeSketchClipboard(data->data(SketchClipboardMimeType));
+    return payload.valid && payload.workspace == workspace_;
+}
+
+bool DesignCanvas::pasteFromClipboard(std::optional<QPointF> at) {
+    const QMimeData* data = QGuiApplication::clipboard()->mimeData();
+    if (data == nullptr || !data->hasFormat(SketchClipboardMimeType)) {
+        return false;
+    }
+    const auto payload = decodeSketchClipboard(data->data(SketchClipboardMimeType));
+    if (!payload.valid || payload.workspace != workspace_) {
+        return false;
+    }
+
+    QRectF bounds = itemBounds(payload.items.first());
+    for (const auto& item : payload.items) {
+        bounds = bounds.united(itemBounds(item));
+    }
+    const QPointF offset = at ? (*at - bounds.center()) : QPointF(gridSize() * 2, gridSize() * 2);
+
+    cancelInlineTextEdit();
+    SketchDocument document = items_;
+    QList<int> pasted;
+    for (const auto& item : payload.items) {
+        document.append(copiedItem(document, item, offset));
+        pasted.append(static_cast<int>(document.size() - 1));
+    }
+    pushEdit(tr("Paste"), document, pasted);
+    return true;
 }
 
 void DesignCanvas::nudgeSelection(QPointF delta) {

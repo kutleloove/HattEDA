@@ -11,6 +11,7 @@
 
 #include <QAction>
 #include <QApplication>
+#include <QClipboard>
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QCheckBox>
@@ -108,6 +109,8 @@ private slots:
     void assemblyExportsWriteCsv();
     void designRuleManagerEditsRulesClassesPairsAndDefaults();
     void routeBoardAppliesRulesThenStartsRoutingGracefully();
+    void clipboardCutCopyPasteAndMirrorActions();
+    void contextMenuPasteUsesTheClickPosition();
     void zoneNetPropertyPoursOnTheCanvas();
     void zoneModeDrawsZonesAndListsThem();
     void trackModeRoutesWithNetClassWidths();
@@ -1218,6 +1221,110 @@ void MainWindowTests::routeBoardAppliesRulesThenStartsRoutingGracefully() {
     QCOMPARE(window.designRules().clearanceRules.first().padPad, 0.33);
     QCOMPARE(QSettings().value(QStringLiteral("pcb/freerouting/maxPasses")).toInt(), 42);
     QSettings().remove(QStringLiteral("pcb/freerouting"));
+}
+
+// Issue #8: cut/copy/paste (system clipboard) and schematic component mirroring.
+void MainWindowTests::clipboardCutCopyPasteAndMirrorActions() {
+    QApplication::clipboard()->clear();
+    hatt::ui::MainWindow window;
+    QVERIFY(showActive(window));
+    activateEditor(window);
+    auto* schematic = window.activeCanvas();
+    hatt::ui::SketchItem resistor;
+    resistor.kind = hatt::ui::SketchItem::Kind::Symbol;
+    resistor.variant = QStringLiteral("schematic.resistor");
+    resistor.label = QStringLiteral("R1");
+    resistor.points = {{20.32, 20.32}};
+    schematic->applyDocumentEdit(QStringLiteral("Setup"), {resistor});
+    schematic->setTool(hatt::ui::CanvasTool::Select);
+    schematic->selectAll();
+
+    auto* cut = action(window, "hatteda.action.cut");
+    auto* copy = action(window, "hatteda.action.copy");
+    auto* paste = action(window, "hatteda.action.paste");
+    auto* mirrorX = action(window, "hatteda.action.mirror-x");
+    auto* mirrorY = action(window, "hatteda.action.mirror-y");
+    QVERIFY(cut && copy && paste && mirrorX && mirrorY);
+    QCOMPARE(cut->shortcut(), QKeySequence(QKeySequence::Cut));
+    QCOMPARE(copy->shortcut(), QKeySequence(QKeySequence::Copy));
+    QCOMPARE(paste->shortcut(), QKeySequence(QKeySequence::Paste));
+    QCOMPARE(mirrorX->shortcut(), QKeySequence(QStringLiteral("X")));
+    QCOMPARE(mirrorY->shortcut(), QKeySequence(QStringLiteral("Y")));
+    QVERIFY(cut->isEnabled());
+    QVERIFY(copy->isEnabled());
+    QVERIFY(mirrorX->isEnabled());
+    QVERIFY(mirrorY->isEnabled());
+    QVERIFY(!paste->isEnabled()); // clipboard cleared above, nothing pasteable yet
+
+    mirrorX->trigger();
+    QVERIFY(schematic->document().first().mirroredX);
+    const int undoCountAfterMirror = schematic->undoStack()->count();
+
+    copy->trigger();
+    QVERIFY(schematic->canPaste());
+    // Re-fire selectionChanged (paste's enablement is refreshed by updateEditActions there) so the
+    // action reflects the clipboard change just made.
+    schematic->clearSelection();
+    schematic->selectAll();
+    QVERIFY(paste->isEnabled());
+
+    paste->trigger();
+    QCOMPARE(schematic->document().size(), 2);
+    QCOMPARE(schematic->document().last().label, QStringLiteral("R2")); // fresh designator
+    QCOMPARE(schematic->undoStack()->count(), undoCountAfterMirror + 1); // one step for the paste
+
+    schematic->selectAll();
+    cut->trigger();
+    QVERIFY(schematic->document().isEmpty());
+    QVERIFY(schematic->canPaste());
+
+    // Mirror actions are schematic-only (Kayra keeps its existing onBottom flip); a Mergen
+    // clipboard payload cannot paste into Kayra either.
+    window.showKayraWorkspace();
+    auto* board = window.activeCanvas();
+    hatt::ui::SketchItem footprint;
+    footprint.kind = hatt::ui::SketchItem::Kind::Symbol;
+    footprint.variant = QStringLiteral("board.r0603");
+    footprint.points = {{10, 10}};
+    board->applyDocumentEdit(QStringLiteral("Setup"), {footprint});
+    board->setTool(hatt::ui::CanvasTool::Select);
+    board->selectAll();
+    QVERIFY(!mirrorX->isEnabled());
+    QVERIFY(!mirrorY->isEnabled());
+    QVERIFY(!board->canPaste());
+}
+
+void MainWindowTests::contextMenuPasteUsesTheClickPosition() {
+    QApplication::clipboard()->clear();
+    hatt::ui::MainWindow window;
+    QVERIFY(showActive(window));
+    activateEditor(window);
+    auto* schematic = window.activeCanvas();
+    hatt::ui::SketchItem resistor;
+    resistor.kind = hatt::ui::SketchItem::Kind::Symbol;
+    resistor.variant = QStringLiteral("schematic.resistor");
+    resistor.label = QStringLiteral("R1");
+    resistor.points = {{20.32, 20.32}};
+    schematic->applyDocumentEdit(QStringLiteral("Setup"), {resistor});
+    schematic->setTool(hatt::ui::CanvasTool::Select);
+    schematic->selectAll();
+    schematic->copySelection();
+    QVERIFY(schematic->canPaste());
+
+    const QPointF at(60.96, 60.96);
+    schematic->contextMenuRequested(schematic->mapToGlobal(schematic->worldToScreen(at).toPoint()), -1);
+    auto* menu = window.findChild<QMenu*>(QStringLiteral("CanvasContextMenu"));
+    QVERIFY(menu);
+    auto* paste = menu->findChild<QAction*>(QStringLiteral("hatteda.context.paste"));
+    QVERIFY(paste);
+    QVERIFY(paste->isEnabled());
+    paste->trigger();
+    menu->close();
+    delete menu;
+
+    QCOMPARE(schematic->document().size(), 2);
+    QVERIFY(std::abs(schematic->document().last().points.first().x() - at.x()) < 0.5);
+    QVERIFY(std::abs(schematic->document().last().points.first().y() - at.y()) < 0.5);
 }
 
 void MainWindowTests::selectionStatesFollowTheme_data() {

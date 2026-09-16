@@ -132,6 +132,12 @@ struct SketchItem {
     BoardLayer layer = BoardLayer::TopCopper;  // Active layer for board items
     bool onBottom = false;                     // Footprint placed on bottom side
     bool excludeFromBoard = false;             // Schematic component excluded from PCB transfer
+    // Schematic component mirroring (#8): independent of `onBottom`, which is the board-side
+    // top/bottom placement flip. Applied in symbolToWorld alongside quarterTurns. Both negate the
+    // stored coordinate directly; world Y is Y-down (ADR-0015), so mirroredY (a top/bottom, "mirror
+    // vertically" flip) negates the stored Y as-is, with no sign flip for display.
+    bool mirroredX = false;                    // Mirrored left-right (hatteda.action.mirror-x)
+    bool mirroredY = false;                    // Mirrored top-bottom (hatteda.action.mirror-y)
     PadDefinition pad;                         // For Kind::Pad items
     double drillDiameter = 0.0;               // For Kind::Via items (mm)
     // Board tracks: copper width; vias: outer diameter (mm). 0 = the default for the kind.
@@ -333,6 +339,12 @@ void registerSymbols(const QVector<SymbolDefinition>& symbols);
 
 void translateItem(SketchItem& item, QPointF delta);
 void rotateItemQuarterTurn(SketchItem& item, QPointF pivot);
+// Mirrors every point around `pivot`, negating the stored (Y-down, ADR-0015) X coordinate (flipX =
+// true, hatteda.action.mirror-x, "mirror horizontally": flips left/right) or Y coordinate (flipX =
+// false, hatteda.action.mirror-y, "mirror vertically": flips top/bottom). For Kind::Symbol, also
+// toggles mirroredX/mirroredY so the symbol's own shapes and pins (via symbolToWorld) mirror in
+// place.
+void mirrorItem(SketchItem& item, QPointF pivot, bool flipX);
 
 // Connection-preserving edits. Wires (schematic wires and board tracks) whose vertices sit on a
 // moved pin or wire vertex follow it; horizontal/vertical runs stay orthogonal by moving a free

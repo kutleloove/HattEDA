@@ -168,6 +168,12 @@ private slots:
     void pcbRouteNetLabelTracksClosestAirwire();
     void pcbDoubleClickPlacesViaAndChangesLayer();
 
+    // Issue #8: schematic component mirroring and system-clipboard cut/copy/paste.
+    void mirrorTogglesSymbolFlagAndReflectsLocalCoordinates();
+    void mirrorSelectionIsUndoableAndInvolutionary();
+    void copyCutPasteRoundTripsSelectionOneUndoStep();
+    void pasteRejectsMismatchedWorkspaceFromClipboard();
+
 private:
     DesignCanvas* canvas_ = nullptr;
 };
@@ -1391,6 +1397,116 @@ void DesignCanvasTests::doubleClickEditsTextInlineAndEscapeCancels() {
     QTest::qWait(10);
     QCOMPARE(canvas_->undoStack()->count(), undoCountBefore + 1);
     QCOMPARE(canvas_->document().first().label, QStringLiteral("NEW"));
+}
+
+// World Y is Y-down (ADR-0015): {3, 4} is 3 right and 4 *down* from the anchor, so mirrorY
+// (flipX = false) negating it to {3, -4} is exactly a top/bottom ("mirror vertically") flip, with
+// no extra sign flip needed for the stored coordinate.
+void DesignCanvasTests::mirrorTogglesSymbolFlagAndReflectsLocalCoordinates() {
+    SketchItem item;
+    item.kind = SketchItem::Kind::Symbol;
+    item.points = {{10, 10}};
+    QVERIFY(!item.mirroredX && !item.mirroredY);
+    QVERIFY(samePoint(hatt::ui::symbolToWorld(item, {3, 4}), {13, 14}));
+
+    hatt::ui::mirrorItem(item, item.points.first(), /*flipX=*/true);
+    QVERIFY(item.mirroredX);
+    QVERIFY(!item.mirroredY);
+    QVERIFY(samePoint(item.points.first(), {10, 10})); // pivot == the item's own anchor
+    QVERIFY(samePoint(hatt::ui::symbolToWorld(item, {3, 4}), {7, 14}));
+
+    hatt::ui::mirrorItem(item, item.points.first(), /*flipX=*/false);
+    QVERIFY(item.mirroredX);
+    QVERIFY(item.mirroredY);
+    QVERIFY(samePoint(hatt::ui::symbolToWorld(item, {3, 4}), {7, 6}));
+
+    // Mirroring the same axis again is self-inverse.
+    hatt::ui::mirrorItem(item, item.points.first(), /*flipX=*/true);
+    QVERIFY(!item.mirroredX);
+    QVERIFY(item.mirroredY);
+    QVERIFY(samePoint(hatt::ui::symbolToWorld(item, {3, 4}), {13, 6}));
+}
+
+void DesignCanvasTests::mirrorSelectionIsUndoableAndInvolutionary() {
+    placeResistor(*canvas_, {20.32, 20.32});
+    canvas_->setTool(CanvasTool::Select);
+    canvas_->selectAll();
+    const auto before = hatt::ui::itemAnchors(canvas_->document().first());
+    QVERIFY(!canvas_->document().first().mirroredX);
+    const int undoCountBefore = canvas_->undoStack()->count();
+
+    canvas_->mirrorSelection(true);
+    QVERIFY(canvas_->document().first().mirroredX);
+    QCOMPARE(canvas_->undoStack()->count(), undoCountBefore + 1);
+
+    canvas_->mirrorSelection(true);
+    QVERIFY(!canvas_->document().first().mirroredX);
+    QCOMPARE(canvas_->undoStack()->count(), undoCountBefore + 2);
+    const auto mirroredTwice = hatt::ui::itemAnchors(canvas_->document().first());
+    QVERIFY(samePoint(mirroredTwice.at(0), before.at(0)));
+    QVERIFY(samePoint(mirroredTwice.at(1), before.at(1)));
+
+    canvas_->undoStack()->undo();
+    canvas_->undoStack()->undo();
+    QVERIFY(!canvas_->document().first().mirroredX);
+    const auto undone = hatt::ui::itemAnchors(canvas_->document().first());
+    QVERIFY(samePoint(undone.at(0), before.at(0)));
+    QVERIFY(samePoint(undone.at(1), before.at(1)));
+
+    // Mirror-Y toggles the other flag independently and is also self-inverse.
+    canvas_->mirrorSelection(false);
+    QVERIFY(canvas_->document().first().mirroredY);
+    canvas_->mirrorSelection(false);
+    QVERIFY(!canvas_->document().first().mirroredY);
+}
+
+void DesignCanvasTests::copyCutPasteRoundTripsSelectionOneUndoStep() {
+    placeResistor(*canvas_, {20.32, 20.32});
+    canvas_->setTool(CanvasTool::Select);
+    canvas_->selectAll();
+    const int undoCountAfterPlacement = canvas_->undoStack()->count();
+
+    canvas_->copySelection();
+    QVERIFY(canvas_->canPaste());
+    QCOMPARE(canvas_->undoStack()->count(), undoCountAfterPlacement); // copy touches no undo entry
+
+    QVERIFY(canvas_->pasteFromClipboard(QPointF(60.96, 60.96)));
+    QCOMPARE(canvas_->document().size(), 2);
+    QCOMPARE(canvas_->undoStack()->count(), undoCountAfterPlacement + 1); // one step for the paste
+    const SketchItem& pasted = canvas_->document().last();
+    QCOMPARE(pasted.label, QStringLiteral("R2")); // fresh, non-colliding designator
+    QVERIFY(pasted.id != canvas_->document().first().id);
+    QVERIFY(samePoint(pasted.points.first(), {60.96, 60.96}));
+    QCOMPARE(canvas_->selection(), QList<int>({1}));
+
+    canvas_->undoStack()->undo();
+    QCOMPARE(canvas_->document().size(), 1);
+
+    // Cut copies then deletes the original (one undo step, for the deletion); pasting it back
+    // still works from the clipboard.
+    canvas_->selectAll();
+    canvas_->cutSelection();
+    QCOMPARE(canvas_->document().size(), 0);
+    QVERIFY(canvas_->pasteFromClipboard());
+    QCOMPARE(canvas_->document().size(), 1);
+    QCOMPARE(canvas_->document().first().label, QStringLiteral("R1"));
+}
+
+void DesignCanvasTests::pasteRejectsMismatchedWorkspaceFromClipboard() {
+    placeResistor(*canvas_, {20.32, 20.32}); // canvas_ is Workspace::Schematic
+    canvas_->setTool(CanvasTool::Select);
+    canvas_->selectAll();
+    canvas_->copySelection();
+    QVERIFY(canvas_->canPaste());
+
+    DesignCanvas board(Workspace::Board);
+    board.resize(800, 600);
+    board.setSnapSettings(SnapSettings{});
+    board.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&board));
+    QVERIFY(!board.canPaste());
+    QVERIFY(!board.pasteFromClipboard());
+    QCOMPARE(board.document().size(), 0);
 }
 
 QTEST_MAIN(DesignCanvasTests)

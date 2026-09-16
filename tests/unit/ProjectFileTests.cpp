@@ -75,6 +75,8 @@ void compareDocuments(const SketchDocument& actual, const SketchDocument& expect
         QCOMPARE(a.layer, e.layer);
         QCOMPARE(a.onBottom, e.onBottom);
         QCOMPARE(a.excludeFromBoard, e.excludeFromBoard);
+        QCOMPARE(a.mirroredX, e.mirroredX);
+        QCOMPARE(a.mirroredY, e.mirroredY);
         QCOMPARE(a.fontFamily, e.fontFamily);
         if (e.kind == SketchItem::Kind::Pad) {
             QCOMPARE(a.pad.number, e.pad.number);
@@ -227,6 +229,8 @@ private slots:
         project.name = QStringLiteral("V2Test");
         SketchItem comp = item(SketchItem::Kind::Symbol, {{0, 0}}, QStringLiteral("schematic.resistor"));
         comp.excludeFromBoard = true;
+        comp.mirroredX = true;
+        comp.mirroredY = true;
         SketchItem board = item(SketchItem::Kind::Symbol, {{10, 10}}, QStringLiteral("board.r0603"));
         board.onBottom = true;
         board.layer = BoardLayer::BottomCopper;
@@ -265,6 +269,8 @@ private slots:
         QCOMPARE(load.project.schematic[0].layer, BoardLayer::TopCopper);
         QVERIFY(!load.project.schematic[0].onBottom);
         QVERIFY(!load.project.schematic[0].excludeFromBoard);
+        QVERIFY(!load.project.schematic[0].mirroredX);
+        QVERIFY(!load.project.schematic[0].mirroredY);
     }
 
     void padItemRoundTrip() {
