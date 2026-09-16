@@ -265,6 +265,55 @@ private slots:
         schematic[1].variant = QStringLiteral("schematic.diode");
         QVERIFY(analyzeSchematic(schematic).simulationErrors.join(" ").contains("does not support"));
     }
+    // Issue #30 follow-up: boardGuidance only turns a track crossing into a junction when the
+    // crossing segments share a copper layer ("Tracks crossing on the same copper layer physically
+    // connect; other layers pass over."). Same layer, different schematic nets: a real short. Same
+    // geometry split across Top/Bottom copper: not connected, no short.
+    void crossingTracksOnDifferentCopperLayersDoNotShort() {
+        auto schematic = dcDividerExample();
+        auto board = transferToBoard(schematic, {}).document;
+        auto findBoardItem = [&](const QString& label) -> const SketchItem* {
+            for (const auto& schItem : schematic) {
+                if (schItem.label != label) continue;
+                for (const auto& boardItem : board) {
+                    if (boardItem.sourceId == schItem.id) return &boardItem;
+                }
+            }
+            return nullptr;
+        };
+        const auto* r1 = findBoardItem(QStringLiteral("R1"));
+        const auto* r2 = findBoardItem(QStringLiteral("R2"));
+        QVERIFY(r1 && r2);
+        const auto* footprint1 = findSymbol(r1->variant);
+        const auto* footprint2 = findSymbol(r2->variant);
+        QVERIFY(footprint1 && footprint2);
+        // R1 pin 1 is on the source rail's net; R2 pin 2 is on the ground net -- different nets.
+        const QPointF p1 = symbolToWorld(*r1, footprint1->pins[0]);
+        const QPointF p2 = symbolToWorld(*r2, footprint2->pins[1]);
+        const QPointF d = p2 - p1;
+        QVERIFY(!d.isNull());
+        const QPointF perp(-d.y(), d.x());
+        const QPointF crossing = (p1 + p2) / 2.0 + perp * 0.25;
+
+        auto crossingBoard = [&](BoardLayer secondLayer) {
+            SketchDocument withTracks = board;
+            SketchItem trackA;
+            trackA.kind = SketchItem::Kind::Wire;
+            trackA.layer = BoardLayer::TopCopper;
+            trackA.points = {p1, p1 + (crossing - p1) * 2.0};
+            SketchItem trackB;
+            trackB.kind = SketchItem::Kind::Wire;
+            trackB.layer = secondLayer;
+            trackB.points = {p2, p2 + (crossing - p2) * 2.0};
+            withTracks << trackA << trackB;
+            return withTracks;
+        };
+
+        // Same layer: the crossing physically joins R1 pin 1 to R2 pin 2 -- a real short.
+        QVERIFY(boardGuidance(schematic, crossingBoard(BoardLayer::TopCopper)).errors.join(" ").contains("short"));
+        // Different layers: the tracks cross geometrically but do not conduct -- no short.
+        QVERIFY(!boardGuidance(schematic, crossingBoard(BoardLayer::BottomCopper)).errors.join(" ").contains("short"));
+    }
     void actualWorkflowReportsAndUndoUpdatesGuidance() {
         QWidget host;
         QMenu menu;

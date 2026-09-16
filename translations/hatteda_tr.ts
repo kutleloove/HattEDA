@@ -261,7 +261,7 @@ Son projeler listesinden kaldırılsın mı?</translation></message>
     <message><source>Simulation stopped.</source><translation>Simülasyon durduruldu.</translation></message>
     <message><source>Supported: resistors, independent DC voltage sources, capacitors (open) and inductors (short). Values use SI/SPICE suffixes (1k, 5, 1meg); unit labels are omitted.</source><translation>Desteklenenler: dirençler, bağımsız DC gerilim kaynakları, kondansatörler (açık devre) ve bobinler (kısa devre). Değerler SI/SPICE önekleriyle yazılır (1k, 5, 1meg); birim eklenmez.</translation></message>
     <message><source>not connected</source><translation>bağlı değil</translation></message>
-    <message><source>This is a connection guide for the current single copper layer, not a full ERC/DRC check.</source><translation>Bu, mevcut tek bakır katman için bir bağlantı rehberidir; tam ERC/DRC denetimi değildir.</translation></message>
+    <message><source>This is a connection guide for tracks, vias and pads; it does not account for copper pours and is not a full ERC/DRC check.</source><translation>Bu, yol, via ve pad'ler için bir bağlantı rehberidir; bakır dökümlerini hesaba katmaz ve tam bir ERC/DRC denetimi değildir.</translation></message>
   </context>
   <context>
     <name>hatt::ui::ComponentLibrary</name>

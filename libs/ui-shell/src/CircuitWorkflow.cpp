@@ -128,7 +128,7 @@ QString CircuitWorkflow::netlistHtml() const {
     const auto guide = boardGuidance(schematic_->document(), board_->document());
     html += QStringLiteral("<p>%1</p>").arg(tr("%1 unrouted connections.").arg(guide.airwires.size()).toHtmlEscaped());
     html += messages(guide.errors);
-    html += QStringLiteral("<p>%1</p>").arg(tr("This is a connection guide for the current single copper layer, not a full ERC/DRC check.").toHtmlEscaped());
+    html += QStringLiteral("<p>%1</p>").arg(tr("This is a connection guide for tracks, vias and pads; it does not account for copper pours and is not a full ERC/DRC check.").toHtmlEscaped());
     return html;
 }
 void CircuitWorkflow::showNetlist() {
