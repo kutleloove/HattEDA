@@ -85,7 +85,7 @@ Placement and drawing share a collapsible bottom `AlignmentBar`. Its left side (
 | 45° | `hatteda.snap.diagonal` | on | Constrain wires and lines to 45° steps |
 | Orthogonal | `hatteda.snap.orthogonal` | off | Constrain wires and lines to horizontal and vertical |
 
-Grid, Objects, Edges and Centres are independent. 45° and Orthogonal are mutually exclusive: turning one on turns the other off; both may be off.
+Grid, Objects, Edges and Centres are independent. 45° and Orthogonal are mutually exclusive: turning one on turns the other off; both may be off. These generic angle constraints are hidden in Kayra, where PCB tracks always use the interactive router's automatic 45° geometry.
 
 The right side (`ALIGN`) holds icon-only align left / horizontal centres / right, align top / vertical centres / bottom, and distribute horizontally / vertically. Align needs at least two selected objects, distribute at least three. A final "Hide" button collapses the strip to a single "Snapping and alignment" button. Alignment and distribution commands appear only in this strip (and the Design menu) so they do not permanently consume the primary command bar.
 

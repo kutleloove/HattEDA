@@ -40,6 +40,26 @@ add_executable(hatt-zone-fill-tests ZoneFillTests.cpp)
 target_link_libraries(hatt-zone-fill-tests PRIVATE HattEDA::UiShell Qt6::Test)
 hatt_add_qt_test(hatt-zone-fill-tests)
 
+add_executable(hatt-specctra-dsn-tests SpecctraDsnTests.cpp)
+target_link_libraries(hatt-specctra-dsn-tests PRIVATE HattEDA::UiShell Qt6::Test)
+hatt_add_qt_test(hatt-specctra-dsn-tests)
+
+add_executable(hatt-specctra-ses-tests SpecctraSesTests.cpp)
+target_link_libraries(hatt-specctra-ses-tests PRIVATE HattEDA::UiShell Qt6::Test)
+hatt_add_qt_test(hatt-specctra-ses-tests)
+
+add_executable(hatt-freerouting-fake FreeroutingFake.cpp)
+target_link_libraries(hatt-freerouting-fake PRIVATE Qt6::Core)
+
+add_executable(hatt-freerouting-runner-tests FreeroutingRunnerTests.cpp)
+target_link_libraries(hatt-freerouting-runner-tests PRIVATE HattEDA::UiShell Qt6::Test)
+add_dependencies(hatt-freerouting-runner-tests hatt-freerouting-fake)
+hatt_add_qt_test(hatt-freerouting-runner-tests)
+
+add_executable(hatt-freerouting-round-trip-tests FreeroutingRoundTripTests.cpp)
+target_link_libraries(hatt-freerouting-round-trip-tests PRIVATE HattEDA::UiShell Qt6::Test)
+hatt_add_qt_test(hatt-freerouting-round-trip-tests)
+
 add_executable(hatt-print-layout-tests PrintLayoutTests.cpp)
 target_link_libraries(hatt-print-layout-tests PRIVATE HattEDA::UiShell Qt6::Test)
 hatt_add_qt_test(hatt-print-layout-tests)

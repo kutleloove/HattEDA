@@ -207,6 +207,10 @@ struct PlacedPad {
 [[nodiscard]] double viaDrill(const SketchItem& item);
 
 inline const QString BoardOutlineVariant = QStringLiteral("board-outline");
+// A physical PCB boundary may use the dedicated outline tool or a closed graphic drawn directly
+// on the Board Edge layer. Board-aware subsystems share this interpretation.
+[[nodiscard]] bool isBoardOutline(const SketchItem& item);
+[[nodiscard]] QVector<QPointF> boardOutlinePoints(const SketchItem& item);
 inline const QString CopperZoneVariant = QStringLiteral("copper-zone");
 // Non-copper zones (ADR-0012), closed polylines like copper zones: a keepout on a copper layer that
 // pours stay out of and copper must not enter, and a filled area on a silk, resist or paste layer.

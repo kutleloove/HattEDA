@@ -491,7 +491,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     auto* circuit = new CircuitWorkflow(this, circuitMenu, canvases_[0], canvases_[1],
         [this](const QString& id, const QString& title, QWidget* content) { openToolWorkspace(id, title, content); },
         [this] { return shellPages_ && shellPages_->currentIndex() == 1; },
-        [this] { showKayraWorkspace(); });
+        [this] { showKayraWorkspace(); }, [this] { return rules_; });
     connect(circuit, &CircuitWorkflow::statusMessage, statusBar(), [this](const QString& message) {
         statusBar()->showMessage(message, 5000);
     });
@@ -531,23 +531,50 @@ void MainWindow::showCanvasContextMenu(DesignCanvas* canvas, QPoint position, in
     menu->setAttribute(Qt::WA_DeleteOnClose);
     const bool hasItem = index >= 0 && index < canvas->document().size();
     if (hasItem) {
-        canvas->selectItem(index);
-        auto* properties = menu->addAction(tr("Edit properties"));
+        if (!canvas->selection().contains(index)) canvas->selectItem(index);
+        const auto item = canvas->document().at(index);
+        const bool board = canvas->workspace() == Workspace::Board;
+        QString object = tr("Object");
+        if (item.kind == SketchItem::Kind::Symbol) object = tr("Component");
+        else if (item.kind == SketchItem::Kind::Wire) object = board ? tr("Route") : tr("Wire");
+        else if (item.kind == SketchItem::Kind::Via) object = tr("Via");
+        else if (item.kind == SketchItem::Kind::Pad) object = tr("Pad");
+        else if (item.kind == SketchItem::Kind::Text) object = tr("Text");
+        else if (isZoneVariant(item.variant)) object = tr("Zone");
+
+        auto* properties = menu->addAction(tr("Edit %1 Properties...").arg(object));
         properties->setObjectName(QStringLiteral("hatteda.context.properties"));
         connect(properties, &QAction::triggered, this,
                 [this, canvas, index] { editItemProperties(canvas, index); });
-        menu->addAction(actions_.value(QStringLiteral("hatteda.action.rotate")));
-        menu->addAction(actions_.value(QStringLiteral("hatteda.action.duplicate")));
-        menu->addAction(actions_.value(QStringLiteral("hatteda.action.array")));
-        menu->addAction(actions_.value(QStringLiteral("hatteda.action.delete")));
-        if (canvas->workspace() == Workspace::Board) {
+
+        const bool rotatable = item.kind != SketchItem::Kind::Wire &&
+                               item.kind != SketchItem::Kind::Via;
+        if (rotatable) {
+            auto* rotate = menu->addAction(tr("Rotate %1 Clockwise").arg(object));
+            rotate->setObjectName(QStringLiteral("hatteda.context.rotate"));
+            connect(rotate, &QAction::triggered, canvas, &DesignCanvas::rotateSelection);
+        }
+        auto* duplicate = menu->addAction(tr("Copy %1").arg(object));
+        duplicate->setObjectName(QStringLiteral("hatteda.context.duplicate"));
+        connect(duplicate, &QAction::triggered, canvas, &DesignCanvas::duplicateSelection);
+        if (item.kind == SketchItem::Kind::Symbol || item.kind == SketchItem::Kind::Pad) {
+            auto* array = menu->addAction(tr("Create %1 Array...").arg(object));
+            array->setObjectName(QStringLiteral("hatteda.context.array"));
+            connect(array, &QAction::triggered, this, [this, canvas] { showArrayDialog(canvas); });
+        }
+        auto* remove = menu->addAction(tr("Delete %1").arg(object));
+        remove->setObjectName(QStringLiteral("hatteda.context.delete"));
+        connect(remove, &QAction::triggered, canvas, &DesignCanvas::deleteSelection);
+
+        if (board) {
             // Quick layer change (#36), without opening the full properties dialog. Moving text (or
             // any graphic) between a top and bottom layer mirrors it automatically: DesignCanvas
             // paints text mirrored whenever its layer is on the bottom side (isBottomLayer), the same
             // convention Gerber bottom-silk uses so the board reads correctly once flipped.
-            const auto item = canvas->document().at(index);
             if (const auto mask = layerMaskForItem(item)) {
-                auto* layerMenu = menu->addMenu(tr("Move to layer"));
+                menu->addSeparator();
+                auto* layerMenu = menu->addMenu(
+                    item.kind == SketchItem::Kind::Wire ? tr("Change Route Layer") : tr("Move to Layer"));
                 layerMenu->setObjectName(QStringLiteral("hatteda.context.move-to-layer"));
                 for (int i = 0; i < BoardLayerCount; ++i) {
                     if (!(*mask & (1 << i))) continue;
@@ -562,9 +589,11 @@ void MainWindow::showCanvasContextMenu(DesignCanvas* canvas, QPoint position, in
                     });
                 }
             }
-            menu->addSeparator();
-            menu->addAction(actions_.value(QStringLiteral("hatteda.action.make-package")));
-            menu->addAction(actions_.value(QStringLiteral("hatteda.action.decompose")));
+            if (item.kind == SketchItem::Kind::Symbol || item.kind == SketchItem::Kind::Pad) {
+                menu->addSeparator();
+                menu->addAction(actions_.value(QStringLiteral("hatteda.action.make-package")));
+                menu->addAction(actions_.value(QStringLiteral("hatteda.action.decompose")));
+            }
         }
     } else {
         menu->addAction(actions_.value(QStringLiteral("hatteda.action.undo")));
@@ -627,12 +656,22 @@ void MainWindow::editItemProperties(DesignCanvas* canvas, int index) {
     const auto item = canvas->document().at(index);
     QDialog dialog(this);
     dialog.setObjectName(QStringLiteral("ItemPropertiesDialog"));
-    dialog.setWindowTitle(tr("Edit properties"));
+    QString object = tr("Object");
+    if (item.kind == SketchItem::Kind::Symbol) object = tr("Component");
+    else if (item.kind == SketchItem::Kind::Wire)
+        object = canvas->workspace() == Workspace::Board ? tr("Route") : tr("Wire");
+    else if (item.kind == SketchItem::Kind::Via) object = tr("Via");
+    else if (item.kind == SketchItem::Kind::Pad) object = tr("Pad");
+    else if (item.kind == SketchItem::Kind::Text) object = tr("Text");
+    else if (isZoneVariant(item.variant)) object = tr("Zone");
+    dialog.setWindowTitle(tr("Edit %1").arg(object));
     auto* form = new QFormLayout(&dialog);
     auto* label = new QLineEdit(item.label, &dialog);
     label->setObjectName(QStringLiteral("ItemLabel"));
     const bool hasLabel = item.kind == SketchItem::Kind::Symbol || item.kind == SketchItem::Kind::Text;
-    if (hasLabel) form->addRow(tr("Label / text"), label);
+    if (hasLabel) {
+        form->addRow(item.kind == SketchItem::Kind::Text ? tr("Text") : tr("Part reference"), label);
+    }
     else label->hide();
     QLineEdit* value = nullptr;
     QComboBox* footprint = nullptr;
@@ -806,16 +845,23 @@ void MainWindow::editItemProperties(DesignCanvas* canvas, int index) {
         field->setValue(toDisplayUnit(millimetres, unit));
         return field;
     };
-    auto* x = coordinate(QStringLiteral("ItemPositionX"), item.points.value(0).x());
-    auto* y = coordinate(QStringLiteral("ItemPositionY"), item.points.value(0).y());
-    form->addRow(tr("Anchor X"), x);
-    form->addRow(tr("Anchor Y (positive down)"), y);
-    auto* rotation = new QComboBox(&dialog);
-    rotation->setObjectName(QStringLiteral("ItemRotation"));
-    rotation->addItems({tr("0 degrees"), tr("90 degrees"), tr("180 degrees"), tr("270 degrees")});
-    rotation->setCurrentIndex((item.quarterTurns % 4 + 4) % 4);
-    if (item.kind != SketchItem::Kind::Text) form->addRow(tr("Rotation"), rotation);
-    else rotation->hide();
+    QDoubleSpinBox* x = nullptr;
+    QDoubleSpinBox* y = nullptr;
+    if (item.kind == SketchItem::Kind::Symbol || item.kind == SketchItem::Kind::Pad ||
+        item.kind == SketchItem::Kind::Via || item.kind == SketchItem::Kind::Text) {
+        x = coordinate(QStringLiteral("ItemPositionX"), item.points.value(0).x());
+        y = coordinate(QStringLiteral("ItemPositionY"), item.points.value(0).y());
+        form->addRow(tr("Position X"), x);
+        form->addRow(tr("Position Y"), y);
+    }
+    QComboBox* rotation = nullptr;
+    if (item.kind == SketchItem::Kind::Symbol || item.kind == SketchItem::Kind::Pad) {
+        rotation = new QComboBox(&dialog);
+        rotation->setObjectName(QStringLiteral("ItemRotation"));
+        rotation->addItems({tr("0 degrees"), tr("90 degrees"), tr("180 degrees"), tr("270 degrees")});
+        rotation->setCurrentIndex((item.quarterTurns % 4 + 4) % 4);
+        form->addRow(tr("Rotation"), rotation);
+    }
     auto* validation = new QLabel(&dialog);
     validation->setObjectName(QStringLiteral("ItemPropertiesValidation"));
     validation->setWordWrap(true);
@@ -860,8 +906,9 @@ void MainWindow::editItemProperties(DesignCanvas* canvas, int index) {
     if (dialog.exec() == QDialog::Accepted) {
         auto properties = item;
         properties.label = label->text();
-        properties.points[0] = {fromDisplayUnit(x->value(), unit), fromDisplayUnit(y->value(), unit)};
-        properties.quarterTurns = rotation->currentIndex();
+        if (x && y)
+            properties.points[0] = {fromDisplayUnit(x->value(), unit), fromDisplayUnit(y->value(), unit)};
+        if (rotation) properties.quarterTurns = rotation->currentIndex();
         if (value) properties.value = value->text();
         if (footprint) properties.footprint = footprint->currentData().toString();
         if (excludeFromBoard) properties.excludeFromBoard = excludeFromBoard->isChecked();
@@ -2394,6 +2441,14 @@ void MainWindow::workspaceChanged() {
     undoGroup_->setActiveStack(canvas->undoStack());
     mergenTab_->setChecked(!board);
     kayraTab_->setChecked(board);
+    // Kayra tracks always use the PCB router's automatic 45-degree geometry. Do not present the
+    // generic line-angle constraints as routing modes in the board workspace.
+    for (auto* toggle : snapToggles_) {
+        const QString key = toggle->property("snapKey").toString();
+        if (key == QLatin1String("diagonal") || key == QLatin1String("orthogonal")) {
+            toggle->setHidden(board);
+        }
+    }
     for (auto* other : canvases_) {
         if (other != canvas) {
             other->cancelOperation();

@@ -14,6 +14,9 @@ const QSet<QString>& MainWindowAgenticGateway::blockedActionIds() {
         QStringLiteral("hatteda.action.new-project"),
         QStringLiteral("hatteda.action.open-project"),
         QStringLiteral("hatteda.action.open-recent"),
+        // Opens a blocking "Auto Router Settings" QDialog::exec() an unattended caller cannot
+        // answer (ADR-0013 decision 4), same reasoning as the project actions above.
+        QStringLiteral("hatteda.action.auto-route"),
     };
     return blocked;
 }

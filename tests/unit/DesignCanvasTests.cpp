@@ -157,6 +157,7 @@ private slots:
     void doubleClickEditsTextInlineAndEscapeCancels();
     void pcbRouteStartsOnPadLayerAndFitsPad();
     void pcbRouteUsesNetClassWidthAndClearance();
+    void pcbRouteAutomaticallyUsesFortyFiveDegreeGeometry();
     void pcbRoutePreviewCompletesToAirwireTarget();
     void pcbAssistedRouteAvoidsCopperObstacles();
     void pcbRouteNetLabelTracksClosestAirwire();
@@ -997,6 +998,33 @@ void DesignCanvasTests::pcbRouteUsesNetClassWidthAndClearance() {
     click(board, {50.8, 50.8});
     QTest::keyClick(&board, Qt::Key_Return);
     QVERIFY(std::abs(board.document().last().width - 0.3048) < 1e-9);
+}
+
+void DesignCanvasTests::pcbRouteAutomaticallyUsesFortyFiveDegreeGeometry() {
+    DesignCanvas board(Workspace::Board);
+    board.resize(800, 600);
+    SnapSettings settings;
+    settings.diagonal = false;
+    settings.orthogonal = true;
+    board.setSnapSettings(settings);
+    board.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&board));
+
+    const QPointF from(10.16, 10.16);
+    const QPointF to(40.64, 30.48);
+    board.setTool(CanvasTool::Wire);
+    click(board, from);
+    sendMouse(board, QEvent::MouseMove, to, Qt::NoButton, Qt::NoButton);
+
+    const QVector<QPointF> preview = board.currentRoutePreview();
+    QVERIFY(samePoints(preview, {from, {30.48, 10.16}, {40.64, 20.32}, to}));
+    const QPointF diagonal = preview[2] - preview[1];
+    QVERIFY(std::abs(std::abs(diagonal.x()) - std::abs(diagonal.y())) < 1e-9);
+
+    click(board, to);
+    QTest::keyClick(&board, Qt::Key_Return);
+    QCOMPARE(board.document().size(), 1);
+    QCOMPARE(board.document().first().points, preview);
 }
 
 void DesignCanvasTests::pcbRoutePreviewCompletesToAirwireTarget() {

@@ -223,8 +223,37 @@ Son projeler listesinden kaldırılsın mı?</translation></message>
     <message><source>Netlist to PCB</source><translation>Netlisti PCB'ye aktar</translation></message>
     <message><source>Update PCB from schematic: refresh linked footprints and auto place new parts</source><translation>PCB'yi şemadan güncelle: bağlı kılıfları yenile, yeni parçaları otomatik yerleştir</translation></message>
     <message><source>Auto placer...</source><translation>Otomatik yerleştirici...</translation></message>
+    <message><source>Auto Router...</source><translation>Auto Router...</translation></message>
+    <message><source>Configure and run the PCB Auto Router; HattEDA validates the result with DRC</source><translation>PCB Auto Router ayarlarını yapıp çalıştır; HattEDA sonucu DRC ile doğrular</translation></message>
+    <message><source>Auto Router</source><translation>Auto Router</translation></message>
+    <message><source>Auto Router Settings</source><translation>Auto Router Ayarları</translation></message>
+    <message><source>Routing layers (from Design Rules)</source><translation>Yönlendirme katmanları (Tasarım Kurallarından)</translation></message>
+    <message><source>Top copper</source><translation>Üst bakır</translation></message>
+    <message><source>Bottom copper</source><translation>Alt bakır</translation></message>
+    <message><source>Maximum routing passes</source><translation>Azami yönlendirme geçişi</translation></message>
+    <message><source>Time limit</source><translation>Süre sınırı</translation></message>
+    <message><source> s</source><translation> sn</translation></message>
+    <message><source>Worker threads</source><translation>Çalışan iş parçacıkları</translation></message>
+    <message><source>Automatic</source><translation>Otomatik</translation></message>
+    <message><source>Optimization strategy</source><translation>İyileştirme stratejisi</translation></message>
+    <message><source>Greedy (fast)</source><translation>Açgözlü (hızlı)</translation></message>
+    <message><source>Hybrid</source><translation>Karma</translation></message>
+    <message><source>Global (quality)</source><translation>Global (kalite)</translation></message>
+    <message><source>Item selection</source><translation>Öğe seçimi</translation></message>
+    <message><source>Prioritized</source><translation>Öncelikli</translation></message>
+    <message><source>Sequential</source><translation>Sıralı</translation></message>
+    <message><source>Random</source><translation>Rastgele</translation></message>
+    <message><source>Begin Routing</source><translation>Yönlendirmeyi Başlat</translation></message>
+    <message><source>Select Freerouting</source><translation>Freerouting'i seç</translation></message>
+    <message><source>Freerouting JAR (*.jar);;All files (*.*)</source><translation>Freerouting JAR (*.jar);;Tüm dosyalar (*.*)</translation></message>
+    <message><source>Auto Router is routing the PCB...</source><translation>Auto Router PCB yollarını çiziyor...</translation></message>
+    <message><source>Cancel</source><translation>İptal</translation></message>
+    <message numerus="yes"><source>The proposed routing was not applied because HattEDA found %n blocking DRC issue(s).</source><translation><numerusform>HattEDA %n engelleyici DRC sorunu bulduğu için önerilen yollar uygulanmadı.</numerusform></translation></message>
+    <message numerus="yes"><source>HattEDA also reported %n warning(s). Run DRC to review them.</source><translation><numerusform>HattEDA ayrıca %n uyarı bildirdi. İncelemek için DRC'yi çalıştırın.</numerusform></translation></message>
+    <message><source>Autorouting applied: %1 track(s), %2 via(s).</source><translation>Otomatik yollar uygulandı: %1 yol, %2 via.</translation></message>
     <message><source>Auto place components</source><translation>Elemanları otomatik yerleştir</translation></message>
     <message><source>Auto placer</source><translation>Otomatik yerleştirici</translation></message>
+    <message><source>%1 of %2 component(s) fit inside the board outline. Enlarge the board, reduce spacing, or place the remaining components manually.</source><translation>%2 elemandan %1 tanesi kart dış çizgisinin içine sığdı. Kartı büyütün, boşluğu azaltın veya kalan elemanları elle yerleştirin.</translation></message>
     <message><source>Every schematic component is already on the board.</source><translation>Şemadaki tüm elemanlar zaten kartta.</translation></message>
     <message numerus="yes"><source>%n component(s) will be placed inside the board outline, or next to the design when there is no outline.</source><translation><numerusform>%n eleman kart dış çizgisinin içine, dış çizgi yoksa tasarımın yanına yerleştirilecek.</numerusform></translation></message>
     <message><source>Placement grid</source><translation>Yerleşim ızgarası</translation></message>
@@ -1013,5 +1042,67 @@ Son projeler listesinden kaldırılsın mı?</translation></message>
     <message><source>Keepout</source><translation>Yasak alan</translation></message>
     <message><source>Area, %1</source><translation>Alan, %1</translation></message>
     <message><source>No net, %1</source><translation>Net yok, %1</translation></message>
+  </context>
+  <context>
+    <name>hatt::ui::SpecctraDsn</name>
+    <message><source>The schematic must pass connectivity checks before autorouting.</source><translation>Otomatik yol çiziminden önce şema bağlantı denetiminden geçmelidir.</translation></message>
+    <message><source>Autorouting currently requires exactly one closed board outline.</source><translation>Otomatik yol çizimi şu anda tam olarak bir kapalı kart dış çizgisi gerektiriyor.</translation></message>
+    <message><source>Draw a closed board outline before autorouting.</source><translation>Otomatik yol çiziminden önce kapalı bir kart dış çizgisi çizin.</translation></message>
+    <message><source>This first autorouter export supports unrouted boards without vias or zones.</source><translation>İlk otomatik yol çizici aktarımı, via veya alan içermeyen henüz yolları çizilmemiş kartları destekliyor.</translation></message>
+    <message><source>Duplicate board reference: %1</source><translation>Tekrarlanan kart referansı: %1</translation></message>
+    <message><source>The board has no routable net on an enabled copper layer.</source><translation>Kartta etkin bir bakır katman üzerinde yönlendirilebilir net yok.</translation></message>
+    <message><source>%1 is not on a copper layer allowed by the %2 net class.</source><translation>%1, %2 net sınıfının izin verdiği bir bakır katman üzerinde değil.</translation></message>
+  </context>
+  <context>
+    <name>hatt::ui::FreeroutingRunner</name>
+    <message><source>An autorouter job is already running.</source><translation>Bir otomatik yol çizimi zaten çalışıyor.</translation></message>
+    <message><source>The autorouter input is empty.</source><translation>Otomatik yol çizici girdisi boş.</translation></message>
+    <message><source>Select a local Freerouting JAR file.</source><translation>Yerel bir Freerouting JAR dosyası seçin.</translation></message>
+    <message><source>A temporary autorouter directory could not be created.</source><translation>Geçici otomatik yol çizici klasörü oluşturulamadı.</translation></message>
+    <message><source>The temporary autorouter input could not be written.</source><translation>Geçici otomatik yol çizici girdisi yazılamadı.</translation></message>
+    <message><source>Freerouting could not be started: %1</source><translation>Freerouting başlatılamadı: %1</translation></message>
+    <message><source>Autorouting was cancelled.</source><translation>Otomatik yol çizimi iptal edildi.</translation></message>
+    <message><source>Autorouting exceeded its time limit.</source><translation>Otomatik yol çizimi süre sınırını aştı.</translation></message>
+    <message><source>Freerouting failed with exit code %1.</source><translation>Freerouting %1 çıkış koduyla başarısız oldu.</translation></message>
+    <message><source>Freerouting did not produce a session file.</source><translation>Freerouting bir oturum dosyası üretmedi.</translation></message>
+    <message><source>Freerouting produced an empty session file.</source><translation>Freerouting boş bir oturum dosyası üretti.</translation></message>
+  </context>
+  <context>
+    <name>hatt::ui::SpecctraSes</name>
+    <message><source>The session file is nested too deeply.</source><translation>Oturum dosyası çok fazla iç içe bölüm içeriyor.</translation></message>
+    <message><source>The session file ended unexpectedly.</source><translation>Oturum dosyası beklenmedik biçimde sona erdi.</translation></message>
+    <message><source>The session file has an unclosed section.</source><translation>Oturum dosyasında kapatılmamış bir bölüm var.</translation></message>
+    <message><source>The session file has an unclosed quoted value.</source><translation>Oturum dosyasında kapatılmamış tırnaklı bir değer var.</translation></message>
+    <message><source>The session file contains an invalid value.</source><translation>Oturum dosyası geçersiz bir değer içeriyor.</translation></message>
+    <message><source>The autorouter session is empty.</source><translation>Otomatik yol çizici oturumu boş.</translation></message>
+    <message><source>The autorouter session has no supported routing section or resolution.</source><translation>Otomatik yol çizici oturumunda desteklenen bir yol bölümü veya çözünürlük yok.</translation></message>
+    <message><source>A routed path for net %1 is malformed.</source><translation>%1 netine ait yol bozuk.</translation></message>
+    <message><source>A routed path for net %1 uses an unsupported layer or width.</source><translation>%1 netine ait yol desteklenmeyen katman veya genişlik kullanıyor.</translation></message>
+    <message><source>A routed path for net %1 has invalid coordinates.</source><translation>%1 netine ait yol geçersiz koordinatlar içeriyor.</translation></message>
+    <message><source>A via for net %1 is malformed.</source><translation>%1 netine ait via bozuk.</translation></message>
+    <message><source>A via for net %1 has invalid coordinates.</source><translation>%1 netine ait via geçersiz koordinatlar içeriyor.</translation></message>
+    <message><source>The autorouter session contains no tracks or vias.</source><translation>Otomatik yol çizici oturumunda yol veya via yok.</translation></message>
+  </context>
+  <context>
+    <name>hatt::ui::MainWindow</name>
+    <message><source>Object</source><translation>Nesne</translation></message>
+    <message><source>Component</source><translation>Eleman</translation></message>
+    <message><source>Route</source><translation>Yol</translation></message>
+    <message><source>Wire</source><translation>Tel</translation></message>
+    <message><source>Via</source><translation>Via</translation></message>
+    <message><source>Pad</source><translation>Pad</translation></message>
+    <message><source>Text</source><translation>Metin</translation></message>
+    <message><source>Zone</source><translation>Alan</translation></message>
+    <message><source>Edit %1 Properties...</source><translation>%1 özelliklerini düzenle...</translation></message>
+    <message><source>Rotate %1 Clockwise</source><translation>%1 saat yönünde döndür</translation></message>
+    <message><source>Copy %1</source><translation>%1 kopyala</translation></message>
+    <message><source>Create %1 Array...</source><translation>%1 dizisi oluştur...</translation></message>
+    <message><source>Delete %1</source><translation>%1 sil</translation></message>
+    <message><source>Change Route Layer</source><translation>Yol katmanını değiştir</translation></message>
+    <message><source>Move to Layer</source><translation>Katmana taşı</translation></message>
+    <message><source>Edit %1</source><translation>%1 düzenle</translation></message>
+    <message><source>Part reference</source><translation>Parça referansı</translation></message>
+    <message><source>Position X</source><translation>X konumu</translation></message>
+    <message><source>Position Y</source><translation>Y konumu</translation></message>
   </context>
 </TS>

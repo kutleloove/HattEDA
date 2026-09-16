@@ -1,5 +1,6 @@
 #pragma once
 #include "hatt/ui/DesignCanvas.hpp"
+#include "hatt/ui/DesignRules.hpp"
 #include <QObject>
 #include <QPointer>
 #include <atomic>
@@ -10,14 +11,17 @@ class QMenu;
 class QTextEdit;
 class QAction;
 class QTimer;
+class QProgressDialog;
 namespace hatt::ui {
+class FreeroutingRunner;
 class CircuitWorkflow final : public QObject {
     Q_OBJECT
 public:
     using ShowReport = std::function<void(const QString&, const QString&, QWidget*)>;
     CircuitWorkflow(QWidget* host, QMenu* menu, DesignCanvas* schematic, DesignCanvas* board,
                     ShowReport showReport, std::function<bool()> projectOpen,
-                    std::function<void()> showBoard);
+                    std::function<void()> showBoard,
+                    std::function<DesignRules()> designRules = [] { return DesignRules{}; });
     ~CircuitWorkflow() override;
 public slots:
     void showNetlist();
@@ -28,6 +32,9 @@ public slots:
     int autoPlace(double grid, double spacing);
     // Auto placer dialog (AutoPlacerDialog) with grid and spacing, remembered in QSettings.
     void showAutoPlacer();
+    // Exports the current unrouted board to a local Freerouting process and imports its SES result
+    // after HattEDA validation. The imported routing is one undo step.
+    void showAutorouter();
     void runDc();
     void cancelDc();
     // Interactive simulation (Proteus play/stop): solves the DC operating point, shows voltage
@@ -55,6 +62,7 @@ private:
     ShowReport showReport_;
     std::function<bool()> projectOpen_;
     std::function<void()> showBoard_;
+    std::function<DesignRules()> designRules_;
     QPointer<QTextEdit> netlist_;
     QPointer<QTextEdit> simulation_;
     std::shared_ptr<std::atomic_bool> cancelled_;
@@ -62,6 +70,9 @@ private:
     QAction* cancel_ = nullptr;
     QAction* start_ = nullptr;
     QAction* stop_ = nullptr;
+    QAction* autoroute_ = nullptr;
+    FreeroutingRunner* autorouter_ = nullptr;
+    QPointer<QProgressDialog> autorouteProgress_;
     QTimer* resolveTimer_ = nullptr;
     bool live_ = false;
     bool running_ = false;

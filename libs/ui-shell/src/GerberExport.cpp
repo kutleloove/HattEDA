@@ -281,7 +281,7 @@ CamOutput buildCamOutput(const SketchDocument& board, const CamOptions& options)
         case SketchItem::Kind::Arc: {
             bool closed = false;
             const QVector<QPointF> outline = graphicOutline(item, closed);
-            if (item.variant == BoardOutlineVariant) {
+            if (isBoardOutline(item)) {
                 stroke(CamLayerKind::Outline, outline, true, CamOutlineLineWidth);
             } else if (item.variant == CopperZoneVariant) {
                 if (poured.contains(item.id) || item.zoneFill == ZoneFillStyle::Empty) {

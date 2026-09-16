@@ -1,20 +1,30 @@
 #include "hatt/ui/CircuitWorkflow.hpp"
+#include "hatt/ui/DesignChecks.hpp"
+#include "hatt/ui/FreeroutingRunner.hpp"
 #include "hatt/ui/SketchCircuit.hpp"
+#include "hatt/ui/SpecctraDsn.hpp"
+#include "hatt/ui/SpecctraSes.hpp"
 #include <QAction>
+#include <QCoreApplication>
+#include <QComboBox>
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QDoubleSpinBox>
 #include <QFileDialog>
+#include <QFileInfo>
 #include <QFormLayout>
 #include <QLabel>
 #include <QMenu>
 #include <QMessageBox>
 #include <QPushButton>
+#include <QProgressDialog>
 #include <QSaveFile>
 #include <QSettings>
+#include <QSpinBox>
 #include <QTextEdit>
 #include <QThread>
 #include <QTimer>
+#include <algorithm>
 #include <exception>
 
 namespace hatt::ui {
@@ -27,9 +37,10 @@ QString messages(const QStringList& errors) {
 }
 CircuitWorkflow::CircuitWorkflow(QWidget* host, QMenu* menu, DesignCanvas* schematic, DesignCanvas* board,
                                  ShowReport showReport, std::function<bool()> projectOpen,
-                                 std::function<void()> showBoard)
+                                 std::function<void()> showBoard, std::function<DesignRules()> designRules)
     : QObject(host), host_(host), schematic_(schematic), board_(board),
-      showReport_(std::move(showReport)), projectOpen_(std::move(projectOpen)), showBoard_(std::move(showBoard)) {
+      showReport_(std::move(showReport)), projectOpen_(std::move(projectOpen)),
+      showBoard_(std::move(showBoard)), designRules_(std::move(designRules)) {
     setObjectName(QStringLiteral("CircuitWorkflow"));
     auto add = [&](const char* id, const QString& title, auto callback) {
         auto* action = new QAction(title, host);
@@ -45,6 +56,8 @@ CircuitWorkflow::CircuitWorkflow(QWidget* host, QMenu* menu, DesignCanvas* schem
     transfer->setShortcut(QKeySequence(QStringLiteral("Alt+A")));
     transfer->setToolTip(tr("Update PCB from schematic: refresh linked footprints and auto place new parts"));
     auto* placer = add("hatteda.action.auto-place", tr("Auto placer..."), &CircuitWorkflow::showAutoPlacer);
+    autoroute_ = add("hatteda.action.auto-route", tr("Auto Router..."), &CircuitWorkflow::showAutorouter);
+    autoroute_->setToolTip(tr("Configure and run the PCB Auto Router; HattEDA validates the result with DRC"));
     menu->addSeparator();
     start_ = add("hatteda.action.simulation-start", tr("Start simulation"), &CircuitWorkflow::startSimulation);
     start_->setProperty("iconKind", QStringLiteral("play"));
@@ -61,9 +74,11 @@ CircuitWorkflow::CircuitWorkflow(QWidget* host, QMenu* menu, DesignCanvas* schem
     connect(menu, &QMenu::aboutToShow, this, [this, net, exportNet, transfer, placer, example] {
         const bool open = projectOpen_();
         net->setEnabled(open); exportNet->setEnabled(open); transfer->setEnabled(open); placer->setEnabled(open);
+        autoroute_->setEnabled(open && !autorouter_->isRunning());
         example->setEnabled(open && !running_);
         updateSimulationActions();
     });
+    autorouter_ = new FreeroutingRunner(this);
     resolveTimer_ = new QTimer(this);
     resolveTimer_->setSingleShot(true);
     resolveTimer_->setInterval(150);
@@ -72,7 +87,10 @@ CircuitWorkflow::CircuitWorkflow(QWidget* host, QMenu* menu, DesignCanvas* schem
     connect(schematic_, &DesignCanvas::documentChanged, this, &CircuitWorkflow::schematicChanged);
     connect(board_, &DesignCanvas::documentChanged, this, &CircuitWorkflow::refreshGuidance);
 }
-CircuitWorkflow::~CircuitWorkflow() { cancelDc(); }
+CircuitWorkflow::~CircuitWorkflow() {
+    cancelDc();
+    autorouter_->cancel();
+}
 
 QTextEdit* CircuitWorkflow::report(QPointer<QTextEdit>& slot, const QString& id, const QString& title) {
     if (!slot) { slot = new QTextEdit; slot->setReadOnly(true); }
@@ -176,13 +194,25 @@ int CircuitWorkflow::autoPlace(double grid, double spacing) {
     if (!projectOpen_()) return 0;
     const auto waiting = unplacedBoardParts(schematic_->document(), board_->document());
     if (!waiting.parts.isEmpty()) {
-        board_->applyDocumentEdit(tr("Auto place components"),
-                                  autoPlaceParts(board_->document(), waiting.parts, grid, spacing));
+        const SketchDocument placed = autoPlaceParts(board_->document(), waiting.parts, grid, spacing);
+        const int placedCount = placed.size() - board_->document().size();
+        if (placedCount > 0)
+            board_->applyDocumentEdit(tr("Auto place components"), placed);
         refreshGuidance();
+        if (placedCount < waiting.parts.size()) {
+            QMessageBox::warning(
+                host_, tr("Auto placer"),
+                tr("%1 of %2 component(s) fit inside the board outline. Enlarge the board, reduce "
+                   "spacing, or place the remaining components manually.")
+                    .arg(placedCount)
+                    .arg(waiting.parts.size()));
+        }
+        showBoard_();
+        if (placedCount > 0) board_->zoomToFit();
+        return placedCount;
     }
     showBoard_();
-    if (!waiting.parts.isEmpty()) board_->zoomToFit();
-    return static_cast<int>(waiting.parts.size());
+    return 0;
 }
 
 void CircuitWorkflow::showAutoPlacer() {
@@ -231,6 +261,199 @@ void CircuitWorkflow::showAutoPlacer() {
     settings.setValue(QStringLiteral("pcb/autoPlacer/grid"), gridMm);
     settings.setValue(QStringLiteral("pcb/autoPlacer/spacing"), spacingMm);
     autoPlace(gridMm, spacingMm);
+}
+
+void CircuitWorkflow::showAutorouter() {
+    if (!projectOpen_() || autorouter_->isRunning()) return;
+
+    const DesignRules rules = designRules_();
+    QSettings settings;
+    QDialog settingsDialog(host_);
+    settingsDialog.setObjectName(QStringLiteral("AutorouterSettingsDialog"));
+    settingsDialog.setWindowTitle(tr("Auto Router Settings"));
+    auto* form = new QFormLayout(&settingsDialog);
+
+    QStringList classLayers;
+    for (const NetClass& netClass : effectiveNetClasses(rules)) {
+        QStringList layers;
+        if (netClass.layers & layerBit(BoardLayer::TopCopper)) layers << tr("Top copper");
+        if (netClass.layers & layerBit(BoardLayer::BottomCopper)) layers << tr("Bottom copper");
+        classLayers << QStringLiteral("%1: %2").arg(netClass.name, layers.join(QStringLiteral(" + ")));
+    }
+    auto* layerSummary = new QLabel(classLayers.join(QLatin1Char('\n')), &settingsDialog);
+    layerSummary->setObjectName(QStringLiteral("AutorouterLayers"));
+    layerSummary->setWordWrap(true);
+    form->addRow(tr("Routing layers (from Design Rules)"), layerSummary);
+
+    auto* passes = new QSpinBox(&settingsDialog);
+    passes->setObjectName(QStringLiteral("AutorouterPasses"));
+    passes->setRange(1, 1000);
+    passes->setValue(settings.value(QStringLiteral("pcb/freerouting/maxPasses"), 100).toInt());
+    form->addRow(tr("Maximum routing passes"), passes);
+
+    auto* timeout = new QSpinBox(&settingsDialog);
+    timeout->setObjectName(QStringLiteral("AutorouterTimeout"));
+    timeout->setRange(10, 3600);
+    timeout->setSuffix(tr(" s"));
+    timeout->setValue(settings.value(QStringLiteral("pcb/freerouting/timeoutMs"), 5 * 60 * 1000).toInt() / 1000);
+    form->addRow(tr("Time limit"), timeout);
+
+    auto* threads = new QSpinBox(&settingsDialog);
+    threads->setObjectName(QStringLiteral("AutorouterThreads"));
+    threads->setRange(0, 64);
+    threads->setSpecialValueText(tr("Automatic"));
+    threads->setValue(settings.value(QStringLiteral("pcb/freerouting/threads"), 0).toInt());
+    form->addRow(tr("Worker threads"), threads);
+
+    auto* updateStrategy = new QComboBox(&settingsDialog);
+    updateStrategy->setObjectName(QStringLiteral("AutorouterUpdateStrategy"));
+    updateStrategy->addItem(tr("Greedy (fast)"), QStringLiteral("greedy"));
+    updateStrategy->addItem(tr("Hybrid"), QStringLiteral("hybrid"));
+    updateStrategy->addItem(tr("Global (quality)"), QStringLiteral("global"));
+    updateStrategy->setCurrentIndex(std::max(
+        0, updateStrategy->findData(settings.value(QStringLiteral("pcb/freerouting/updateStrategy"),
+                                                   QStringLiteral("greedy")))));
+    form->addRow(tr("Optimization strategy"), updateStrategy);
+
+    auto* selectionStrategy = new QComboBox(&settingsDialog);
+    selectionStrategy->setObjectName(QStringLiteral("AutorouterSelectionStrategy"));
+    selectionStrategy->addItem(tr("Prioritized"), QStringLiteral("prioritized"));
+    selectionStrategy->addItem(tr("Sequential"), QStringLiteral("sequential"));
+    selectionStrategy->addItem(tr("Random"), QStringLiteral("random"));
+    selectionStrategy->setCurrentIndex(std::max(
+        0, selectionStrategy->findData(settings.value(QStringLiteral("pcb/freerouting/selectionStrategy"),
+                                                      QStringLiteral("prioritized")))));
+    form->addRow(tr("Item selection"), selectionStrategy);
+
+    auto* settingsButtons =
+        new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &settingsDialog);
+    settingsButtons->button(QDialogButtonBox::Ok)->setText(tr("Begin Routing"));
+    connect(settingsButtons, &QDialogButtonBox::accepted, &settingsDialog, &QDialog::accept);
+    connect(settingsButtons, &QDialogButtonBox::rejected, &settingsDialog, &QDialog::reject);
+    form->addRow(settingsButtons);
+    if (settingsDialog.exec() != QDialog::Accepted) return;
+
+    settings.setValue(QStringLiteral("pcb/freerouting/maxPasses"), passes->value());
+    settings.setValue(QStringLiteral("pcb/freerouting/timeoutMs"), timeout->value() * 1000);
+    settings.setValue(QStringLiteral("pcb/freerouting/threads"), threads->value());
+    settings.setValue(QStringLiteral("pcb/freerouting/updateStrategy"), updateStrategy->currentData());
+    settings.setValue(QStringLiteral("pcb/freerouting/selectionStrategy"), selectionStrategy->currentData());
+
+    const SpecctraDsnResult exported =
+        exportSpecctraDsn(schematic_->document(), board_->document(), rules, QStringLiteral("HattEDA"));
+    if (!exported.errors.isEmpty()) {
+        QMessageBox::warning(host_, tr("Auto Router"), exported.errors.join(QLatin1Char('\n')));
+        return;
+    }
+
+    const QString bundledRoot = QCoreApplication::applicationDirPath() + QStringLiteral("/autorouter");
+    const QString bundledJar = bundledRoot + QStringLiteral("/freerouting.jar");
+#ifdef Q_OS_WIN
+    const QString bundledJava = bundledRoot + QStringLiteral("/runtime/bin/javaw.exe");
+#else
+    const QString bundledJava = bundledRoot + QStringLiteral("/runtime/bin/java");
+#endif
+    const bool bundled = QFileInfo::exists(bundledJar) && QFileInfo::exists(bundledJava);
+    QString jarPath = bundled ? bundledJar
+                              : settings.value(QStringLiteral("pcb/freerouting/jar")).toString();
+    if (!bundled && (jarPath.isEmpty() || !QFileInfo::exists(jarPath))) {
+        jarPath = QFileDialog::getOpenFileName(host_, tr("Select Freerouting"), QString(),
+                                               tr("Freerouting JAR (*.jar);;All files (*.*)"));
+        if (jarPath.isEmpty()) return;
+        settings.setValue(QStringLiteral("pcb/freerouting/jar"), jarPath);
+    }
+
+    autorouteProgress_ = new QProgressDialog(tr("Auto Router is routing the PCB..."), tr("Cancel"), 0, 0, host_);
+    autorouteProgress_->setObjectName(QStringLiteral("AutorouterProgress"));
+    autorouteProgress_->setWindowTitle(tr("Auto Router"));
+    autorouteProgress_->setWindowModality(Qt::ApplicationModal);
+    autorouteProgress_->setMinimumDuration(0);
+    autorouteProgress_->setAutoClose(false);
+    autorouteProgress_->setAutoReset(false);
+    connect(autorouteProgress_, &QProgressDialog::canceled, autorouter_, &FreeroutingRunner::cancel);
+
+    connect(autorouter_, &FreeroutingRunner::finished, this,
+            [this, rules](const FreeroutingResult& routed) {
+                if (autorouteProgress_) {
+                    autorouteProgress_->close();
+                    autorouteProgress_->deleteLater();
+                    autorouteProgress_.clear();
+                }
+                autoroute_->setEnabled(projectOpen_());
+                if (!routed.error.isEmpty()) {
+                    auto* box = new QMessageBox(QMessageBox::Critical, tr("Auto Router"), routed.error,
+                                                QMessageBox::Ok, host_);
+                    if (!routed.diagnostics.trimmed().isEmpty()) box->setDetailedText(routed.diagnostics);
+                    box->exec();
+                    delete box;
+                    return;
+                }
+
+                const SpecctraSesResult imported = importSpecctraSes(routed.ses);
+                if (!imported.errors.isEmpty()) {
+                    QMessageBox::warning(host_, tr("Auto Router"), imported.errors.join(QLatin1Char('\n')));
+                    return;
+                }
+                const SketchDocument routing =
+                    snapSpecctraRoutingToPads(imported.routing, board_->document());
+                SketchDocument candidate = board_->document();
+                candidate += routing;
+                const CheckReport check = runDesignRuleCheck(schematic_->document(), candidate, rules);
+                QStringList errors;
+                QStringList warnings;
+                for (const auto& violation : check.violations) {
+                    const bool blocking = violation.severity == CheckSeverity::Error ||
+                                          violation.rule == QStringLiteral("drc.unrouted");
+                    (blocking ? errors : warnings) << violation.message;
+                }
+                if (!errors.isEmpty()) {
+                    auto* box = new QMessageBox(
+                        QMessageBox::Warning, tr("Auto Router"),
+                        tr("The proposed routing was not applied because HattEDA found %n blocking DRC issue(s).",
+                           nullptr, errors.size()),
+                        QMessageBox::Ok, host_);
+                    box->setDetailedText(errors.join(QLatin1Char('\n')));
+                    box->exec();
+                    delete box;
+                    return;
+                }
+
+                board_->applyDocumentEdit(tr("Auto Router"), candidate);
+                refreshGuidance();
+                showBoard_();
+                board_->zoomToFit();
+                const int trackCount = std::count_if(routing.cbegin(), routing.cend(),
+                                                     [](const SketchItem& item) {
+                                                         return item.kind == SketchItem::Kind::Wire;
+                                                     });
+                const int viaCount = routing.size() - trackCount;
+                QString message = tr("Autorouting applied: %1 track(s), %2 via(s).")
+                                      .arg(trackCount)
+                                      .arg(viaCount);
+                if (!warnings.isEmpty()) {
+                    message += QLatin1Char('\n') +
+                               tr("HattEDA also reported %n warning(s). Run DRC to review them.",
+                                  nullptr, warnings.size());
+                }
+                QMessageBox::information(host_, tr("Auto Router"), message);
+                emit statusMessage(message);
+            },
+            Qt::SingleShotConnection);
+
+    autoroute_->setEnabled(false);
+    autorouteProgress_->show();
+    FreeroutingRequest request;
+    if (bundled) request.javaExecutable = bundledJava;
+    request.jarPath = jarPath;
+    request.dsn = exported.data;
+    request.maxPasses = settings.value(QStringLiteral("pcb/freerouting/maxPasses"), 100).toInt();
+    request.threadCount = settings.value(QStringLiteral("pcb/freerouting/threads"), 0).toInt();
+    request.updateStrategy =
+        settings.value(QStringLiteral("pcb/freerouting/updateStrategy"), QStringLiteral("greedy")).toString();
+    request.selectionStrategy =
+        settings.value(QStringLiteral("pcb/freerouting/selectionStrategy"), QStringLiteral("prioritized")).toString();
+    request.timeoutMs = settings.value(QStringLiteral("pcb/freerouting/timeoutMs"), 5 * 60 * 1000).toInt();
+    autorouter_->start(request);
 }
 
 void CircuitWorkflow::exportNetlist() {

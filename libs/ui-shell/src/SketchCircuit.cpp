@@ -3,6 +3,7 @@
 
 #include <QCoreApplication>
 #include <QHash>
+#include <QPainterPath>
 #include <QSet>
 #include <algorithm>
 #include <cmath>
@@ -310,45 +311,63 @@ SketchDocument autoPlaceParts(const SketchDocument& board, const SketchDocument&
     const double gap = std::max(0.0, spacing);
     SketchDocument result = board;
     QVector<QRectF> occupied;
-    QRectF area;
+    struct PlacementRegion {
+        QPainterPath shape;
+        QRectF bounds;
+    };
+    QVector<PlacementRegion> regions;
     for (const auto& item : board) {
-        const bool outline = item.variant == BoardOutlineVariant;
-        if (outline && area.isNull()) area = itemBounds(item).adjusted(gap, gap, -gap, -gap);
+        const QVector<QPointF> outline = boardOutlinePoints(item);
+        if (!outline.isEmpty()) {
+            QPainterPath shape(outline.first());
+            for (qsizetype i = 1; i < outline.size(); ++i) shape.lineTo(outline[i]);
+            shape.closeSubpath();
+            regions.append({shape, shape.boundingRect()});
+        }
         // The outline and zones surround parts, so they do not block placement.
-        if (!outline && !isZoneVariant(item.variant)) occupied.append(itemBounds(item));
+        if (outline.isEmpty() && !isZoneVariant(item.variant)) occupied.append(itemBounds(item));
     }
-    if (area.isEmpty()) {
+    if (regions.isEmpty()) {
         double right = 0.0;
         for (const auto& rect : occupied) right = std::max(right, rect.right());
-        area = QRectF(occupied.isEmpty() ? 10.0 : right + 10.0, 10.0, 60.0, 1e6);
+        const QRectF fallback(occupied.isEmpty() ? 10.0 : right + 10.0, 10.0, 60.0, 1e6);
+        QPainterPath shape;
+        shape.addRect(fallback);
+        regions.append({shape, fallback});
     }
     auto snapUp = [grid](double value) { return grid > 0 ? std::ceil(value / grid - 1e-9) * grid : value; };
-    double x = area.left();
-    double y = area.top();
-    double rowHeight = 0.0;
+    const double step = grid > 0 ? grid : 0.254;
     for (SketchItem part : parts) {
         part.points = {{0, 0}};
         const QRectF local = itemBounds(part);
-        for (int attempt = 0; attempt < 100000; ++attempt) {
-            if (x > area.left() && x + local.width() > area.right()) {
-                x = area.left();
-                y += rowHeight + gap;
-                rowHeight = 0.0;
+        bool fitted = false;
+        int attempts = 0;
+        for (const PlacementRegion& region : regions) {
+            const double firstX = snapUp(region.bounds.left() + gap - local.left());
+            const double firstY = snapUp(region.bounds.top() + gap - local.top());
+            const double lastX = region.bounds.right() - gap - local.right();
+            const double lastY = region.bounds.bottom() - gap - local.bottom();
+            for (double y = firstY; y <= lastY + 1e-9 && !fitted && attempts < 250000; y += step) {
+                for (double x = firstX; x <= lastX + 1e-9 && attempts < 250000; x += step) {
+                    ++attempts;
+                    const QPointF origin(x, y);
+                    const QRectF placed = local.translated(origin);
+                    const QRectF envelope = placed.adjusted(-gap, -gap, gap, gap);
+                    if (!region.shape.contains(envelope)) continue;
+                    const bool blocked = std::any_of(occupied.cbegin(), occupied.cend(),
+                                                     [&](const QRectF& rect) {
+                        return rect.adjusted(-gap / 2, -gap / 2, gap / 2, gap / 2)
+                            .intersects(placed.adjusted(-gap / 2, -gap / 2, gap / 2, gap / 2));
+                    });
+                    if (blocked) continue;
+                    part.points = {origin};
+                    occupied.append(placed);
+                    result.append(part);
+                    fitted = true;
+                    break;
+                }
             }
-            const QPointF origin(snapUp(x - local.left()), snapUp(y - local.top()));
-            const QRectF placed = local.translated(origin);
-            const auto blocker = std::find_if(occupied.begin(), occupied.end(), [&](const QRectF& rect) {
-                return rect.adjusted(-gap / 2, -gap / 2, gap / 2, gap / 2).intersects(placed);
-            });
-            if (blocker == occupied.end()) {
-                part.points = {origin};
-                occupied.append(placed);
-                result.append(part);
-                x = placed.right() + gap;
-                rowHeight = std::max(rowHeight, placed.bottom() - y);
-                break;
-            }
-            x = std::max(x + std::max(gap, 0.254), blocker->right() + gap);
+            if (fitted) break;
         }
     }
     return result;

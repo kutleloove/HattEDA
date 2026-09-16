@@ -100,6 +100,7 @@ private slots:
     void arrayDialogCreatesGrid();
     void projectSaveOpenAndUnsavedChanges();
     void contextPropertiesAcceptAndCancel();
+    void contextMenuUsesObjectSpecificCommandsAndKeepsMultiSelection();
     void componentModeUsesProjectDevicesAndSchematicParts();
     void newDeviceCreatesFootprintAndPinMap();
     void designChecksReportAndRules();
@@ -300,6 +301,7 @@ void MainWindowTests::contextPropertiesAcceptAndCancel() {
         QVERIFY(menu);
         auto* properties = menu->findChild<QAction*>(QStringLiteral("hatteda.context.properties"));
         QVERIFY(properties);
+        QVERIFY(properties->text().contains(QStringLiteral("Component")));
         menu->hide();
         QTimer::singleShot(0, [accept] {
             auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
@@ -341,6 +343,39 @@ void MainWindowTests::contextPropertiesAcceptAndCancel() {
     QCOMPARE(canvas->document().first().label, original.label);
     QCOMPARE(canvas->document().first().value, original.value);
     QCOMPARE(canvas->document().first().footprint, original.footprint);
+}
+
+void MainWindowTests::contextMenuUsesObjectSpecificCommandsAndKeepsMultiSelection() {
+    hatt::ui::MainWindow window;
+    QVERIFY(showActive(window));
+    activateEditor(window);
+    window.showKayraWorkspace();
+    auto* board = window.activeCanvas();
+    hatt::ui::SketchItem first;
+    first.kind = hatt::ui::SketchItem::Kind::Wire;
+    first.layer = hatt::ui::BoardLayer::TopCopper;
+    first.points = {{0, 0}, {10, 0}};
+    hatt::ui::SketchItem second = first;
+    second.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    second.points = {{0, 5}, {10, 5}};
+    board->applyDocumentEdit(QStringLiteral("Routes"), {first, second});
+    board->selectAll();
+
+    board->contextMenuRequested(board->mapToGlobal(QPoint(100, 100)), 0);
+    auto* menu = window.findChild<QMenu*>(QStringLiteral("CanvasContextMenu"));
+    QVERIFY(menu);
+    QCOMPARE(board->selection().size(), 2);
+    auto* properties = menu->findChild<QAction*>(QStringLiteral("hatteda.context.properties"));
+    auto* copy = menu->findChild<QAction*>(QStringLiteral("hatteda.context.duplicate"));
+    auto* remove = menu->findChild<QAction*>(QStringLiteral("hatteda.context.delete"));
+    QVERIFY(properties && copy && remove);
+    QVERIFY(properties->text().contains(QStringLiteral("Route")));
+    QVERIFY(copy->text().contains(QStringLiteral("Route")));
+    QVERIFY(remove->text().contains(QStringLiteral("Route")));
+    QVERIFY(!menu->findChild<QAction*>(QStringLiteral("hatteda.context.rotate")));
+    QVERIFY(menu->findChild<QMenu*>(QStringLiteral("hatteda.context.move-to-layer")));
+    menu->close();
+    delete menu;
 }
 
 namespace {
@@ -549,6 +584,15 @@ void MainWindowTests::snapSettingsArePersisted() {
         QVERIFY(!edges->isChecked());
         QVERIFY(grid->isChecked());
         QVERIFY(diagonal->isChecked());
+        QVERIFY(!diagonal->isHidden());
+        QVERIFY(!orthogonal->isHidden());
+
+        window.showKayraWorkspace();
+        QVERIFY(diagonal->isHidden());
+        QVERIFY(orthogonal->isHidden());
+        window.showMergenWorkspace();
+        QVERIFY(!diagonal->isHidden());
+        QVERIFY(!orthogonal->isHidden());
 
         edges->click();
         grid->click();
@@ -684,6 +728,9 @@ void MainWindowTests::boardUnitsFollowPreference() {
 
 void MainWindowTests::startsOnWelcomePageWithoutProjectChrome() {
     hatt::ui::MainWindow window;
+    auto* autoroute = action(window, "hatteda.action.auto-route");
+    QVERIFY(autoroute != nullptr);
+    QCOMPARE(autoroute->text(), QStringLiteral("Auto Router..."));
     auto* pages = window.findChild<QStackedWidget*>(QStringLiteral("ApplicationPages"));
     QVERIFY(pages != nullptr);
     QCOMPARE(pages->currentIndex(), 0);

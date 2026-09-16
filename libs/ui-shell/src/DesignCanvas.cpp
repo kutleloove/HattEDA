@@ -635,14 +635,33 @@ bool isPathTool(CanvasTool tool) {
     return tool == CanvasTool::Wire || tool == CanvasTool::Polyline || tool == CanvasTool::Zone;
 }
 
-QVector<QPointF> diagonalRoute(QPointF from, QPointF to) {
+QVector<QPointF> diagonalRoute(QPointF from, QPointF to, double gridStep) {
     const double dx = to.x() - from.x();
     const double dy = to.y() - from.y();
     const double ax = std::abs(dx);
     const double ay = std::abs(dy);
     if (ax < 1e-9 || ay < 1e-9 || std::abs(ax - ay) < 1e-9) return {};
-    return {ax > ay ? from + QPointF(std::copysign(ax - ay, dx), 0.0)
-                    : from + QPointF(0.0, std::copysign(ay - ax, dy))};
+
+    // Proteus-style PCB routing keeps straight runs at both ends and joins them with a true
+    // 45-degree segment. Keep both bends on the routing grid; very short spans fall back to the
+    // usual straight-plus-diagonal shape when three non-zero runs cannot fit.
+    const double shortest = std::min(ax, ay);
+    double diagonal = shortest / 2.0;
+    if (gridStep > 1e-9) {
+        diagonal = std::round(diagonal / gridStep) * gridStep;
+        if (shortest >= 2.0 * gridStep - 1e-9) {
+            diagonal = std::clamp(diagonal, gridStep, shortest - gridStep);
+        }
+    }
+    if (diagonal < 1e-9 || shortest - diagonal < 1e-9) {
+        return {ax > ay ? from + QPointF(std::copysign(ax - ay, dx), 0.0)
+                        : from + QPointF(0.0, std::copysign(ay - ax, dy))};
+    }
+
+    const QPointF first = from + QPointF(std::copysign(ax - diagonal, dx), 0.0);
+    const QPointF second = first + QPointF(std::copysign(diagonal, dx),
+                                           std::copysign(diagonal, dy));
+    return {first, second};
 }
 
 double segmentDistance(const QLineF& first, const QLineF& second) {
@@ -1615,8 +1634,9 @@ QPointF DesignCanvas::spacingShift(const QList<int>& skipped, const QRectF& movi
 }
 
 bool DesignCanvas::routesWire() const {
-    return tool_ == CanvasTool::Wire && !freeAngle_ &&
-           (workspace_ == Workspace::Schematic || snap_.orthogonal);
+    // Wire/track geometry is owned by the interactive router. The diagonal/orthogonal snap
+    // buttons constrain generic drawing tools; PCB routing must not depend on a mode toggle.
+    return tool_ == CanvasTool::Wire && !freeAngle_;
 }
 
 QVector<QPointF> DesignCanvas::routeTo(QPointF point) const {
@@ -1759,10 +1779,8 @@ std::optional<QVector<QPointF>> DesignCanvas::obstacleAvoidingRoute(QPointF from
     };
 
     QVector<QPointF> direct{from};
-    if (snap_.orthogonal) {
-        direct += orthogonalRoute(from, to, {}, {}, gridSize());
-    } else if (snap_.diagonal) {
-        direct += diagonalRoute(from, to);
+    if (!freeAngle_) {
+        direct += diagonalRoute(from, to, gridSize());
     }
     direct.append(to);
     if (pathIsClear(direct)) {
@@ -1820,7 +1838,7 @@ std::optional<QVector<QPointF>> DesignCanvas::obstacleAvoidingRoute(QPointF from
     std::priority_queue<QueueEntry, std::vector<QueueEntry>, std::greater<>> open;
     cost[start] = 0.0;
     open.push({QLineF(from, to).length(), start});
-    const bool diagonal = snap_.diagonal && !snap_.orthogonal;
+    const bool diagonal = !freeAngle_;
     const std::array<QPoint, 8> moves = {QPoint(1, 0),  QPoint(-1, 0), QPoint(0, 1),
                                          QPoint(0, -1), QPoint(1, 1),  QPoint(1, -1),
                                          QPoint(-1, 1), QPoint(-1, -1)};
