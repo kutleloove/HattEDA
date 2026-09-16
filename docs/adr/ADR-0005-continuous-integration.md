@@ -6,7 +6,7 @@ The repository had no CI, so pull requests could merge without being built or te
 
 ## Decision
 
-- `.github/workflows/ci.yml` runs one `windows-latest` job on pushes to `main`, `feature/**` and `work/**`, on pull requests to `main`, and on manual dispatch.
+- `.github/workflows/ci.yml` runs one `windows-latest` job on pushes to `main`, `feature/**`, `work/**` and `issue/**`, on pull requests to `main` or `integration/mvp`, and on manual dispatch.
 - The toolchain matches the local setup: Qt 6.11.2 `win64_mingw`, Qt's MinGW 13.1 (`tools_mingw1310`) and Ninja (`tools_ninja`), installed with `jurplel/install-qt-action` and cached. These are CI tools only and add no application or build dependency. aqtinstall is installed from a pinned git commit because its latest release (3.3.0) cannot resolve the Qt 6.11 repository layout; switch back to a release once one ships with Qt 6.11 support.
 - Third-party actions are pinned to commit SHAs with the version in a comment.
 - Additional presets `ci-mingw-debug` and `ci-mingw-release` (hidden base `ci-mingw-base`, build presets `ci-debug`/`ci-release`, test preset `ci-debug`) read `QT_ROOT_DIR` and `HATTEDA_MINGW_DIR` from the environment and find `ninja` on PATH. The existing `windows-mingw-*` presets stay unchanged for local use.

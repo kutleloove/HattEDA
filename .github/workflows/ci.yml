@@ -6,9 +6,11 @@ on:
       - main
       - "feature/**"
       - "work/**"
+      - "issue/**"
   pull_request:
     branches:
       - main
+      - integration/mvp
   workflow_dispatch:
 
 permissions:
