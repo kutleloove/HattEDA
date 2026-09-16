@@ -14,6 +14,7 @@ class QLabel;
 class QLineEdit;
 class QListWidget;
 class QPushButton;
+class QSpinBox;
 class QTableWidget;
 
 namespace hatt::ui {
@@ -31,31 +32,49 @@ namespace hatt::ui {
 //    `PairRemove`).
 //  - Defaults (`DefaultThermalRelief`, `DefaultThermalGap`, `DefaultSpokeWidth`,
 //    `DefaultSolderResist`, `DefaultSilkClearance`, `DefaultCurveTolerance`).
-// OK is disabled while validateDesignRules fails; the reason is shown in `RulesValidation`.
+//  - Autorouter (issue #49; `AutorouterLayers`, `AutorouterPasses`, `AutorouterTimeout`,
+//    `AutorouterThreads`, `AutorouterUpdateStrategy`, `AutorouterSelectionStrategy`): where/how the
+//    external Freerouting engine (ADR-0014) routes. These values are a machine-local run preference,
+//    never project data — read from and written to `QSettings` `pcb/freerouting/*` (the same keys
+//    `CircuitWorkflow` always used), never into `DesignRules`/the `.hatt` file. The `RouteBoard`
+//    button next to OK/Cancel accepts the dialog (applying any rule edits, same as OK) and sets
+//    `routeRequested()` so the host can start routing immediately with the settings just chosen.
+// OK and Route Board are disabled while validateDesignRules fails; the reason is shown in
+// `RulesValidation`.
 class DesignRuleManagerDialog final : public QDialog {
     Q_OBJECT
 
 public:
     // `nets` are the schematic net names, `automaticClasses` their POWER/SIGNAL fallback classes.
+    // `openAutorouterTab` selects the Autorouter tab initially (used when the dialog is opened from
+    // Circuit > Auto Router... rather than Design > Design rules...).
     DesignRuleManagerDialog(const DesignRules& rules, const QStringList& nets,
-                            const QHash<QString, QString>& automaticClasses, QWidget* parent = nullptr);
+                            const QHash<QString, QString>& automaticClasses, QWidget* parent = nullptr,
+                            bool openAutorouterTab = false);
 
     // The edited rules. A single DEFAULT Board rule with equal gaps and the unchanged default net
     // classes are stored in the compact form (global values only) so unchanged projects keep their
     // file contents.
     [[nodiscard]] DesignRules rules() const;
 
+    // True when the dialog was accepted via the Route Board button rather than OK: the host should
+    // apply rules() and then start autorouting with the current pcb/freerouting/* QSettings.
+    [[nodiscard]] bool routeRequested() const noexcept { return routeRequested_; }
+
 private:
     QWidget* createRulesTab();
     QWidget* createNetClassesTab();
     QWidget* createPairsTab();
     QWidget* createDefaultsTab();
+    QWidget* createAutorouterTab();
     void showRule(int index);
     void storeRule();
     void refreshRuleList();
     void showNetClass(int index);
     void storeNetClass();
     void refreshNetLists();
+    void refreshAutorouterLayers();
+    void persistAutorouterSettings();
     void validate();
 
     DesignRules working_;
@@ -101,8 +120,16 @@ private:
     QDoubleSpinBox* silkClearance_ = nullptr;
     QDoubleSpinBox* curveTolerance_ = nullptr;
 
+    QSpinBox* autorouterPasses_ = nullptr;
+    QSpinBox* autorouterTimeout_ = nullptr;
+    QSpinBox* autorouterThreads_ = nullptr;
+    QComboBox* autorouterUpdateStrategy_ = nullptr;
+    QComboBox* autorouterSelectionStrategy_ = nullptr;
+
     QLabel* validation_ = nullptr;
     QDialogButtonBox* buttons_ = nullptr;
+    QPushButton* routeBoard_ = nullptr;
+    bool routeRequested_ = false;
 };
 
 } // namespace hatt::ui

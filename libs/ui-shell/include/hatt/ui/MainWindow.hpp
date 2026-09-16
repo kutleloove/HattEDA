@@ -31,6 +31,7 @@ namespace hatt::ui {
 
 class BoardLayerPanel;
 class ChecksReport;
+class CircuitWorkflow;
 class DesignCanvas;
 class MainWindowAgenticGateway;
 class ProjectGuard;
@@ -91,8 +92,10 @@ public slots:
     void showPrintLayout();
     // Runs ERC and DRC and shows the results in the `hatteda.tool.design-checks` workspace.
     void runDesignChecks();
-    // DesignRulesDialog for the project's rules.
-    void editDesignRules();
+    // DesignRuleManagerDialog for the project's rules. `openAutorouterTab` selects its Autorouter
+    // tab initially (issue #49; used by Circuit > Auto Router...). Its Route Board button applies the
+    // edited rules the same as OK, then starts routing via `circuit_->runAutorouter()`.
+    void editDesignRules(bool openAutorouterTab = false);
     // Assembly CSV files (ManufacturingExport.hpp). An empty path asks for one; false when cancelled
     // or writing failed (the error is shown).
     bool exportBom(const QString& path = {});
@@ -226,6 +229,7 @@ private:
     QLabel* zoomLabel_ = nullptr;
     DesignRules rules_;
     bool rulesModified_ = false;
+    CircuitWorkflow* circuit_ = nullptr;
     QPointer<ChecksReport> checksReport_;
     // Local MCP server for agentic use (ADR-0013), started only when the `agentic/mcpEnabled`
     // QSettings key is true (default off).

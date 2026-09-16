@@ -13,7 +13,9 @@
 #include <QListWidget>
 #include <QLocale>
 #include <QPushButton>
+#include <QSettings>
 #include <QSignalBlocker>
+#include <QSpinBox>
 #include <QTabWidget>
 #include <QTableWidget>
 #include <QVBoxLayout>
@@ -22,6 +24,14 @@
 
 namespace hatt::ui {
 namespace {
+
+// pcb/freerouting/* (issue #49; ADR-0014): a machine-local run preference for the external
+// Freerouting engine, never project data, so these live in QSettings, not DesignRules/.hatt.
+const QLatin1String kMaxPassesKey("pcb/freerouting/maxPasses");
+const QLatin1String kTimeoutKey("pcb/freerouting/timeoutMs");
+const QLatin1String kThreadsKey("pcb/freerouting/threads");
+const QLatin1String kUpdateStrategyKey("pcb/freerouting/updateStrategy");
+const QLatin1String kSelectionStrategyKey("pcb/freerouting/selectionStrategy");
 
 QDoubleSpinBox* lengthField(QWidget* parent, const QString& name, double minimum = 0.0) {
     auto* field = new QDoubleSpinBox(parent);
@@ -51,7 +61,8 @@ enum PairColumn { PairName, PairPositive, PairNegative, PairWidth, PairGap };
 } // namespace
 
 DesignRuleManagerDialog::DesignRuleManagerDialog(const DesignRules& rules, const QStringList& nets,
-                                                 const QHash<QString, QString>& automaticClasses, QWidget* parent)
+                                                 const QHash<QString, QString>& automaticClasses, QWidget* parent,
+                                                 bool openAutorouterTab)
     : QDialog(parent), working_(rules), nets_(nets), automaticClasses_(automaticClasses) {
     setObjectName(QStringLiteral("DesignRuleManagerDialog"));
     setWindowTitle(tr("Design Rule Manager"));
@@ -67,20 +78,33 @@ DesignRuleManagerDialog::DesignRuleManagerDialog(const DesignRules& rules, const
     tabs->addTab(createNetClassesTab(), tr("Net Classes"));
     tabs->addTab(createPairsTab(), tr("Differential Pairs"));
     tabs->addTab(createDefaultsTab(), tr("Defaults"));
+    const int autorouterTabIndex = tabs->addTab(createAutorouterTab(), tr("Autorouter"));
     layout->addWidget(tabs, 1);
     validation_ = new QLabel(this);
     validation_->setObjectName(QStringLiteral("RulesValidation"));
     validation_->setWordWrap(true);
     layout->addWidget(validation_);
     buttons_ = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
-    connect(buttons_, &QDialogButtonBox::accepted, this, &QDialog::accept);
+    routeBoard_ = buttons_->addButton(tr("Route Board"), QDialogButtonBox::ActionRole);
+    routeBoard_->setObjectName(QStringLiteral("RouteBoard"));
+    routeBoard_->setToolTip(tr("Apply these design rules and start the Auto Router with the settings above"));
+    connect(buttons_, &QDialogButtonBox::accepted, this, [this] {
+        persistAutorouterSettings();
+        accept();
+    });
     connect(buttons_, &QDialogButtonBox::rejected, this, &QDialog::reject);
+    connect(routeBoard_, &QPushButton::clicked, this, [this] {
+        persistAutorouterSettings();
+        routeRequested_ = true;
+        accept();
+    });
     layout->addWidget(buttons_);
 
     refreshRuleList();
     showRule(0);
     classCombo_->setCurrentIndex(0);
     showNetClass(0);
+    if (openAutorouterTab) tabs->setCurrentIndex(autorouterTabIndex);
     validate();
 }
 
@@ -564,6 +588,91 @@ void DesignRuleManagerDialog::validate() {
     const QString problem = validateDesignRules(rules());
     validation_->setText(problem);
     buttons_->button(QDialogButtonBox::Ok)->setEnabled(problem.isEmpty());
+    if (routeBoard_) routeBoard_->setEnabled(problem.isEmpty());
+    refreshAutorouterLayers();
+}
+
+QWidget* DesignRuleManagerDialog::createAutorouterTab() {
+    auto* page = new QWidget(this);
+    page->setObjectName(QStringLiteral("DesignRulesAutorouterTab"));
+    auto* form = new QFormLayout(page);
+
+    auto* layerSummary = new QLabel(page);
+    layerSummary->setObjectName(QStringLiteral("AutorouterLayers"));
+    layerSummary->setWordWrap(true);
+    form->addRow(tr("Routing layers (from Net Classes)"), layerSummary);
+
+    const QSettings settings;
+    autorouterPasses_ = new QSpinBox(page);
+    autorouterPasses_->setObjectName(QStringLiteral("AutorouterPasses"));
+    autorouterPasses_->setRange(1, 1000);
+    autorouterPasses_->setValue(settings.value(kMaxPassesKey, 100).toInt());
+    form->addRow(tr("Maximum routing passes"), autorouterPasses_);
+
+    autorouterTimeout_ = new QSpinBox(page);
+    autorouterTimeout_->setObjectName(QStringLiteral("AutorouterTimeout"));
+    autorouterTimeout_->setRange(10, 3600);
+    autorouterTimeout_->setSuffix(tr(" s"));
+    autorouterTimeout_->setValue(settings.value(kTimeoutKey, 5 * 60 * 1000).toInt() / 1000);
+    form->addRow(tr("Time limit"), autorouterTimeout_);
+
+    autorouterThreads_ = new QSpinBox(page);
+    autorouterThreads_->setObjectName(QStringLiteral("AutorouterThreads"));
+    autorouterThreads_->setRange(0, 64);
+    autorouterThreads_->setSpecialValueText(tr("Automatic"));
+    autorouterThreads_->setValue(settings.value(kThreadsKey, 0).toInt());
+    form->addRow(tr("Worker threads"), autorouterThreads_);
+
+    autorouterUpdateStrategy_ = new QComboBox(page);
+    autorouterUpdateStrategy_->setObjectName(QStringLiteral("AutorouterUpdateStrategy"));
+    autorouterUpdateStrategy_->addItem(tr("Greedy (fast)"), QStringLiteral("greedy"));
+    autorouterUpdateStrategy_->addItem(tr("Hybrid"), QStringLiteral("hybrid"));
+    autorouterUpdateStrategy_->addItem(tr("Global (quality)"), QStringLiteral("global"));
+    autorouterUpdateStrategy_->setCurrentIndex(std::max(
+        0, autorouterUpdateStrategy_->findData(settings.value(kUpdateStrategyKey, QStringLiteral("greedy")))));
+    form->addRow(tr("Optimization strategy"), autorouterUpdateStrategy_);
+
+    autorouterSelectionStrategy_ = new QComboBox(page);
+    autorouterSelectionStrategy_->setObjectName(QStringLiteral("AutorouterSelectionStrategy"));
+    autorouterSelectionStrategy_->addItem(tr("Prioritized"), QStringLiteral("prioritized"));
+    autorouterSelectionStrategy_->addItem(tr("Sequential"), QStringLiteral("sequential"));
+    autorouterSelectionStrategy_->addItem(tr("Random"), QStringLiteral("random"));
+    autorouterSelectionStrategy_->setCurrentIndex(std::max(
+        0, autorouterSelectionStrategy_->findData(
+               settings.value(kSelectionStrategyKey, QStringLiteral("prioritized")))));
+    form->addRow(tr("Item selection"), autorouterSelectionStrategy_);
+
+    auto* hint = new QLabel(
+        tr("These settings run the external Freerouting engine (see THIRD_PARTY_LICENSES.md); they "
+           "are a local run preference and are not saved with the project."),
+        page);
+    hint->setWordWrap(true);
+    form->addRow(hint);
+
+    refreshAutorouterLayers();
+    return page;
+}
+
+void DesignRuleManagerDialog::refreshAutorouterLayers() {
+    auto* layerSummary = findChild<QLabel*>(QStringLiteral("AutorouterLayers"));
+    if (!layerSummary) return;
+    QStringList classLayers;
+    for (const NetClass& netClass : working_.netClasses) {
+        QStringList layers;
+        if (netClass.layers & layerBit(BoardLayer::TopCopper)) layers << tr("Top copper");
+        if (netClass.layers & layerBit(BoardLayer::BottomCopper)) layers << tr("Bottom copper");
+        classLayers << QStringLiteral("%1: %2").arg(netClass.name, layers.join(QStringLiteral(" + ")));
+    }
+    layerSummary->setText(classLayers.join(QLatin1Char('\n')));
+}
+
+void DesignRuleManagerDialog::persistAutorouterSettings() {
+    QSettings settings;
+    settings.setValue(kMaxPassesKey, autorouterPasses_->value());
+    settings.setValue(kTimeoutKey, autorouterTimeout_->value() * 1000);
+    settings.setValue(kThreadsKey, autorouterThreads_->value());
+    settings.setValue(kUpdateStrategyKey, autorouterUpdateStrategy_->currentData());
+    settings.setValue(kSelectionStrategyKey, autorouterSelectionStrategy_->currentData());
 }
 
 } // namespace hatt::ui

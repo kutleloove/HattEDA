@@ -61,13 +61,17 @@ Golden DSN fixtures cover outline coordinates, layers, padstacks, placement, net
 real-engine smoke test exercises export, Freerouting 2.4.1 on its bundled Java 25 runtime, SES
 import and final HattEDA DRC when the test environment paths are set. The local process runner uses
 a private temporary directory, headless/offline arguments, cancellation, a time limit and captured
-diagnostics. **Circuit → Auto Router...** presents HattEDA's routing settings, then uses the
-packaged engine without showing its UI. It runs
-behind a cancellable progress dialog, rejects malformed output, incomplete nets or blocking DRC
-issues, and applies valid tracks/vias as one undo operation. A local JAR picker is available only
-as a developer fallback when the package is absent. Next slices add existing copper, keepout and
-zone export plus configurable routing passes and timeout in the UI. Multi-board export will
-partition footprints by containment and run each physical board as a separate routing job.
+diagnostics. Routing settings (passes, time limit, worker threads, optimization/selection strategy)
+live in the Design Rule Manager's Autorouter tab (issue #49) rather than a separate dialog, since
+they are a machine-local run preference stored in `QSettings` (`pcb/freerouting/*`), never in the
+project document per the boundary above. Its Route Board button applies any rule edits, then
+**Circuit → Auto Router...** (or Route Board itself) runs the packaged engine without showing its
+UI. It runs behind a cancellable progress dialog, rejects malformed output, incomplete nets or
+blocking DRC issues, and applies valid tracks/vias as one undo operation. A local JAR picker is
+available only as a developer fallback when the package is absent; a missing JAR/Java runtime is
+reported as a plain error dialog, not a crash. Next slices add existing copper, keepout and zone
+export. Multi-board export will partition footprints by containment and run each physical board as
+a separate routing job.
 
 Windows release builds provide `HATTEDA_FREEROUTING_JAR` and `HATTEDA_JAVA_RUNTIME` at configure
 time. CMake copies them beside HattEDA under `autorouter/`; runtime discovery prefers this bundle,

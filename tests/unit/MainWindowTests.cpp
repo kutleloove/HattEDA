@@ -107,6 +107,7 @@ private slots:
     void fabricationExportAsksAboutRuleErrors();
     void assemblyExportsWriteCsv();
     void designRuleManagerEditsRulesClassesPairsAndDefaults();
+    void routeBoardAppliesRulesThenStartsRoutingGracefully();
     void zoneNetPropertyPoursOnTheCanvas();
     void zoneModeDrawsZonesAndListsThem();
     void trackModeRoutesWithNetClassWidths();
@@ -1180,6 +1181,43 @@ void MainWindowTests::designRuleManagerEditsRulesClassesPairsAndDefaults() {
     QCOMPARE(rules.differentialPairs.size(), 1);
     QCOMPARE(rules.differentialPairs.first().gap, 0.18);
     QVERIFY(!rules.defaults.thermalRelief);
+}
+
+// Issue #49: Design > Design rules... always applies edits (OK or Route Board); Route Board also
+// starts routing right away. Autorouter engine settings (passes, timeout, ...) are a QSettings
+// pcb/freerouting/* run preference, never project data (ADR-0014), so they persist even though no
+// board outline exists yet to actually route.
+void MainWindowTests::routeBoardAppliesRulesThenStartsRoutingGracefully() {
+    hatt::ui::MainWindow window;
+    QVERIFY(showActive(window));
+    activateEditor(window);
+    QCOMPARE(window.designRules().clearanceRules.size(), 0); // compact default form
+
+    QTimer::singleShot(0, [] {
+        auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+        QVERIFY(dialog);
+        QCOMPARE(dialog->objectName(), QStringLiteral("DesignRuleManagerDialog"));
+        dialog->findChild<QDoubleSpinBox*>(QStringLiteral("RulePadPad"))->setValue(0.33);
+        dialog->findChild<QSpinBox*>(QStringLiteral("AutorouterPasses"))->setValue(42);
+
+        // No board outline exists yet, so runAutorouter() rejects the export gracefully: a plain
+        // warning dialog, not a crash and not an OS file/JAR picker.
+        QTimer::singleShot(0, [] {
+            auto* box = qobject_cast<QMessageBox*>(QApplication::activeModalWidget());
+            QVERIFY(box);
+            QCOMPARE(box->windowTitle(), QStringLiteral("Auto Router"));
+            box->button(QMessageBox::Ok)->click();
+        });
+        auto* routeBoard = dialog->findChild<QPushButton*>(QStringLiteral("RouteBoard"));
+        QVERIFY(routeBoard->isEnabled());
+        routeBoard->click();
+    });
+    action(window, "hatteda.action.design-rules")->trigger();
+
+    QCOMPARE(window.designRules().clearanceRules.size(), 1);
+    QCOMPARE(window.designRules().clearanceRules.first().padPad, 0.33);
+    QCOMPARE(QSettings().value(QStringLiteral("pcb/freerouting/maxPasses")).toInt(), 42);
+    QSettings().remove(QStringLiteral("pcb/freerouting"));
 }
 
 void MainWindowTests::selectionStatesFollowTheme_data() {

@@ -21,7 +21,8 @@ public:
     CircuitWorkflow(QWidget* host, QMenu* menu, DesignCanvas* schematic, DesignCanvas* board,
                     ShowReport showReport, std::function<bool()> projectOpen,
                     std::function<void()> showBoard,
-                    std::function<DesignRules()> designRules = [] { return DesignRules{}; });
+                    std::function<DesignRules()> designRules = [] { return DesignRules{}; },
+                    std::function<void()> configureAutorouter = [] {});
     ~CircuitWorkflow() override;
 public slots:
     void showNetlist();
@@ -32,9 +33,14 @@ public slots:
     int autoPlace(double grid, double spacing);
     // Auto placer dialog (AutoPlacerDialog) with grid and spacing, remembered in QSettings.
     void showAutoPlacer();
-    // Exports the current unrouted board to a local Freerouting process and imports its SES result
-    // after HattEDA validation. The imported routing is one undo step.
+    // Circuit > Auto Router... (hatteda.action.auto-route): hands off to `configureAutorouter_`
+    // (issue #49; MainWindow opens the Design Rules dialog's Autorouter tab) rather than showing its
+    // own settings dialog. Routing itself starts from there via `runAutorouter()`.
     void showAutorouter();
+    // Exports the current unrouted board to a local Freerouting process (settings read from
+    // QSettings pcb/freerouting/*, as left by the Design Rules dialog's Autorouter tab) and imports
+    // its SES result after HattEDA validation. The imported routing is one undo step.
+    void runAutorouter();
     void runDc();
     void cancelDc();
     // Interactive simulation (Proteus play/stop): solves the DC operating point, shows voltage
@@ -63,6 +69,7 @@ private:
     std::function<bool()> projectOpen_;
     std::function<void()> showBoard_;
     std::function<DesignRules()> designRules_;
+    std::function<void()> configureAutorouter_;
     QPointer<QTextEdit> netlist_;
     QPointer<QTextEdit> simulation_;
     std::shared_ptr<std::atomic_bool> cancelled_;
