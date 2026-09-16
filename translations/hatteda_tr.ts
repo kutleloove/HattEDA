@@ -510,6 +510,10 @@ Son projeler listesinden kaldırılsın mı?</translation></message>
     <message><source>%1 × %2 mm, drill %3</source><translation>%1 × %2 mm, delik %3</translation></message>
     <message><source>none (SMD)</source><translation>yok (SMD)</translation></message>
     <message><source>Layer colours...</source><translation>Katman renkleri...</translation></message>
+    <message><source>Preferences...</source><translation>Tercihler...</translation></message>
+    <message><source>Preferences</source><translation>Tercihler</translation></message>
+    <message><source>Let external agents (Claude Code, Codex, etc.) use this project over MCP</source><translation>Dış ajanların (Claude Code, Codex vb.) bu projeyi MCP üzerinden kullanmasına izin ver</translation></message>
+    <message><source>A local MCP server will listen on &quot;hatteda-agentic-mcp-%1&quot; (this window's process id); point an MCP-capable agent at it. The app works the same whether this is on or off.</source><translation>Yerel bir MCP sunucusu &quot;hatteda-agentic-mcp-%1&quot; üzerinde dinleyecek (bu pencerenin işlem kimliği); MCP destekleyen bir ajanı bu adrese yönlendirin. Uygulama bu ayar açık ya da kapalı olsun aynı şekilde çalışır.</translation></message>
   </context>
   <context>
     <name>hatt::ui::PadStyle</name>

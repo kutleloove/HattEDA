@@ -516,12 +516,23 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     statusBar()->showMessage(tr("Start by creating or opening a project"));
 
     // Local MCP server for agentic use (ADR-0013), off by default: the app's core function must
-    // not depend on it. The pid keeps the pipe name unique when more than one window is running.
-    if (QSettings().value(QStringLiteral("agentic/mcpEnabled"), false).toBool()) {
+    // not depend on it.
+    updateAgenticServer();
+}
+
+void MainWindow::updateAgenticServer() {
+    const bool enabled = QSettings().value(QStringLiteral("agentic/mcpEnabled"), false).toBool();
+    if (enabled == (agenticServer_ != nullptr)) return;
+    if (enabled) {
         agenticGateway_ = std::make_unique<MainWindowAgenticGateway>(this);
         agenticServer_ = new hatt::agentic::AgenticMcpServer(*agenticGateway_, this);
+        // The pid keeps the pipe name unique when more than one window is running.
         agenticServer_->start(
             QStringLiteral("hatteda-agentic-mcp-%1").arg(QCoreApplication::applicationPid()));
+    } else {
+        delete agenticServer_;
+        agenticServer_ = nullptr;
+        agenticGateway_.reset();
     }
 }
 
@@ -892,6 +903,35 @@ void MainWindow::editItemProperties(DesignCanvas* canvas, int index) {
         properties.pinPadMap = pinPadMap;
         canvas->editItemProperties(index, properties);
     }
+}
+
+void MainWindow::editAgenticSettings() {
+    QDialog dialog(this);
+    dialog.setObjectName(QStringLiteral("PreferencesDialog"));
+    dialog.setWindowTitle(tr("Preferences"));
+    auto* layout = new QVBoxLayout(&dialog);
+    auto* enabled = new QCheckBox(
+        tr("Let external agents (Claude Code, Codex, etc.) use this project over MCP"), &dialog);
+    enabled->setObjectName(QStringLiteral("AgenticMcpEnabled"));
+    enabled->setChecked(QSettings().value(QStringLiteral("agentic/mcpEnabled"), false).toBool());
+    layout->addWidget(enabled);
+    auto* info = new QLabel(&dialog);
+    info->setObjectName(QStringLiteral("AgenticMcpInfo"));
+    info->setWordWrap(true);
+    info->setText(tr("A local MCP server will listen on \"hatteda-agentic-mcp-%1\" (this "
+                     "window's process id); point an MCP-capable agent at it. The app works the "
+                     "same whether this is on or off.")
+                      .arg(QCoreApplication::applicationPid()));
+    info->setVisible(enabled->isChecked());
+    connect(enabled, &QCheckBox::toggled, info, &QLabel::setVisible);
+    layout->addWidget(info);
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+    layout->addWidget(buttons);
+    connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    if (dialog.exec() != QDialog::Accepted) return;
+    QSettings().setValue(QStringLiteral("agentic/mcpEnabled"), enabled->isChecked());
+    updateAgenticServer();
 }
 
 void MainWindow::applyTextStyle() {
@@ -1614,6 +1654,10 @@ void MainWindow::createMenus() {
             [setLanguage] { setLanguage(QStringLiteral("en")); });
     connect(languageMenu->addAction(QStringLiteral("Türkçe")), &QAction::triggered, this,
             [setLanguage] { setLanguage(QStringLiteral("tr")); });
+    viewMenu->addSeparator();
+    auto* preferences = viewMenu->addAction(tr("Preferences..."));
+    preferences->setObjectName(QStringLiteral("hatteda.action.preferences"));
+    connect(preferences, &QAction::triggered, this, &MainWindow::editAgenticSettings);
 
     auto* toolsMenu = menuBar()->addMenu(tr("&Tools"));
     toolsMenu->addActions(toolActions_->actions());

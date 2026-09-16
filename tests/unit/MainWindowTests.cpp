@@ -116,6 +116,9 @@ private slots:
     void moveToLayerContextMenuChangesTextItemLayer();
     void textStyleBarShowsFontAndAppliesToNewText();
 
+    // ADR-0013: the Preferences dialog toggle for the agentic MCP server.
+    void preferencesDialogTogglesAgenticServer();
+
 private:
     QTemporaryDir settingsDir_;
 };
@@ -1507,6 +1510,57 @@ void MainWindowTests::trackModeRoutesWithNetClassWidths() {
     QCOMPARE(board->activeRouteClass()->traceWidth, 0.635);
     board->cancelOperation();
     QVERIFY(!board->activeRouteClass().has_value());
+}
+
+void MainWindowTests::preferencesDialogTogglesAgenticServer() {
+    QSettings().setValue(QStringLiteral("agentic/mcpEnabled"), false);
+    hatt::ui::MainWindow window;
+    QVERIFY(showActive(window));
+    QVERIFY(!window.agenticServerRunning());
+
+    QTimer::singleShot(0, [] {
+        auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+        QVERIFY(dialog);
+        QCOMPARE(dialog->objectName(), QStringLiteral("PreferencesDialog"));
+        auto* enabled = dialog->findChild<QCheckBox*>(QStringLiteral("AgenticMcpEnabled"));
+        QVERIFY(enabled);
+        QVERIFY(!enabled->isChecked());
+        auto* info = dialog->findChild<QLabel*>(QStringLiteral("AgenticMcpInfo"));
+        QVERIFY(info);
+        QVERIFY(info->isHidden()); // only shown while the checkbox is checked
+        enabled->setChecked(true);
+        QVERIFY(info->isVisible());
+        QVERIFY(info->text().contains(QStringLiteral("hatteda-agentic-mcp-")));
+        dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Ok)->click();
+    });
+    action(window, "hatteda.action.preferences")->trigger();
+    QVERIFY(window.agenticServerRunning());
+    QVERIFY(QSettings().value(QStringLiteral("agentic/mcpEnabled")).toBool());
+
+    // Reopening reflects the saved state; unchecking stops the server again.
+    QTimer::singleShot(0, [] {
+        auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+        QVERIFY(dialog);
+        auto* enabled = dialog->findChild<QCheckBox*>(QStringLiteral("AgenticMcpEnabled"));
+        QVERIFY(enabled->isChecked());
+        enabled->setChecked(false);
+        dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Ok)->click();
+    });
+    action(window, "hatteda.action.preferences")->trigger();
+    QVERIFY(!window.agenticServerRunning());
+    QVERIFY(!QSettings().value(QStringLiteral("agentic/mcpEnabled")).toBool());
+
+    // Cancel discards the change: still off, setting untouched.
+    QTimer::singleShot(0, [] {
+        auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+        QVERIFY(dialog);
+        auto* enabled = dialog->findChild<QCheckBox*>(QStringLiteral("AgenticMcpEnabled"));
+        enabled->setChecked(true); // Cancel below must discard this
+        dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Cancel)->click();
+    });
+    action(window, "hatteda.action.preferences")->trigger();
+    QVERIFY(!window.agenticServerRunning());
+    QVERIFY(!QSettings().value(QStringLiteral("agentic/mcpEnabled")).toBool());
 }
 
 QTEST_MAIN(MainWindowTests)
