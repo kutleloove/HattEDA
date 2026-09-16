@@ -65,6 +65,9 @@ public:
     [[nodiscard]] QVector<CheckViolation> lastCheckViolations() const;
     // True once `hatteda.action.run-checks` has produced a report this session.
     [[nodiscard]] bool hasDesignChecksReport() const;
+    // True while the local agentic MCP server (ADR-0013) is listening; follows the
+    // `agentic/mcpEnabled` QSettings key applied by `editAgenticSettings`. Available for tests.
+    [[nodiscard]] bool agenticServerRunning() const noexcept { return agenticServer_ != nullptr; }
 
 public slots:
     void showMergenWorkspace();
@@ -159,6 +162,10 @@ private:
     void applyTextStyle();
     void editItemProperties(DesignCanvas* canvas, int index);
     void showArrayDialog(DesignCanvas* canvas);
+    // Preferences dialog (currently just the agentic MCP server toggle, ADR-0013); starts or stops
+    // the server immediately to match the new setting.
+    void editAgenticSettings();
+    void updateAgenticServer();
     QAction* makeAction(const QString& objectName, const QString& text, const QString& iconKind);
     bool writeAssemblyFile(QString path, const QString& title, const QString& suffix, const QByteArray& content);
 
