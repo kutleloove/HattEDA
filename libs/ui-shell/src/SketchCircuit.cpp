@@ -73,6 +73,7 @@ void collectSchematicInput(const SketchDocument& document, CircuitSnapshot& resu
             electrical::Wire wire;
             for (auto p : item.points) wire.points.push_back(point(p));
             result.input.wires.push_back(std::move(wire));
+            result.wireIds.push_back(item.id);
             continue;
         }
         if (item.kind != SketchItem::Kind::Symbol) continue;
@@ -233,6 +234,22 @@ QVector<QPointF> schematicJunctions(const SketchDocument& document) {
     collectSchematicInput(document, snapshot);
     QVector<QPointF> result;
     for (const auto p : electrical::junctionPoints(snapshot.input)) result.append(QPointF(p.x, p.y));
+    return result;
+}
+
+QHash<QString, QString> schematicWireNets(const SketchDocument& document) {
+    QHash<QString, QString> result;
+    const CircuitSnapshot snapshot = analyzeSchematic(document);
+    if (!snapshot.errors.isEmpty()) return result;
+    const auto& wireNets = snapshot.connectivity.wireNets;
+    for (qsizetype i = 0; i < snapshot.wireIds.size() && i < static_cast<qsizetype>(wireNets.size()); ++i) {
+        const int net = wireNets[static_cast<std::size_t>(i)];
+        if (net < 0 || snapshot.wireIds[i].isEmpty() ||
+            net >= static_cast<int>(snapshot.connectivity.nets.size())) {
+            continue;
+        }
+        result.insert(snapshot.wireIds[i], QString::fromStdString(snapshot.connectivity.nets[net].name));
+    }
     return result;
 }
 

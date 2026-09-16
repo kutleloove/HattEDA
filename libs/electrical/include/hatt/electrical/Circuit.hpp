@@ -27,6 +27,7 @@ struct Net { std::string name; std::vector<int> pins; };
 struct ConnectivityResult {
     std::vector<Net> nets;
     std::vector<int> pinNets; // Index into nets for each input pin.
+    std::vector<int> wireNets; // Index into nets for each input wire (issue #47: wire net labels).
     std::vector<std::string> errors;
 };
 ConnectivityResult buildConnectivity(const ConnectivityInput& input);

@@ -479,6 +479,8 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
         // Pours depend on both documents (nets come from the schematic) and on the design rules.
         connect(canvas, &DesignCanvas::documentChanged, this, &MainWindow::refreshZoneFills);
         connect(canvas, &DesignCanvas::documentChanged, this, &MainWindow::refreshRouteClasses);
+        // Wire/track net labels (issue #47) depend on both documents too.
+        connect(canvas, &DesignCanvas::documentChanged, this, &MainWindow::refreshWireNets);
         connect(canvas, &DesignCanvas::selectionChanged, this, &MainWindow::syncZoneListSelection);
         connect(canvas, &DesignCanvas::contextMenuRequested, this,
                 [this, canvas](QPoint position, int index) {
@@ -3191,6 +3193,14 @@ void MainWindow::refreshZoneFills() {
     board->setZoneFills(fills);
     // Summaries follow the zones, the schematic nets and the net classes.
     refreshZoneList();
+}
+
+void MainWindow::refreshWireNets() {
+    auto* schematic = canvases_.value(0, nullptr);
+    auto* board = canvases_.value(1, nullptr);
+    if (schematic == nullptr) return;
+    schematic->setWireNets(schematicWireNets(schematic->document()));
+    if (board != nullptr) board->setWireNets(boardTrackNets(schematic->document(), board->document()));
 }
 
 void MainWindow::refreshZoneList() {

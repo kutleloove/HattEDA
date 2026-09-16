@@ -159,6 +159,23 @@ public:
     // items in the zone's layer colour; computed by the host because pouring needs the schematic nets.
     void setZoneFills(const QHash<QString, QPainterPath>& fills);
     [[nodiscard]] QHash<QString, QPainterPath> zoneFills() const { return zoneFills_; }
+    // Net name of each Wire item (schematic wire or PCB track), keyed by item id; computed by the
+    // host (SketchCircuit::schematicWireNets / BoardCopper::boardTrackNets, issue #47). A wire
+    // missing here has no determinable net (a connectivity error, an unrouted track, or a short)
+    // and is drawn without a label.
+    void setWireNets(const QHash<QString, QString>& netsByItemId);
+    [[nodiscard]] QHash<QString, QString> wireNets() const { return wireNets_; }
+    // Document index of the Wire item under the cursor in Select mode while nothing is being
+    // dragged, else -1 (issue #47). That item, and its connected same-net run up to the next
+    // junction/pin/pad/via, are drawn at full opacity; other wires stay dimmed.
+    [[nodiscard]] int hoveredWireIndex() const noexcept { return hoveredWire_; }
+    // Net name of the hovered wire (wireNets() looked up by its item id), or empty.
+    [[nodiscard]] QString hoveredWireNet() const;
+    // World-coordinate segments of the hovered wire's full-opacity run (issue #47): the hovered
+    // item's own segments plus any neighbouring Wire item reached by a plain two-way pass-through,
+    // stopping at the next junction, pin, pad or via. Empty when nothing is hovered. Exposed for
+    // tests, mirroring currentRoutePreview().
+    [[nodiscard]] QVector<QLineF> hoveredWireRun() const;
 
     static void paintSymbolPreview(QPainter& painter, const QRectF& target, const QString& symbolId,
                                    const QPalette& palette);
@@ -319,6 +336,11 @@ private:
     QVector<Airwire> airwires_;
     QVector<CanvasAnnotation> annotations_;
     QHash<QString, QPainterPath> zoneFills_;
+    QHash<QString, QString> wireNets_;
+    // Wire hover (issue #47): item index and the world point closest to the cursor on it, updated
+    // by updateSelectCursor while the Select tool has no drag pending.
+    int hoveredWire_ = -1;
+    QPointF hoveredWireWorld_;
     QList<int> selection_;
     CanvasTool tool_ = CanvasTool::Select;
     QString variant_;

@@ -188,6 +188,31 @@ void drawRouteClearance(QPainter& painter, const QVector<QPointF>& points, doubl
     for (const QPointF& point : points) painter.drawEllipse(map(point), radius, radius);
 }
 
+// Forward declaration; defined further down, used by drawItem's Wire case below (issue #47).
+bool samePoint(QPointF a, QPointF b);
+
+// Opacity of a wire not part of the hover run (#47): visible enough to read in both themes, but a
+// clear step below the full-opacity hovered/selected run (matches the zone-fill dim in paintEvent).
+constexpr double WireDimAlpha = 0.55;
+
+// World point at the midpoint of the wire item's total polyline length, for its single net label
+// (issue #47 simplifies "periodic" labelling along a track to one label per item).
+QPointF polylineMidpoint(const QVector<QPointF>& points) {
+    if (points.size() < 2) return points.value(0);
+    double total = 0.0;
+    for (int i = 1; i < points.size(); ++i) total += QLineF(points[i - 1], points[i]).length();
+    double remaining = total / 2.0;
+    for (int i = 1; i < points.size(); ++i) {
+        const double length = QLineF(points[i - 1], points[i]).length();
+        if (remaining <= length || i == points.size() - 1) {
+            const double t = length > 1e-9 ? std::clamp(remaining / length, 0.0, 1.0) : 0.0;
+            return points[i - 1] + (points[i] - points[i - 1]) * t;
+        }
+        remaining -= length;
+    }
+    return points.first();
+}
+
 // Same size as the explicit junction symbol (0.5 mm radius), never smaller than the wire.
 void drawJunctionDots(QPainter& painter, const QVector<QPointF>& points, const QColor& color,
                       double scale, const WorldToScreen& map) {
@@ -297,9 +322,16 @@ void drawPads(QPainter& painter, const QVector<PlacedPad>& pads, const CanvasCol
     painter.setBrush(Qt::NoBrush);
 }
 
+// `wireHighlight` (issue #47): nullptr leaves a Wire item at full opacity throughout, as before
+// (routing ghosts and the placement preview keep the pre-#47 look); a non-null list (even empty)
+// means the main document pass is active, so every wire segment is dimmed to WireDimAlpha unless it
+// matches one of the list's segments (the hovered wire's connected run) or the item is selected.
+// `wireHovered` additionally brightens that item's single net label; `wireNetLabel` is the label
+// text, or empty for none.
 void drawItem(QPainter& painter, const SketchItem& item, const CanvasColors& colors, bool board,
               bool selected, bool preview, double scale, const WorldToScreen& map,
-              const LayerView& view = {}) {
+              const LayerView& view = {}, const QVector<QLineF>* wireHighlight = nullptr,
+              bool wireHovered = false, const QString& wireNetLabel = {}) {
     if (item.points.isEmpty()) {
         return;
     }
@@ -370,24 +402,65 @@ void drawItem(QPainter& painter, const SketchItem& item, const CanvasColors& col
         }
         break;
     }
-    case SketchItem::Kind::Wire:
+    case SketchItem::Kind::Wire: {
+        // Alpha multiplier for the segment [a, b] (#47): full opacity when dimming is inactive
+        // (wireHighlight == nullptr), the item is selected, or the segment is part of the hover
+        // run; WireDimAlpha otherwise.
+        auto segmentAlpha = [&](QPointF a, QPointF b) {
+            if (wireHighlight == nullptr || selected) return 1.0;
+            for (const QLineF& run : *wireHighlight) {
+                if ((samePoint(run.p1(), a) && samePoint(run.p2(), b)) ||
+                    (samePoint(run.p1(), b) && samePoint(run.p2(), a))) {
+                    return 1.0;
+                }
+            }
+            return WireDimAlpha;
+        };
         if (board) {
             // Tracks are drawn at their copper width in the colour of their layer.
             const QColor color = sideColor(colors.layers[static_cast<int>(item.layer)],
                                            layerBit(item.layer), view);
             const double copperWidth = std::max(2.0, trackWidth(item) * scale);
-            if (!preview) {
-                QColor edge = color.darker(185);
-                edge.setAlpha(color.alpha());
-                painter.setPen(strokePen(edge, copperWidth + 2.0));
-                painter.drawPolyline(polygon);
+            const QColor main = pick(color);
+            for (qsizetype i = 1; i < item.points.size(); ++i) {
+                const QPointF a = item.points[i - 1];
+                const QPointF b = item.points[i];
+                const double alpha = segmentAlpha(a, b);
+                if (!preview) {
+                    QColor edge = color.darker(185);
+                    edge.setAlphaF(edge.alphaF() * alpha);
+                    painter.setPen(strokePen(edge, copperWidth + 2.0));
+                    painter.drawLine(map(a), map(b));
+                }
+                QColor segmentColor = main;
+                segmentColor.setAlphaF(segmentColor.alphaF() * alpha);
+                painter.setPen(strokePen(segmentColor, copperWidth, preview));
+                painter.drawLine(map(a), map(b));
             }
-            painter.setPen(strokePen(pick(color), copperWidth, preview));
         } else {
-            painter.setPen(strokePen(pick(colors.wire), selected ? 3.0 : 2.0, preview));
+            for (qsizetype i = 1; i < item.points.size(); ++i) {
+                const QPointF a = item.points[i - 1];
+                const QPointF b = item.points[i];
+                QColor color = pick(colors.wire);
+                color.setAlphaF(color.alphaF() * segmentAlpha(a, b));
+                painter.setPen(strokePen(color, selected ? 3.0 : 2.0, preview));
+                painter.drawLine(map(a), map(b));
+            }
         }
-        painter.drawPolyline(polygon);
+        if (!preview && !wireNetLabel.isEmpty()) {
+            QFont font = painter.font();
+            font.setBold(false);
+            font.setPixelSize(std::clamp(static_cast<int>(1.3 * scale), 8, 18));
+            painter.setFont(font);
+            const double labelAlpha = wireHighlight == nullptr || selected || wireHovered ? 1.0 : WireDimAlpha;
+            QColor labelColor = colors.label;
+            labelColor.setAlphaF(labelColor.alphaF() * labelAlpha);
+            painter.setPen(labelColor);
+            const QPointF anchor = map(polylineMidpoint(item.points));
+            painter.drawText(anchor + QPointF(4, -4), wireNetLabel);
+        }
         break;
+    }
     case SketchItem::Kind::Line:
     case SketchItem::Kind::Polyline: {
         const bool outline = item.variant == BoardOutlineVariant;
@@ -614,6 +687,123 @@ SketchItem copiedItem(const SketchDocument& document, const SketchItem& item, QP
 }
 
 bool samePoint(QPointF a, QPointF b) { return QLineF(a, b).length() < 1e-6; }
+
+// Highlighted "run" of a hovered wire/track (issue #47): the connected sub-path between the two
+// nearest stop points, matching Proteus's "next junction/pin". Splitting a new wire onto an
+// existing one (splitPathAtWires) only splits the new wire, so the existing wire being crossed
+// stays one item spanning past that join (see wireCornerOnAnotherWireJoinsIt/teeJoinsFollowMoved
+// Wires) — a plain vertex-to-vertex walk would show that whole unsplit span at full opacity. This
+// first cuts every wire segment at any point where another wire's vertex or a pin/pad/via anchor
+// lands on it (its own endpoints aside), turning every such touch into a real graph node, then
+// walks the flattened segment graph of every Wire item sharing the hovered item's layer (schematic
+// items all share one default layer, so this never filters there): the piece closest to
+// `hoverWorld` seeds the run, and each end extends while it is a plain two-way pass-through
+// (exactly two segment-ends meet there, matching electrical::junctionPoints's branch count) and
+// not an anchor.
+QVector<QLineF> wireHoverRun(const SketchDocument& document, int wireIndex, QPointF hoverWorld) {
+    if (wireIndex < 0 || wireIndex >= document.size() ||
+        document[wireIndex].kind != SketchItem::Kind::Wire) {
+        return {};
+    }
+    const BoardLayer layer = document[wireIndex].layer;
+
+    QVector<QPointF> anchors;
+    for (const auto& item : document) {
+        if (item.kind == SketchItem::Kind::Symbol || item.kind == SketchItem::Kind::Pad ||
+            item.kind == SketchItem::Kind::Via) {
+            anchors += itemAnchors(item);
+        }
+    }
+    auto isAnchor = [&](QPointF p) {
+        return std::any_of(anchors.begin(), anchors.end(), [&](QPointF a) { return samePoint(a, p); });
+    };
+
+    // Every point a segment might need cutting at: pin/pad/via anchors and every wire's own
+    // vertices (an item's own bends are already piece boundaries, so re-listing them is harmless).
+    QVector<QPointF> splitPoints = anchors;
+    for (const auto& item : document) {
+        if (item.kind == SketchItem::Kind::Wire && item.layer == layer) splitPoints += item.points;
+    }
+    auto cutSegment = [&](QPointF a, QPointF b) {
+        const QLineF line(a, b);
+        const double length2 = QPointF::dotProduct(b - a, b - a);
+        QVector<double> cuts;
+        if (length2 > 1e-12) {
+            for (QPointF p : splitPoints) {
+                if (samePoint(p, a) || samePoint(p, b) || distanceToSegment(p, line) > 1e-6) continue;
+                const double t = QPointF::dotProduct(p - a, b - a) / length2;
+                if (t > 1e-6 && t < 1.0 - 1e-6) cuts.append(t);
+            }
+        }
+        std::sort(cuts.begin(), cuts.end());
+        cuts.erase(std::unique(cuts.begin(), cuts.end(),
+                               [](double x, double y) { return std::abs(x - y) < 1e-6; }),
+                  cuts.end());
+        QVector<QPointF> points{a};
+        for (double t : cuts) points.append(a + (b - a) * t);
+        points.append(b);
+        return points;
+    };
+
+    struct SegRef { QPointF a, b; int item; };
+    QVector<SegRef> segments;
+    for (int i = 0; i < document.size(); ++i) {
+        const SketchItem& item = document[i];
+        if (item.kind != SketchItem::Kind::Wire || item.layer != layer) continue;
+        for (const QLineF& raw : itemSegments(item)) {
+            const QVector<QPointF> pieces = cutSegment(raw.p1(), raw.p2());
+            for (qsizetype p = 1; p < pieces.size(); ++p) {
+                segments.append({pieces[p - 1], pieces[p], i});
+            }
+        }
+    }
+
+    int seed = -1;
+    double bestDistance = std::numeric_limits<double>::infinity();
+    for (int i = 0; i < segments.size(); ++i) {
+        if (segments[i].item != wireIndex) continue;
+        const double distance = distanceToSegment(hoverWorld, QLineF(segments[i].a, segments[i].b));
+        if (distance < bestDistance) {
+            bestDistance = distance;
+            seed = i;
+        }
+    }
+    if (seed < 0) return {};
+
+    auto branchesAt = [&](QPointF p) {
+        int branches = 0;
+        for (const auto& seg : segments) {
+            branches += int(samePoint(seg.a, p)) + int(samePoint(seg.b, p));
+        }
+        return branches;
+    };
+
+    QVector<bool> used(segments.size(), false);
+    used[seed] = true;
+    QVector<QLineF> run{QLineF(segments[seed].a, segments[seed].b)};
+    auto extend = [&](QPointF frontier, bool prepend) {
+        for (;;) {
+            if (isAnchor(frontier) || branchesAt(frontier) != 2) return;
+            int next = -1;
+            bool flip = false;
+            for (int i = 0; i < segments.size(); ++i) {
+                if (used[i]) continue;
+                if (samePoint(segments[i].a, frontier)) { next = i; flip = false; break; }
+                if (samePoint(segments[i].b, frontier)) { next = i; flip = true; break; }
+            }
+            if (next < 0) return;
+            used[next] = true;
+            const QPointF a = flip ? segments[next].b : segments[next].a;
+            const QPointF b = flip ? segments[next].a : segments[next].b;
+            if (prepend) run.prepend(QLineF(b, a));
+            else run.append(QLineF(a, b));
+            frontier = b;
+        }
+    };
+    extend(segments[seed].a, true);
+    extend(segments[seed].b, false);
+    return run;
+}
 
 bool sameGeometry(const SketchDocument& a, const SketchDocument& b) {
     if (a.size() != b.size()) return false;
@@ -938,6 +1128,7 @@ void DesignCanvas::setTool(CanvasTool tool, const QString& variant) {
     hasMeasurement_ = false;
     if (tool_ != CanvasTool::Select) {
         clearSelection();
+        hoveredWire_ = -1;
     }
     setCursor(tool_ == CanvasTool::Select ? Qt::ArrowCursor : Qt::CrossCursor);
     emit statusMessage(toolHint());
@@ -1059,6 +1250,8 @@ void DesignCanvas::restore(const SketchDocument& document, const QList<int>& sel
     items_ = document;
     selection_ = selection;
     selection_.removeIf([this](int index) { return index < 0 || index >= items_.size(); });
+    // Issue #47: item indices can be reused for a different item after undo/redo/reload.
+    hoveredWire_ = -1;
     emit selectionChanged(static_cast<int>(selection_.size()));
     emit documentChanged();
     update();
@@ -1082,6 +1275,21 @@ void DesignCanvas::setAnnotations(const QVector<CanvasAnnotation>& annotations) 
 void DesignCanvas::setZoneFills(const QHash<QString, QPainterPath>& fills) {
     zoneFills_ = fills;
     update();
+}
+
+void DesignCanvas::setWireNets(const QHash<QString, QString>& netsByItemId) {
+    wireNets_ = netsByItemId;
+    update();
+}
+
+QString DesignCanvas::hoveredWireNet() const {
+    if (hoveredWire_ < 0 || hoveredWire_ >= items_.size()) return {};
+    return wireNets_.value(items_[hoveredWire_].id);
+}
+
+QVector<QLineF> DesignCanvas::hoveredWireRun() const {
+    if (tool_ != CanvasTool::Select || hoveredWire_ < 0) return {};
+    return wireHoverRun(items_, hoveredWire_, hoveredWireWorld_);
 }
 
 void DesignCanvas::pushEdit(const QString& text, const SketchDocument& document,
@@ -2033,10 +2241,20 @@ bool DesignCanvas::textResizeHandleAt(QPointF screen, int& itemIndex) const {
 void DesignCanvas::updateSelectCursor(QPointF screen) {
     int textItem = -1;
     if (textResizeHandleAt(screen, textItem)) {
+        hoveredWire_ = -1;
         if (cursor().shape() != Qt::SizeFDiagCursor) setCursor(Qt::SizeFDiagCursor);
         return;
     }
     const int hit = hitTest(screen);
+    // Issue #47: the wire under the cursor (and the world point on it) for the hover-run
+    // highlight, independent of the cursor-shape logic below (which only applies outside a
+    // multi-selection).
+    if (hit >= 0 && items_[hit].kind == SketchItem::Kind::Wire) {
+        hoveredWire_ = hit;
+        hoveredWireWorld_ = screenToWorld(screen);
+    } else {
+        hoveredWire_ = -1;
+    }
     Qt::CursorShape shape = Qt::ArrowCursor;
     if (hit >= 0 && items_[hit].kind == SketchItem::Kind::Wire &&
         !(selection_.size() > 1 && selection_.contains(hit))) {
@@ -2813,6 +3031,7 @@ void DesignCanvas::keyPressEvent(QKeyEvent* event) {
 
 void DesignCanvas::leaveEvent(QEvent* event) {
     hoverValid_ = false;
+    hoveredWire_ = -1;
     update();
     QWidget::leaveEvent(event);
 }
@@ -2879,6 +3098,9 @@ void DesignCanvas::paintEvent(QPaintEvent*) {
     const bool dragging = drag_ == Drag::Move && moveDocument_.size() == items_.size();
     const SketchDocument& shown = dragging ? moveDocument_ : items_;
     const LayerView view{visibleLayers_, activeLayer_};
+    // Wires default to a reduced opacity; the hovered wire's connected run (issue #47) stays full
+    // opacity. Not tracked while dragging, when `shown` (moveDocument_) may differ from items_.
+    const QVector<QLineF> hoverRun = dragging ? QVector<QLineF>() : hoveredWireRun();
     // Board: the inactive side first, then the active side; hidden layers are skipped.
     for (int rank = board ? 0 : 1; rank <= 1; ++rank) {
         // Poured copper lies under the other items of its side. It is not redrawn during a move,
@@ -2898,7 +3120,11 @@ void DesignCanvas::paintEvent(QPaintEvent*) {
         }
         for (int i = 0; i < shown.size(); ++i) {
             if (board && (drawRank(shown[i], view) != rank || !itemVisible(shown[i]))) continue;
-            drawItem(painter, shown[i], colors, board, selection_.contains(i), false, scale_, map, view);
+            const QString netLabel = shown[i].kind == SketchItem::Kind::Wire
+                                         ? wireNets_.value(shown[i].id)
+                                         : QString();
+            drawItem(painter, shown[i], colors, board, selection_.contains(i), false, scale_, map, view,
+                     &hoverRun, i == hoveredWire_, netLabel);
         }
     }
     for (const auto& piece : routePieces_) {

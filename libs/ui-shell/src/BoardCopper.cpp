@@ -263,6 +263,19 @@ BoardCopperModel buildBoardCopperModel(const SketchDocument& schematic, const Sk
     return model;
 }
 
+QHash<QString, QString> boardTrackNets(const SketchDocument& schematic, const SketchDocument& board) {
+    QHash<QString, QString> result;
+    const BoardCopperModel model = buildBoardCopperModel(schematic, board);
+    if (!model.netsKnown) return result;
+    for (int i = 0; i < model.conductors.size(); ++i) {
+        const BoardConductor& conductor = model.conductors[i];
+        if (conductor.kind != ConductorKind::Track) continue;
+        const QVector<int> nets = model.groupNets(model.groups.value(i, i));
+        if (nets.size() == 1) result.insert(conductor.itemId, model.netNames.value(nets.first()));
+    }
+    return result;
+}
+
 QString routeClassKey(const QString& itemId, int padIndex) {
     return padIndex < 0 ? itemId : itemId + QLatin1Char(':') + QString::number(padIndex);
 }

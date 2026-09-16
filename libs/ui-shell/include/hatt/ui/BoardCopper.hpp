@@ -72,6 +72,10 @@ struct BoardCopperModel {
 [[nodiscard]] BoardCopperModel buildBoardCopperModel(const SketchDocument& schematic, const SketchDocument& board,
                                                      double nearDistance = 0.0);
 [[nodiscard]] double conductorGap(const BoardConductor& first, const BoardConductor& second, QPointF* where = nullptr);
+// Net name of each board Wire (track) item, keyed by item id (issue #47: wire net labels). Empty
+// when the schematic has connectivity errors; a track whose touching group has no net or more than
+// one (unrouted or shorted) is omitted.
+[[nodiscard]] QHash<QString, QString> boardTrackNets(const SketchDocument& schematic, const SketchDocument& board);
 
 struct DesignRules;
 struct RouteClass;
