@@ -21,6 +21,7 @@ qt_add_translations(hatteda
     TS_FILES
         ${CMAKE_SOURCE_DIR}/translations/hatteda_tr.ts
     RESOURCE_PREFIX "/i18n"
+    SOURCE_TARGETS hatteda hatt-ui-shell
 )
 
 if(MSVC)
