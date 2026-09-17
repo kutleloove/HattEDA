@@ -2870,6 +2870,15 @@ bool MainWindow::openProjectFile(const QString& path) {
     }
     addRecentProject(path);
     activateProject(path, load.project);
+    if (!load.warnings.isEmpty()) {
+        // #61/ADR-0017: an item used a symbol id this build could not resolve and loaded as a
+        // placeholder instead of rejecting the file; tell the user which ones.
+        QMessageBox::warning(this, tr("Open project"),
+                             tr("%1 opened, but %n item(s) use a symbol this version of HattEDA "
+                                "does not recognize and were kept as placeholders:\n\n%2",
+                                nullptr, load.warnings.size())
+                                 .arg(QDir::toNativeSeparators(path), load.warnings.join(QLatin1Char('\n'))));
+    }
     if (recovery == ProjectGuard::Recovery::Restored) {
         // Recovered content is not on disk yet: keep the window modified until it is saved.
         for (auto* canvas : canvases_) canvas->undoStack()->resetClean();

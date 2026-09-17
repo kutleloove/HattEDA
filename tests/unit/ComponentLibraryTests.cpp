@@ -1,5 +1,6 @@
 #include "hatt/ui/ComponentLibrary.hpp"
 #include "hatt/ui/ComponentCatalog.hpp"
+#include "hatt/ui/LibraryModel.hpp"
 
 #include <QtTest>
 

@@ -66,6 +66,14 @@ add_library(hatt-ui-shell STATIC
     src/AgenticGateway.cpp
     include/hatt/ui/SketchClipboard.hpp
     src/SketchClipboard.cpp
+    include/hatt/ui/LibraryModel.hpp
+    src/LibraryModel.cpp
+)
+
+qt_add_resources(hatt-ui-shell "builtin-library"
+    PREFIX "/library"
+    BASE "resources/library"
+    FILES resources/library/builtin.json
 )
 
 add_library(HattEDA::UiShell ALIAS hatt-ui-shell)
