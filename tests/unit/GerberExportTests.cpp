@@ -204,16 +204,16 @@ void GerberExportTests::previewDrawsLayersInBoardColours() {
     QCOMPARE(preview.outputBounds().width(), 4.0 + 2.0 * CamMaskExpansion); // mask opening is largest
 
     auto centre = [&preview] { return preview.grab().toImage().pixelColor(100, 100); };
-    const QColor background = [&] {
-        CamPreview empty;
-        empty.resize(200, 200);
-        return empty.grab().toImage().pixelColor(100, 100);
-    }();
-    QVERIFY(centre() != background);
+    // fitToOutput() insets a 16 px margin on every side (CamPreview.cpp), so (5, 5) always falls
+    // outside the fitted content and shows the plain background fill from the same widget and
+    // paint pass as `centre()` - unlike a separate empty CamPreview, it cannot pick up a different
+    // palette/theme snapshot than the one just used to paint `preview` itself.
+    auto corner = [&preview] { return preview.grab().toImage().pixelColor(5, 5); };
+    QVERIFY(centre() != corner());
     preview.setLayerVisible(CamLayerKind::TopCopper, false);
     preview.setLayerVisible(CamLayerKind::TopMask, false);
     preview.setLayerVisible(CamLayerKind::TopPaste, false);
-    QCOMPARE(centre(), background);
+    QCOMPARE(centre(), corner());
     QVERIFY(!preview.isLayerVisible(CamLayerKind::TopCopper));
 }
 
