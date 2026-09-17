@@ -47,15 +47,37 @@ struct DcElement {
     int negative = -1;
     double value = 0; // ohms, volts, farads or henries, SI. Unused by the DC models of C and L.
 };
+
+// Nonlinear DC operating-point models (#62), solved by Newton-Raphson alongside the linear
+// elements above in the same MNA system. `nets` gives terminal net indices in the order documented
+// per kind; `parameters` gives SI values in the order documented per kind.
+enum class NonlinearKind { Diode, Zener, Led };
+struct NonlinearElement {
+    std::string reference;
+    NonlinearKind kind = NonlinearKind::Diode;
+    // Diode/Zener/Led: nets = {anode, cathode}.
+    std::vector<int> nets;
+    // Diode: {Is (A), n, Rs (ohm, may be 0)}.
+    // Zener: {Is, n, Rs, Vz (breakdown voltage, positive), Rz (breakdown slope resistance, ohm)}.
+    // Led: {Is, n, Rs, ratedCurrent (A, for the brightness output; 0 disables brightness)}.
+    std::vector<double> parameters;
+};
+
 struct DcCircuit {
     int netCount = 0;
     int ground = -1;
     std::vector<DcElement> elements;
+    std::vector<NonlinearElement> nonlinear;
 };
 struct DcResult {
     bool success = false;
     std::vector<double> voltages; // Indexed by net.
     std::vector<double> currents; // Indexed by element.
+    // Indexed by `DcCircuit::nonlinear`: current into the first listed terminal (e.g. anode).
+    std::vector<double> nonlinearCurrents;
+    // Indexed by `DcCircuit::nonlinear`: kind-specific secondary output, 0 where unused.
+    // Led: forward current / ratedCurrent, clamped to [0, 1] (0 when ratedCurrent is 0).
+    std::vector<double> nonlinearAux;
     std::string error;
 };
 DcResult solveDc(const DcCircuit& circuit, const std::atomic_bool* cancelled = nullptr);

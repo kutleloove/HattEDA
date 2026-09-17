@@ -118,6 +118,133 @@ int main() {
         double value = 123;
         check(!parseSpiceValue(text, value) && value == 123, text);
     }
+    // #62 nonlinear DC operating point: diode, zener, LED.
+    constexpr double Vt = 0.025852;
+    // Independent reference: solves V = I*R + n*Vt*ln(I/Is + 1) for I by bisection, entirely
+    // separate from the solver's own Newton-Raphson, so the two can be cross-checked.
+    const auto seriesDiodeCurrent = [](double supply, double resistance, double is, double n) {
+        double lo = 0, hi = supply / resistance;
+        for (int iter = 0; iter < 200; ++iter) {
+            const double mid = (lo + hi) / 2;
+            const double vDiode = n * Vt * std::log(mid / is + 1.0);
+            const double predictedSupply = mid * resistance + vDiode;
+            if (predictedSupply < supply) lo = mid; else hi = mid;
+        }
+        return (lo + hi) / 2;
+    };
+    {
+        // 3.3 V + 100 ohm + red LED (issue #62 acceptance: Vf ~1.8 V at rated current). Net 1 is
+        // the supply node, net 2 the LED anode (after the series resistor), net 0 ground.
+        const double is = 5e-18, n = 1.8, ratedCurrent = 0.02;
+        const auto expected = seriesDiodeCurrent(3.3, 100, is, n);
+        const auto result = solveDc({3, 0,
+                                     {{"V1", DcKind::VoltageSource, 1, 0, 3.3}, {"R1", DcKind::Resistor, 1, 2, 100}},
+                                     {{"D1", NonlinearKind::Led, {2, 0}, {is, n, 0, ratedCurrent}}}});
+        check(result.success, "LED divider solves");
+        if (result.success) {
+            check(std::abs(result.nonlinearCurrents[0] - expected) < expected * 1e-6,
+                  "LED current matches independent reference within 1e-6");
+            check(near(result.voltages[2] + result.nonlinearCurrents[0] * 100, 3.3),
+                  "LED divider satisfies KVL");
+            check(result.nonlinearAux[0] > 0 && result.nonlinearAux[0] <= 1,
+                  "LED brightness is a normalized fraction of rated current");
+        }
+    }
+    {
+        // Plain diode, forward-biased through a 1 kohm resistor: cross-check against the
+        // independent reference. Net 1 is the supply node, net 2 the diode anode, net 0 ground.
+        const double is = 1e-12, n = 1.0;
+        const auto expected = seriesDiodeCurrent(5.0, 1000, is, n);
+        const auto result = solveDc({3, 0,
+                                     {{"V1", DcKind::VoltageSource, 1, 0, 5.0}, {"R1", DcKind::Resistor, 1, 2, 1000}},
+                                     {{"D1", NonlinearKind::Diode, {2, 0}, {is, n, 0}}}});
+        check(result.success && std::abs(result.nonlinearCurrents[0] - expected) < expected * 1e-6,
+              "diode current matches independent reference");
+    }
+    {
+        // Reverse-biased diode: current is the tiny leakage current, essentially -Is. No resistor
+        // is needed since the reverse current is minuscule.
+        const auto result = solveDc({2, 0, {{"V1", DcKind::VoltageSource, 1, 0, -5.0}},
+                                     {{"D1", NonlinearKind::Diode, {1, 0}, {1e-12, 1.0, 0}}},
+                                     });
+        check(result.success && result.nonlinearCurrents[0] < 0 &&
+                  std::abs(result.nonlinearCurrents[0] + 1e-12) < 1e-13,
+              "reverse-biased diode carries only leakage current");
+    }
+    {
+        // Diode with series resistance: V = I*(R + Rs) + Vjunction(I). The 220 ohm here is the
+        // diode's own internal Rs; a 1 kohm external resistor limits the current the same way as
+        // the two tests above.
+        const double is = 1e-12, n = 1.0, rs = 220.0;
+        const auto expected = seriesDiodeCurrent(5.0, 1000.0 + rs, is, n);
+        const auto noRs = solveDc({3, 0,
+                                   {{"V1", DcKind::VoltageSource, 1, 0, 5.0}, {"R1", DcKind::Resistor, 1, 2, 1000}},
+                                   {{"D1", NonlinearKind::Diode, {2, 0}, {is, n, 0}}}});
+        const auto withRs = solveDc({3, 0,
+                                     {{"V1", DcKind::VoltageSource, 1, 0, 5.0}, {"R1", DcKind::Resistor, 1, 2, 1000}},
+                                     {{"D1", NonlinearKind::Diode, {2, 0}, {is, n, rs}}}});
+        check(noRs.success && withRs.success, "diode with Rs solves");
+        if (noRs.success && withRs.success) {
+            check(std::abs(withRs.nonlinearCurrents[0] - expected) < expected * 1e-6,
+                  "series resistance current matches independent reference");
+            check(withRs.nonlinearCurrents[0] < noRs.nonlinearCurrents[0],
+                  "series resistance reduces forward current");
+        }
+    }
+    {
+        // Zener shunt regulator: supply -> 1k series resistor -> zener to ground, cathode toward
+        // the supply (the usual reverse-breakdown orientation, anode = ground = net 0, cathode =
+        // net 2), so the regulated node (net 2) sits near +Vz for both a 12 V and a 15 V supply.
+        const double is = 1e-12, n = 1.0, rs = 0, vz = 5.1, rz = 5.0;
+        for (double supply : {12.0, 15.0}) {
+            const auto result = solveDc({3, 0,
+                                         {{"V1", DcKind::VoltageSource, 1, 0, supply},
+                                          {"R1", DcKind::Resistor, 1, 2, 1000}},
+                                         {{"Z1", NonlinearKind::Zener, {0, 2}, {is, n, rs, vz, rz}}}});
+            check(result.success, "zener regulator solves");
+            if (result.success) {
+                check(std::abs(result.voltages[2] - vz) < 0.3,
+                      "zener output regulates near breakdown voltage");
+                check(near(result.currents[1] + result.nonlinearCurrents[0], 0.0),
+                      "resistor current balances zener current (KCL at the regulated node)");
+            }
+        }
+    }
+    {
+        // Parameter/topology validation.
+        const auto badTerminals = solveDc({2, 0, {}, {{"D1", NonlinearKind::Diode, {0}, {1e-12, 1, 0}}}});
+        check(!badTerminals.success, "nonlinear element needs exactly 2 terminals");
+        const auto badNet = solveDc({2, 0, {}, {{"D1", NonlinearKind::Diode, {0, 5}, {1e-12, 1, 0}}}});
+        check(!badNet.success, "nonlinear element net index in range");
+        const auto badParamCount = solveDc({2, 0, {}, {{"D1", NonlinearKind::Diode, {0, 1}, {1e-12, 1}}}});
+        check(!badParamCount.success, "diode needs exactly 3 parameters");
+        const auto zeroIs = solveDc({2, 0, {}, {{"D1", NonlinearKind::Diode, {0, 1}, {0, 1, 0}}}});
+        check(!zeroIs.success, "saturation current must be positive");
+        const auto negativeN = solveDc({2, 0, {}, {{"D1", NonlinearKind::Diode, {0, 1}, {1e-12, -1, 0}}}});
+        check(!negativeN.success, "ideality factor must be positive");
+        const auto negativeRs = solveDc({2, 0, {}, {{"D1", NonlinearKind::Diode, {0, 1}, {1e-12, 1, -1}}}});
+        check(!negativeRs.success, "series resistance must be non-negative");
+        const auto zenerBadVz = solveDc({2, 0, {}, {{"Z1", NonlinearKind::Zener, {0, 1}, {1e-12, 1, 0, 0, 5}}}});
+        check(!zenerBadVz.success, "zener breakdown voltage must be positive");
+        const auto zenerBadRz = solveDc({2, 0, {}, {{"Z1", NonlinearKind::Zener, {0, 1}, {1e-12, 1, 0, 5, 0}}}});
+        check(!zenerBadRz.success, "zener breakdown resistance must be positive");
+        const auto ledBadRated =
+            solveDc({2, 0, {}, {{"L1", NonlinearKind::Led, {0, 1}, {1e-18, 1, 0, -1}}}});
+        check(!ledBadRated.success, "LED rated current must be non-negative");
+    }
+    {
+        // Never crashes on an extreme case: two independent voltage sources pin a diode 10 V
+        // forward-biased (no resistor limits the current), forcing many damped Newton steps
+        // (the per-iteration junction voltage step is capped) to reach that fixed operating
+        // point. Either a finite answer or a clear convergence error is acceptable; a crash,
+        // hang, NaN or infinity is not.
+        const auto extreme =
+            solveDc({3, 0, {{"V1", DcKind::VoltageSource, 1, 0, 5.0}, {"V2", DcKind::VoltageSource, 2, 0, -5.0}},
+                     {{"D1", NonlinearKind::Diode, {1, 2}, {1e-12, 1.0, 0}}}});
+        check(extreme.success ? (!extreme.nonlinearCurrents.empty() && std::isfinite(extreme.nonlinearCurrents[0]))
+                               : !extreme.error.empty(),
+              "extreme nonlinear circuit never crashes: succeeds with a finite answer or fails clearly");
+    }
     if (!failures) std::cout << "All DC solver tests passed.\n";
     return failures ? 1 : 0;
 }
