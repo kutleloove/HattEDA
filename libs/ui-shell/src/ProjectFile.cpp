@@ -529,15 +529,19 @@ QString rulesFromJson(const QJsonValue& value, DesignRules& rules) { return desi
 } // namespace
 
 int requiredFormatVersion(const ProjectData& project) {
+    bool hasZoneFeature = false;
     for (const SketchDocument* document : {&project.schematic, &project.board}) {
         for (const SketchItem& item : *document) {
+            if (item.mirroredX || item.mirroredY) {
+                return ProjectFormatVersion;
+            }
             if (item.variant == KeepoutZoneVariant || item.variant == AreaZoneVariant ||
                 item.zoneFill != ZoneFillStyle::Solid) {
-                return ProjectFormatVersion;
+                hasZoneFeature = true;
             }
         }
     }
-    return ProjectBaseFormatVersion;
+    return hasZoneFeature ? ProjectZoneFormatVersion : ProjectBaseFormatVersion;
 }
 
 QByteArray serializeProject(const ProjectData& project) {

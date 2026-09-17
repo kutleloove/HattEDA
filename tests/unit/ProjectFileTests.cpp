@@ -237,12 +237,41 @@ private slots:
         project.schematic = {comp};
         project.board = {board};
 
+        // A mirrored item forces version 5 (#8): older readers would ignore mirroredX/mirroredY
+        // and place the symbol's pins/shapes unmirrored, which is a wrong position, not just a
+        // missing feature.
+        QCOMPARE(requiredFormatVersion(project), ProjectFormatVersion);
+        const QJsonObject root = QJsonDocument::fromJson(serializeProject(project)).object();
+        QCOMPARE(root[QStringLiteral("formatVersion")].toInt(), 5);
+
         const ProjectLoad load = parseProject(serializeProject(project));
         QVERIFY2(load.ok(), qPrintable(load.error));
         compareDocuments(load.project.schematic, project.schematic);
         compareDocuments(load.project.board, project.board);
         // Deterministic re-serialise
         QCOMPARE(serializeProject(load.project), serializeProject(project));
+    }
+
+    // #8: mirroring outranks zone features (version 5), zone features alone still only need
+    // version 4, and a project using neither keeps writing the base version 3.
+    void formatVersionPicksTheHighestFeatureInUse() {
+        ProjectData plain = sampleProject();
+        QCOMPARE(requiredFormatVersion(plain), ProjectBaseFormatVersion);
+
+        ProjectData zoned;
+        zoned.name = QStringLiteral("Zoned");
+        SketchItem keepout = item(SketchItem::Kind::Polyline, {{0, 0}, {5, 0}, {5, 5}}, KeepoutZoneVariant);
+        keepout.closed = true;
+        zoned.board = {keepout};
+        QCOMPARE(requiredFormatVersion(zoned), ProjectZoneFormatVersion);
+        QCOMPARE(QJsonDocument::fromJson(serializeProject(zoned)).object()[QStringLiteral("formatVersion")].toInt(), 4);
+
+        ProjectData mirroredAndZoned = zoned;
+        SketchItem mirrored = item(SketchItem::Kind::Symbol, {{10, 10}}, QStringLiteral("schematic.resistor"));
+        mirrored.mirroredY = true;
+        mirroredAndZoned.schematic = {mirrored};
+        QCOMPARE(requiredFormatVersion(mirroredAndZoned), ProjectFormatVersion);
+        QCOMPARE(QJsonDocument::fromJson(serializeProject(mirroredAndZoned)).object()[QStringLiteral("formatVersion")].toInt(), 5);
     }
 
     void v1FileIsUpgradedToV2() {
