@@ -129,6 +129,20 @@ public:
     // identities and designators in row order, and everything ends up selected.
     void createArray(int rows, int columns, QPointF pitch);
     void rotateSelection();
+    // Mirrors the selection as one group, negating X (flipX = true, hatteda.action.mirror-x) or Y
+    // (flipX = false, hatteda.action.mirror-y) around the selection bounds' centre. One undo step.
+    void mirrorSelection(bool flipX);
+    // Cut/copy/paste (#8, SketchClipboard.hpp): the selection goes on the system clipboard tagged
+    // with this canvas's workspace. Cut also deletes it as one undo step; copy does not touch undo.
+    void copySelection() const;
+    void cutSelection();
+    // True while the system clipboard holds a same-workspace payload this canvas could paste.
+    [[nodiscard]] bool canPaste() const;
+    // Pastes the clipboard at `at` (world coordinates), or offset by two grid steps from the
+    // copied items' own position when not given (matching duplicateSelection). Every pasted item
+    // gets a fresh identity, and symbols get fresh designators (nextDesignator); the paste becomes
+    // the new selection. One undo step; a no-op (false) when canPaste() is false.
+    bool pasteFromClipboard(std::optional<QPointF> at = std::nullopt);
     void selectItem(int index);
     void editItemProperties(int index, const QString& label, QPointF position, int quarterTurns);
     void editItemProperties(int index, const SketchItem& properties);

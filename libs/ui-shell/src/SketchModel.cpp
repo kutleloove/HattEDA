@@ -714,8 +714,10 @@ int itemLayerMask(const SketchItem& item) {
 }
 
 QPointF symbolToWorld(const SketchItem& item, QPointF local) {
-    // Bottom side footprints are seen from the top, so they are mirrored left to right.
-    if (item.onBottom) local.setX(-local.x());
+    // Bottom side footprints are seen from the top, so they are mirrored left to right. Schematic
+    // components (#8) mirror independently, on either axis.
+    if (item.onBottom || item.mirroredX) local.setX(-local.x());
+    if (item.mirroredY) local.setY(-local.y());
     for (int turn = 0; turn < item.quarterTurns % 4; ++turn) {
         local = rotateQuarter(local);
     }
@@ -931,6 +933,17 @@ void rotateItemQuarterTurn(SketchItem& item, QPointF pivot) {
     }
     if (item.kind == SketchItem::Kind::Symbol || item.kind == SketchItem::Kind::Pad) {
         item.quarterTurns = (item.quarterTurns + 1) % 4;
+    }
+}
+
+void mirrorItem(SketchItem& item, QPointF pivot, bool flipX) {
+    for (QPointF& point : item.points) {
+        if (flipX) point.setX(2 * pivot.x() - point.x());
+        else point.setY(2 * pivot.y() - point.y());
+    }
+    if (item.kind == SketchItem::Kind::Symbol) {
+        if (flipX) item.mirroredX = !item.mirroredX;
+        else item.mirroredY = !item.mirroredY;
     }
 }
 

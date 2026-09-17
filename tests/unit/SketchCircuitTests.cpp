@@ -94,6 +94,69 @@ private slots:
         QVERIFY(autoNet != QStringLiteral("VCC"));
         QVERIFY2(autoNet.startsWith(QLatin1Char('N')), qPrintable(autoNet));
     }
+    // Issue #8: a mirrored component's pins move for connectivity too (symbolToWorld), not just for
+    // drawing. A wire drawn to R1's actual (mirrored) pin 1 position leaves pin 2 as the only
+    // unconnected pin; the same wire drawn to pin 1's un-mirrored position instead lands on the
+    // (mirrored) pin 2, leaving pin 1 unconnected -- proof mirroring really swaps which physical
+    // pin sits where for connectivity, not just for the on-screen shape.
+    void mirroredComponentConnectsWiresAtItsActualPinPosition() {
+        SketchItem resistor;
+        resistor.kind = SketchItem::Kind::Symbol;
+        resistor.variant = QStringLiteral("schematic.resistor");
+        resistor.label = QStringLiteral("R1");
+        resistor.points = {{20.32, 20.32}};
+        resistor.mirroredX = true;
+
+        const QPointF mirroredPin1 = itemAnchors(resistor).at(0);
+        SketchItem unmirrored = resistor;
+        unmirrored.mirroredX = false;
+        const QPointF naivePin1 = itemAnchors(unmirrored).at(0);
+        QVERIFY(QLineF(mirroredPin1, naivePin1).length() > 0.01); // mirroring actually moved the pin
+
+        SketchItem power;
+        power.kind = SketchItem::Kind::Symbol;
+        power.variant = QStringLiteral("schematic.power");
+        power.label = QStringLiteral("VCC");
+        power.points = {{5.08, 5.08}};
+
+        auto wireBetween = [](QPointF a, QPointF b) {
+            SketchItem w;
+            w.kind = SketchItem::Kind::Wire;
+            w.points = {a, b};
+            return w;
+        };
+
+        SketchDocument connected{resistor, power, wireBetween(power.points.first(), mirroredPin1)};
+        const auto connectedSnapshot = analyzeSchematic(connected);
+        QVERIFY2(connectedSnapshot.errors.isEmpty(), qPrintable(connectedSnapshot.errors.join("; ")));
+        QCOMPARE(schematicWireNets(connected).value(connected.last().id), QStringLiteral("VCC"));
+
+        auto unconnectedPinMessagesFor = [](const SketchDocument& doc, const QString& id) {
+            QStringList messages;
+            for (const auto& violation : runElectricalRuleCheck(doc).violations) {
+                if (violation.rule == QLatin1String("erc.unconnected-pin") && violation.itemIds.contains(id)) {
+                    messages << violation.message;
+                }
+            }
+            return messages;
+        };
+        // R1 pin 2 is never wired, so it is always the unconnected one when the wire reaches the
+        // symbol's actual (mirrored) pin 1.
+        const QStringList connectedGaps = unconnectedPinMessagesFor(connected, resistor.id);
+        QCOMPARE(connectedGaps.size(), 1);
+        QVERIFY2(connectedGaps.first().contains(QStringLiteral("pin 2")), qPrintable(connectedGaps.first()));
+
+        // The same wire, drawn to where pin 1 would sit *without* mirroring, actually lands on R1's
+        // (mirrored) pin 2 instead -- since a symmetric resistor's two pins swap places under an
+        // X-mirror. So now pin 1, not pin 2, is the one left unconnected: proof that mirroring
+        // really did swap which physical pin sits where, not just the on-screen shape.
+        SketchDocument disconnected{resistor, power, wireBetween(power.points.first(), naivePin1)};
+        const auto disconnectedSnapshot = analyzeSchematic(disconnected);
+        QVERIFY2(disconnectedSnapshot.errors.isEmpty(), qPrintable(disconnectedSnapshot.errors.join("; ")));
+        const QStringList disconnectedGaps = unconnectedPinMessagesFor(disconnected, resistor.id);
+        QCOMPARE(disconnectedGaps.size(), 1);
+        QVERIFY2(disconnectedGaps.first().contains(QStringLiteral("pin 1")), qPrintable(disconnectedGaps.first()));
+    }
     void catalogCurrentSourceSolvesFromSnapshot() {
         registerBuiltInCatalog();
         SketchDocument document;

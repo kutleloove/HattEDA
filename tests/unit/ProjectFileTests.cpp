@@ -75,6 +75,8 @@ void compareDocuments(const SketchDocument& actual, const SketchDocument& expect
         QCOMPARE(a.layer, e.layer);
         QCOMPARE(a.onBottom, e.onBottom);
         QCOMPARE(a.excludeFromBoard, e.excludeFromBoard);
+        QCOMPARE(a.mirroredX, e.mirroredX);
+        QCOMPARE(a.mirroredY, e.mirroredY);
         QCOMPARE(a.fontFamily, e.fontFamily);
         if (e.kind == SketchItem::Kind::Pad) {
             QCOMPARE(a.pad.number, e.pad.number);
@@ -227,11 +229,20 @@ private slots:
         project.name = QStringLiteral("V2Test");
         SketchItem comp = item(SketchItem::Kind::Symbol, {{0, 0}}, QStringLiteral("schematic.resistor"));
         comp.excludeFromBoard = true;
+        comp.mirroredX = true;
+        comp.mirroredY = true;
         SketchItem board = item(SketchItem::Kind::Symbol, {{10, 10}}, QStringLiteral("board.r0603"));
         board.onBottom = true;
         board.layer = BoardLayer::BottomCopper;
         project.schematic = {comp};
         project.board = {board};
+
+        // A mirrored item forces version 5 (#8): older readers would ignore mirroredX/mirroredY
+        // and place the symbol's pins/shapes unmirrored, which is a wrong position, not just a
+        // missing feature.
+        QCOMPARE(requiredFormatVersion(project), ProjectFormatVersion);
+        const QJsonObject root = QJsonDocument::fromJson(serializeProject(project)).object();
+        QCOMPARE(root[QStringLiteral("formatVersion")].toInt(), 5);
 
         const ProjectLoad load = parseProject(serializeProject(project));
         QVERIFY2(load.ok(), qPrintable(load.error));
@@ -239,6 +250,28 @@ private slots:
         compareDocuments(load.project.board, project.board);
         // Deterministic re-serialise
         QCOMPARE(serializeProject(load.project), serializeProject(project));
+    }
+
+    // #8: mirroring outranks zone features (version 5), zone features alone still only need
+    // version 4, and a project using neither keeps writing the base version 3.
+    void formatVersionPicksTheHighestFeatureInUse() {
+        ProjectData plain = sampleProject();
+        QCOMPARE(requiredFormatVersion(plain), ProjectBaseFormatVersion);
+
+        ProjectData zoned;
+        zoned.name = QStringLiteral("Zoned");
+        SketchItem keepout = item(SketchItem::Kind::Polyline, {{0, 0}, {5, 0}, {5, 5}}, KeepoutZoneVariant);
+        keepout.closed = true;
+        zoned.board = {keepout};
+        QCOMPARE(requiredFormatVersion(zoned), ProjectZoneFormatVersion);
+        QCOMPARE(QJsonDocument::fromJson(serializeProject(zoned)).object()[QStringLiteral("formatVersion")].toInt(), 4);
+
+        ProjectData mirroredAndZoned = zoned;
+        SketchItem mirrored = item(SketchItem::Kind::Symbol, {{10, 10}}, QStringLiteral("schematic.resistor"));
+        mirrored.mirroredY = true;
+        mirroredAndZoned.schematic = {mirrored};
+        QCOMPARE(requiredFormatVersion(mirroredAndZoned), ProjectFormatVersion);
+        QCOMPARE(QJsonDocument::fromJson(serializeProject(mirroredAndZoned)).object()[QStringLiteral("formatVersion")].toInt(), 5);
     }
 
     void v1FileIsUpgradedToV2() {
@@ -265,6 +298,8 @@ private slots:
         QCOMPARE(load.project.schematic[0].layer, BoardLayer::TopCopper);
         QVERIFY(!load.project.schematic[0].onBottom);
         QVERIFY(!load.project.schematic[0].excludeFromBoard);
+        QVERIFY(!load.project.schematic[0].mirroredX);
+        QVERIFY(!load.project.schematic[0].mirroredY);
     }
 
     void padItemRoundTrip() {

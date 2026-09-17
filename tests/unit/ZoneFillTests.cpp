@@ -416,7 +416,7 @@ void ZoneFillTests::zoneKindsAndFillRoundTripWithFormatVersion() {
     area.variant = AreaZoneVariant;
     area.zoneFill = ZoneFillStyle::Empty;
     project.board += {keepout, area};
-    QCOMPARE(requiredFormatVersion(project), ProjectFormatVersion);
+    QCOMPARE(requiredFormatVersion(project), ProjectZoneFormatVersion);
     const QByteArray bytes = serializeProject(project);
     QVERIFY(bytes.contains("\"formatVersion\": 4"));
     const ProjectLoad loaded = parseProject(bytes);
@@ -433,7 +433,7 @@ void ZoneFillTests::zoneKindsAndFillRoundTripWithFormatVersion() {
     // A keepout alone (no fill field) still needs version 4: older builds would read copper.
     ProjectData keepoutOnly;
     keepoutOnly.board = {keepout};
-    QCOMPARE(requiredFormatVersion(keepoutOnly), ProjectFormatVersion);
+    QCOMPARE(requiredFormatVersion(keepoutOnly), ProjectZoneFormatVersion);
 
     QByteArray broken = bytes;
     broken.replace("\"zoneFill\": \"hatched\"", "\"zoneFill\": \"dotted\"");

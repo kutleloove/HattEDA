@@ -64,6 +64,8 @@ add_library(hatt-ui-shell STATIC
     src/PrintLayoutDialog.cpp
     include/hatt/ui/AgenticGateway.hpp
     src/AgenticGateway.cpp
+    include/hatt/ui/SketchClipboard.hpp
+    src/SketchClipboard.cpp
 )
 
 add_library(HattEDA::UiShell ALIAS hatt-ui-shell)

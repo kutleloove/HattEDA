@@ -1,4 +1,4 @@
-# ADR-0004: Interim `.hatt` project file (format version 4)
+# ADR-0004: Interim `.hatt` project file (format version 5)
 
 Status: Accepted for the interim editor implementation; refs #6, #9, #10, #11. Supersedes the "in-memory only" note for identities and electrical metadata in ADR-0003.
 
@@ -6,7 +6,7 @@ Projects could not be saved: New project created no file, Open only changed the 
 
 ## Decision
 
-- A `.hatt` file is UTF-8 JSON written with Qt Core's `QJsonDocument`. This adds no new dependency. The root holds `format: "hatteda-project"`, an integer `formatVersion` (currently `4` for projects that use version 4 zone features and `3` otherwise, see `requiredFormatVersion`), the project `name`, and `schematic` and `board` sections. Each section holds `items`, a list of `SketchItem`s.
+- A `.hatt` file is UTF-8 JSON written with Qt Core's `QJsonDocument`. This adds no new dependency. The root holds `format: "hatteda-project"`, an integer `formatVersion` (currently `5` for a project with a mirrored item, `4` for one that only uses version 4 zone features, `3` otherwise — see `requiredFormatVersion`), the project `name`, and `schematic` and `board` sections. Each section holds `items`, a list of `SketchItem`s.
 - Each item stores `id` (UUID), `kind` (`symbol`, `wire`, `line`, `polyline`, `rectangle`, `circle`, `arc` or `text`) and `points` as `[x, y]` pairs. The optional fields `variant`, `label`, `quarterTurns`, `closed`, `value`, `footprint`, `pinPadMap` and `sourceId` are written only when they differ from their defaults. Kind names are part of the format and are never renamed or reused.
 - Coordinates are floating-point millimetres, exactly as the interim model holds them. Doubles use Qt's shortest round-trip representation, so saving an unchanged project reproduces the file byte for byte. Keys are sorted.
 - Readers:
@@ -27,11 +27,12 @@ Projects could not be saved: New project created no file, Open only changed the 
 ## Consequences and remaining work
 
 - Designs survive restarts, and UUID links between schematic and PCB (`sourceId`) persist.
-- Versions 1 and 2 remain readable. Version 2 introduced layers/pads and project library data; version 3 adds the optional stable `simulationModel` id to custom device records. Missing ids keep the explicit “no model assigned” behavior. Version 4 (ADR-0012) adds keepout and area zones (`variant` `keepout-zone` / `area-zone`) and the item field `zoneFill` (`hatched` or `empty`, omitted for `solid`). Version 3 readers would read them as copper or solid pours, so a project is written as version 4 only when it uses one of them; all other projects keep writing version 3 and still open in older builds. The future fixed-point migration will use a later version and converter.
+- Versions 1 and 2 remain readable. Version 2 introduced layers/pads and project library data; version 3 adds the optional stable `simulationModel` id to custom device records. Missing ids keep the explicit “no model assigned” behavior. Version 4 (ADR-0012) adds keepout and area zones (`variant` `keepout-zone` / `area-zone`) and the item field `zoneFill` (`hatched` or `empty`, omitted for `solid`). Version 3 readers would read them as copper or solid pours, so a project is written as version 4 only when it uses one of them; all other projects keep writing version 3 and still open in older builds. Version 5 (issue #8) adds the `Kind::Symbol` fields `mirroredX`/`mirroredY` (schematic component mirroring): a version 4 or older reader ignores them and places the symbol's pins and shapes unmirrored, a wrong position/net rather than a merely missing feature, so a project is written as version 5 only when some item is actually mirrored; otherwise it keeps writing version 4 or 3 as before. The future fixed-point migration will use a later version and converter.
 - The symbol library is compiled in. A file that references a symbol removed from a later build is rejected rather than silently dropping parts. Library versioning is future work.
 - Autosave, crash recovery, the `.bak` backup and the project lock file are in ADR-0005. They do not change the format.
 - Later sections: format version 2 layers/pads and the `library` object (ADR-0006), project devices and footprints in `library.customDevices|customFootprints` (ADR-0007), design rules in `rules` (ADR-0008; Design Rule Manager parts in ADR-0010, including the optional, additive net class `clearance` from issue #39 that needs no version bump), version 3 custom-device simulation model ids, the copper zone `net` (ADR-0009), and version 4 zone kinds and fill styles (ADR-0012). Built-in catalog definitions are referenced by stable id and are not copied into the file.
 - `Kind::Text` items gained an optional `fontFamily` string (#36): the QFont family used for schematic text, empty meaning the application default; board text ignores it and always renders with StrokeFont. Purely additive (omitted when empty, defaults to empty when absent), so no `formatVersion` bump.
+- `Kind::Symbol` items gained optional `mirroredX`/`mirroredY` booleans (#8): schematic component mirroring (`hatteda.action.mirror-x|y`), independent of the existing board-side `onBottom` flip. Unlike the other optional fields above, this is not silently-additive: an older reader that ignores these booleans would place the mirrored symbol's pins and shapes in the wrong spot, changing net connectivity rather than just missing a cosmetic feature — so it bumps `requiredFormatVersion` to version 5 (see above), only for projects that actually use it.
 - Not covered yet: embedded schematic symbol drawings, and project-level editor settings (units, grid) inside the file.
 
 ## Validation

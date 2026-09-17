@@ -144,6 +144,8 @@ QJsonObject itemToJson(const SketchItem& item) {
         object[QStringLiteral("layer")] = QLatin1String(layerToString(item.layer));
     if (item.onBottom) object[QStringLiteral("onBottom")] = true;
     if (item.excludeFromBoard) object[QStringLiteral("excludeFromBoard")] = true;
+    if (item.mirroredX) object[QStringLiteral("mirroredX")] = true;
+    if (item.mirroredY) object[QStringLiteral("mirroredY")] = true;
     if (item.kind == SketchItem::Kind::Pad)
         object[QStringLiteral("pad")] = padToJson(item.pad);
     if (item.kind == SketchItem::Kind::Via && item.drillDiameter != 0.0)
@@ -244,6 +246,10 @@ QString documentFromJson(const QJsonValue& value, Workspace workspace, const QSt
         if (!onBottom.isUndefined()) item.onBottom = onBottom.toBool();
         const QJsonValue exclude = object.value(QStringLiteral("excludeFromBoard"));
         if (!exclude.isUndefined()) item.excludeFromBoard = exclude.toBool();
+        const QJsonValue mirroredX = object.value(QStringLiteral("mirroredX"));
+        if (!mirroredX.isUndefined()) item.mirroredX = mirroredX.toBool();
+        const QJsonValue mirroredY = object.value(QStringLiteral("mirroredY"));
+        if (!mirroredY.isUndefined()) item.mirroredY = mirroredY.toBool();
         const QJsonValue padVal = object.value(QStringLiteral("pad"));
         if (!padVal.isUndefined() && padVal.isObject())
             item.pad = padFromJson(padVal.toObject());
@@ -523,15 +529,19 @@ QString rulesFromJson(const QJsonValue& value, DesignRules& rules) { return desi
 } // namespace
 
 int requiredFormatVersion(const ProjectData& project) {
+    bool hasZoneFeature = false;
     for (const SketchDocument* document : {&project.schematic, &project.board}) {
         for (const SketchItem& item : *document) {
+            if (item.mirroredX || item.mirroredY) {
+                return ProjectFormatVersion;
+            }
             if (item.variant == KeepoutZoneVariant || item.variant == AreaZoneVariant ||
                 item.zoneFill != ZoneFillStyle::Solid) {
-                return ProjectFormatVersion;
+                hasZoneFeature = true;
             }
         }
     }
-    return ProjectBaseFormatVersion;
+    return hasZoneFeature ? ProjectZoneFormatVersion : ProjectBaseFormatVersion;
 }
 
 QByteArray serializeProject(const ProjectData& project) {
