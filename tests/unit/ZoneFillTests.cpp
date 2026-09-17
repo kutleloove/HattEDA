@@ -1,0 +1,448 @@
+#include "hatt/ui/BoardCopper.hpp"
+#include "hatt/ui/DesignChecks.hpp"
+#include "hatt/ui/DesignRules.hpp"
+#include "hatt/ui/GerberExport.hpp"
+#include "hatt/ui/ProjectFile.hpp"
+#include "hatt/ui/SketchCircuit.hpp"
+#include "hatt/ui/ZoneFill.hpp"
+
+#include <QLineF>
+#include <QtTest>
+
+#include <algorithm>
+
+using namespace hatt::ui;
+
+namespace {
+
+SketchItem zoneItem(const QString& net, QRectF area, BoardLayer layer = BoardLayer::TopCopper) {
+    SketchItem zone;
+    zone.kind = SketchItem::Kind::Polyline;
+    zone.variant = CopperZoneVariant;
+    zone.closed = true;
+    zone.layer = layer;
+    zone.net = net;
+    zone.points = {area.topLeft(), area.topRight(), area.bottomRight(), area.bottomLeft()};
+    return zone;
+}
+
+SketchItem smdPad(QPointF at, double size) {
+    SketchItem pad;
+    pad.kind = SketchItem::Kind::Pad;
+    pad.points = {at};
+    pad.layer = BoardLayer::TopCopper;
+    pad.pad = {1, PadShape::Rect, size, size, 0.0, layerBit(BoardLayer::TopCopper)};
+    return pad;
+}
+
+} // namespace
+
+class ZoneFillTests final : public QObject {
+    Q_OBJECT
+
+private slots:
+    void otherNetsAreKeptClear();
+    void ownNetStaysConnected();
+    void ownPadsGetThermalReliefs();
+    void islandsWithoutOwnCopperAreRemoved();
+    void sliversNarrowerThanMinimumWidthAreRemoved();
+    void zonesWithoutNetAreNotPoured();
+    void boardEdgeClearanceShrinksThePour();
+    void contoursCarryHoleDepth();
+    void gerberWritesPourBeforeCopperWithClearPolarity();
+    void schematicNetsDecideWhatThePourJoins();
+    void zoneNetRoundTripsThroughProjectFile();
+    void pourSettingsFollowDesignRules();
+    // Zone mode (ADR-0012)
+    void emptyZonesAreNotPouredAndDoNotConduct();
+    void hatchedPourKeepsBarsAndBorder();
+    void keepoutZonesCutPoursOnTheirLayer();
+    void keepoutZonesReportCopperInside();
+    void areaZonesFillTheirLayerAndExport();
+    void zoneSummaryShowsNetClassAndFill();
+    void zoneKindsAndFillRoundTripWithFormatVersion();
+};
+
+void ZoneFillTests::otherNetsAreKeptClear() {
+    const SketchDocument board{zoneItem(QStringLiteral("GND"), {0, 0, 20, 20}), smdPad({10, 10}, 2.0)};
+    const auto fills = fillZones(board, boardCopperObstacles(board), 0.2, 0.3);
+    QCOMPARE(fills.size(), 1);
+    const QPainterPath& fill = fills.first().fill;
+    QVERIFY(!fill.contains(QPointF(10, 10)));
+    QVERIFY(!fill.contains(QPointF(11.15, 10))); // inside pad edge + clearance
+    QVERIFY(fill.contains(QPointF(11.4, 10)));
+    QVERIFY(fill.contains(QPointF(2, 2)));
+}
+
+void ZoneFillTests::ownNetStaysConnected() {
+    const SketchDocument board{zoneItem(QStringLiteral("GND"), {0, 0, 20, 20}), smdPad({10, 10}, 2.0)};
+    auto obstacles = boardCopperObstacles(board);
+    for (auto& obstacle : obstacles) obstacle.net = QStringLiteral("GND");
+    const auto fills = fillZones(board, obstacles, 0.2, 0.3);
+    QVERIFY(fills.first().fill.contains(QPointF(10, 10)));
+    QVERIFY(fills.first().fill.contains(QPointF(11.15, 10)));
+}
+
+void ZoneFillTests::ownPadsGetThermalReliefs() {
+    const SketchDocument board{zoneItem(QStringLiteral("GND"), {0, 0, 20, 20}), smdPad({10, 10}, 2.0)};
+    auto obstacles = boardCopperObstacles(board);
+    for (auto& obstacle : obstacles) obstacle.net = QStringLiteral("GND");
+    ZonePourOptions options;
+    options.clearance = 0.2;
+    options.thermalGap = 0.5;
+    options.spokeWidth = 0.4;
+    const QPainterPath fill = fillZones(board, obstacles, options).first().fill;
+    QVERIFY(fill.contains(QPointF(11.25, 10)));     // spoke across the gap on the pad axis
+    QVERIFY(fill.contains(QPointF(10, 8.75)));
+    QVERIFY(!fill.contains(QPointF(11.25, 11.25))); // gap corner, off the spokes
+    QVERIFY(!fill.contains(QPointF(11.25, 10.5)));
+    QVERIFY(fill.contains(QPointF(12.0, 12.0)));    // pour beyond the gap
+}
+
+void ZoneFillTests::islandsWithoutOwnCopperAreRemoved() {
+    // A track of another net splits the zone; only the left half holds a GND pad.
+    SketchItem wall;
+    wall.kind = SketchItem::Kind::Wire;
+    wall.layer = BoardLayer::TopCopper;
+    wall.width = 1.0;
+    wall.points = {{10, -5}, {10, 25}};
+    const SketchDocument board{zoneItem(QStringLiteral("GND"), {0, 0, 20, 20}), smdPad({4, 10}, 1.5), wall};
+    auto obstacles = boardCopperObstacles(board);
+    for (auto& obstacle : obstacles) {
+        if (obstacle.itemId == board[1].id) obstacle.net = QStringLiteral("GND");
+    }
+    ZonePourOptions options;
+    const QPainterPath kept = fillZones(board, obstacles, options).first().fill;
+    QVERIFY(kept.contains(QPointF(2, 2)));
+    QVERIFY(!kept.contains(QPointF(15, 15)));
+
+    options.removeIslands = false;
+    QVERIFY(fillZones(board, obstacles, options).first().fill.contains(QPointF(15, 15)));
+}
+
+void ZoneFillTests::sliversNarrowerThanMinimumWidthAreRemoved() {
+    // Two pads of another net 0.6 mm apart leave a 0.2 mm sliver after 0.2 mm clearance each side.
+    const SketchDocument board{zoneItem(QStringLiteral("GND"), {0, 0, 20, 20}), smdPad({10, 10}, 1.0),
+                               smdPad({11.6, 10}, 1.0), smdPad({3, 3}, 1.0)};
+    auto obstacles = boardCopperObstacles(board);
+    obstacles.last().net = QStringLiteral("GND"); // keeps the main pour from being an island
+    ZonePourOptions options;
+    options.clearance = 0.2;
+    options.thermalReliefs = false;
+    options.minimumWidth = 0.0;
+    QVERIFY(fillZones(board, obstacles, options).first().fill.contains(QPointF(10.8, 10)));
+
+    options.minimumWidth = 0.25;
+    const QPainterPath fill = fillZones(board, obstacles, options).first().fill;
+    QVERIFY(!fill.contains(QPointF(10.8, 10)));
+    QVERIFY(fill.contains(QPointF(10.8, 5)));  // wide pour stays
+    QVERIFY(fill.contains(QPointF(1.0, 1.0)));
+    QVERIFY(!fill.contains(QPointF(10.6, 10))); // never grows into the clearance
+}
+
+void ZoneFillTests::zonesWithoutNetAreNotPoured() {
+    const SketchDocument board{zoneItem(QString(), {0, 0, 20, 20})};
+    QVERIFY(fillZones(board, {}, 0.2, 0.3).isEmpty());
+    // A zone on the bottom copper ignores top-only copper.
+    const SketchDocument bottom{zoneItem(QStringLiteral("GND"), {0, 0, 20, 20}, BoardLayer::BottomCopper),
+                                smdPad({10, 10}, 2.0)};
+    QVERIFY(fillZones(bottom, boardCopperObstacles(bottom), 0.2, 0.3).first().fill.contains(QPointF(10, 10)));
+}
+
+void ZoneFillTests::boardEdgeClearanceShrinksThePour() {
+    SketchItem outline;
+    outline.kind = SketchItem::Kind::Polyline;
+    outline.variant = BoardOutlineVariant;
+    outline.closed = true;
+    outline.layer = BoardLayer::BoardEdge;
+    outline.points = {{0, 0}, {15, 0}, {15, 15}, {0, 15}};
+    const SketchDocument board{outline, zoneItem(QStringLiteral("GND"), {-5, -5, 30, 30})};
+    const QPainterPath fill = fillZones(board, {}, 0.2, 0.3).first().fill;
+    QVERIFY(fill.contains(QPointF(14.5, 5)));
+    QVERIFY(!fill.contains(QPointF(14.85, 5)));
+    QVERIFY(!fill.contains(QPointF(20, 5)));
+}
+
+void ZoneFillTests::contoursCarryHoleDepth() {
+    const SketchDocument board{zoneItem(QStringLiteral("GND"), {0, 0, 20, 20}), smdPad({10, 10}, 2.0)};
+    const auto contours = zoneContours(fillZones(board, boardCopperObstacles(board), 0.2, 0.3).first().fill);
+    QCOMPARE(contours.size(), 2);
+    QCOMPARE(contours[0].depth, 0);
+    QCOMPARE(contours[1].depth, 1);
+    QVERIFY(contours[1].polygon.boundingRect().width() < 4.0);
+}
+
+void ZoneFillTests::gerberWritesPourBeforeCopperWithClearPolarity() {
+    const SketchDocument board{zoneItem(QStringLiteral("GND"), {0, 0, 20, 20}), smdPad({10, 10}, 2.0)};
+    CamOptions options;
+    options.zoneFills = fillZones(board, boardCopperObstacles(board), 0.2, 0.3);
+    options.designators = false;
+    const CamOutput output = buildCamOutput(board, options);
+    QCOMPARE(output.skippedZones, 0);
+    const auto& copper = output.layers[static_cast<int>(CamLayerKind::TopCopper)].primitives;
+    QCOMPARE(copper.size(), 3);
+    QCOMPARE(copper[0].kind, CamPrimitive::Kind::Region);
+    QVERIFY(!copper[0].clear);
+    QVERIFY(copper[1].clear);
+    QCOMPARE(copper[2].kind, CamPrimitive::Kind::Flash);
+
+    const QByteArray gerber = gerberLayer(output.layers[static_cast<int>(CamLayerKind::TopCopper)], QStringLiteral("t"));
+    const qsizetype clear = gerber.indexOf("%LPC*%");
+    const qsizetype dark = gerber.indexOf("%LPD*%", clear);
+    const qsizetype flash = gerber.indexOf("D03*");
+    QVERIFY(clear > 0);
+    QVERIFY(dark > clear);
+    QVERIFY(flash > dark);
+
+    // Without a pour the zone is still left out.
+    QCOMPARE(buildCamOutput(board).skippedZones, 1);
+}
+
+void ZoneFillTests::schematicNetsDecideWhatThePourJoins() {
+    const SketchDocument schematic = dcDividerExample();
+    SketchItem outline;
+    outline.kind = SketchItem::Kind::Polyline;
+    outline.variant = BoardOutlineVariant;
+    outline.closed = true;
+    outline.layer = BoardLayer::BoardEdge;
+    outline.points = {{0, 0}, {80, 0}, {80, 60}, {0, 60}};
+    BoardTransfer transfer = transferToBoard(schematic, {outline});
+    QVERIFY2(transfer.errors.isEmpty(), qPrintable(transfer.errors.join(QLatin1Char('\n'))));
+    SketchDocument board = transfer.document;
+    const auto header = std::find_if(board.begin(), board.end(), [](const SketchItem& item) {
+        return item.kind == SketchItem::Kind::Symbol && item.label == QLatin1String("V1");
+    });
+    QVERIFY(header != board.end());
+    const QVector<PlacedPad> headerPads = itemPads(*header);
+    QCOMPARE(headerPads.size(), 2);
+
+    const BoardCopperModel model = buildBoardCopperModel(schematic, board);
+    QVERIFY(model.netsKnown);
+    QString plusNet;
+    for (const BoardConductor& conductor : model.conductors) {
+        if (conductor.kind == ConductorKind::Pad && QLineF(conductor.pad.center, headerPads[0].center).length() < 1e-6) {
+            plusNet = model.netNames.value(conductor.net);
+        }
+    }
+    QVERIFY(!plusNet.isEmpty());
+
+    board.append(zoneItem(plusNet, {1, 1, 78, 58}, BoardLayer::BottomCopper));
+    const auto fills = pourZones(schematic, board, 0.2, 0.3);
+    QCOMPARE(fills.size(), 1);
+    QVERIFY(fills.first().fill.contains(headerPads[0].center));  // own net: joined
+    QVERIFY(!fills.first().fill.contains(headerPads[1].center)); // other net: cleared
+    QVERIFY(fills.first().fill.contains(QPointF(5, 5)));
+}
+
+void ZoneFillTests::zoneNetRoundTripsThroughProjectFile() {
+    ProjectData project;
+    project.name = QStringLiteral("zones");
+    project.board = {zoneItem(QStringLiteral("GND"), {0, 0, 5, 5})};
+    const ProjectLoad loaded = parseProject(serializeProject(project));
+    QVERIFY2(loaded.ok(), qPrintable(loaded.error));
+    QCOMPARE(loaded.project.board.first().net, QStringLiteral("GND"));
+
+    QByteArray broken = serializeProject(project);
+    broken.replace("\"net\": \"GND\"", "\"net\": 5");
+    QVERIFY(broken.contains("\"net\": 5"));
+    QVERIFY(!parseProject(broken).ok());
+}
+
+void ZoneFillTests::pourSettingsFollowDesignRules() {
+    DesignRules rules;
+    ClearanceRule rule;
+    rule.padTrace = 0.35;
+    rule.graphic = 0.45;
+    rule.edge = 0.6;
+    rules.clearanceRules = {rule};
+    rules.defaults.thermalRelief = false;
+    rules.defaults.spokeWidth = 0.55;
+    const ZonePourOptions options = pourOptionsFor(rules);
+    QCOMPARE(options.clearance, clearanceBetween(rules, CopperLayerMask, ClearanceObject::Graphic, ClearanceObject::Pad));
+    QVERIFY(options.clearance >= 0.45 - 1e-9);
+    QCOMPARE(options.boardEdgeClearance, edgeClearance(rules, CopperLayerMask));
+    QVERIFY(!options.thermalReliefs);
+    QCOMPARE(options.spokeWidth, 0.55);
+    QVERIFY(options.thermalGap >= options.clearance);
+}
+
+void ZoneFillTests::emptyZonesAreNotPouredAndDoNotConduct() {
+    SketchItem zone = zoneItem(QStringLiteral("GND"), {0, 0, 20, 20});
+    zone.zoneFill = ZoneFillStyle::Empty;
+    const SketchDocument board{zone, smdPad({10, 10}, 2.0)};
+    auto obstacles = boardCopperObstacles(board);
+    for (auto& obstacle : obstacles) obstacle.net = QStringLiteral("GND");
+    QVERIFY(fillZones(board, obstacles, ZonePourOptions{}).isEmpty());
+    QVERIFY(pourZones({}, board, 0.2, 0.3).isEmpty());
+    QCOMPARE(itemCopperLayers(zone), 0);
+    QVERIFY(buildBoardCopperModel({}, {zone}).conductors.isEmpty());
+    // Only a boundary: nothing to fabricate and nothing reported as skipped.
+    const CamOutput output = buildCamOutput({zone});
+    QCOMPARE(output.skippedZones, 0);
+    QVERIFY(output.layers[static_cast<int>(CamLayerKind::TopCopper)].primitives.isEmpty());
+}
+
+void ZoneFillTests::hatchedPourKeepsBarsAndBorder() {
+    SketchItem zone = zoneItem(QStringLiteral("GND"), {0, 0, 20, 20});
+    const SketchDocument solidBoard{zone, smdPad({10, 10}, 2.0)};
+    auto obstacles = boardCopperObstacles(solidBoard);
+    for (auto& obstacle : obstacles) obstacle.net = QStringLiteral("GND");
+    ZonePourOptions options;
+    options.thermalReliefs = false;
+    options.hatchPitch = 1.0;
+    options.hatchWidth = 0.3;
+    QVERIFY(fillZones(solidBoard, obstacles, options).first().fill.contains(QPointF(5.5, 5.5)));
+
+    zone.zoneFill = ZoneFillStyle::Hatched;
+    const SketchDocument board{zone, solidBoard[1]};
+    const QPainterPath fill = fillZones(board, obstacles, options).first().fill;
+    QVERIFY(fill.contains(QPointF(5.5, 5.0)));  // horizontal bar on the 1 mm grid
+    QVERIFY(fill.contains(QPointF(5.0, 5.5)));  // vertical bar
+    QVERIFY(!fill.contains(QPointF(5.5, 5.5))); // open cell
+    QVERIFY(fill.contains(QPointF(0.1, 5.5)));  // border along the zone edge
+    QVERIFY(fill.contains(QPointF(10, 10)));    // own pad stays joined
+
+    const QPainterPath hatch = hatchedArea(QPainterPath(), 1.0, 0.3);
+    QVERIFY(hatch.isEmpty());
+}
+
+void ZoneFillTests::keepoutZonesCutPoursOnTheirLayer() {
+    SketchItem keepout = zoneItem(QString(), {5, 5, 5, 5});
+    keepout.variant = KeepoutZoneVariant;
+    const SketchDocument board{zoneItem(QStringLiteral("GND"), {0, 0, 20, 20}), keepout, smdPad({2, 2}, 1.0)};
+    auto obstacles = boardCopperObstacles(board);
+    QCOMPARE(obstacles.size(), 1); // the keepout itself is not copper
+    obstacles.first().net = QStringLiteral("GND");
+    const QPainterPath fill = fillZones(board, obstacles, ZonePourOptions{}).first().fill;
+    QVERIFY(!fill.contains(QPointF(7.5, 7.5)));
+    QVERIFY(fill.contains(QPointF(15, 15)));
+
+    // A keepout on the other copper layer leaves the pour alone.
+    SketchDocument bottomKeepout = board;
+    bottomKeepout[1].layer = BoardLayer::BottomCopper;
+    QVERIFY(fillZones(bottomKeepout, obstacles, ZonePourOptions{}).first().fill.contains(QPointF(7.5, 7.5)));
+    QCOMPARE(itemCopperLayers(keepout), 0);
+}
+
+void ZoneFillTests::keepoutZonesReportCopperInside() {
+    SketchItem keepout = zoneItem(QString(), {0, 0, 10, 10});
+    keepout.variant = KeepoutZoneVariant;
+    SketchDocument board{keepout, smdPad({5, 5}, 1.0), smdPad({30, 30}, 1.0)};
+    CheckReport report = runDesignRuleCheck({}, board, DesignRules{});
+    int keepouts = 0;
+    for (const auto& violation : report.violations) {
+        if (violation.rule != QLatin1String("drc.keepout")) continue;
+        ++keepouts;
+        QCOMPARE(violation.severity, CheckSeverity::Error);
+        QVERIFY(violation.itemIds.contains(board[0].id));
+        QVERIFY(violation.itemIds.contains(board[1].id));
+    }
+    QCOMPARE(keepouts, 1);
+
+    board[0].layer = BoardLayer::BottomCopper;
+    report = runDesignRuleCheck({}, board, DesignRules{});
+    QVERIFY(std::none_of(report.violations.begin(), report.violations.end(),
+                         [](const CheckViolation& v) { return v.rule == QLatin1String("drc.keepout"); }));
+}
+
+void ZoneFillTests::areaZonesFillTheirLayerAndExport() {
+    SketchItem area = zoneItem(QString(), {0, 0, 10, 10}, BoardLayer::TopSilk);
+    area.variant = AreaZoneVariant;
+    auto fills = areaZoneFills({area});
+    QCOMPARE(fills.size(), 1);
+    QCOMPARE(fills.first().layer, BoardLayer::TopSilk);
+    QVERIFY(fills.first().fill.contains(QPointF(5.5, 5.5)));
+
+    area.zoneFill = ZoneFillStyle::Hatched;
+    fills = areaZoneFills({area});
+    QVERIFY(fills.first().fill.contains(QPointF(5.5, 5.0)));
+    QVERIFY(!fills.first().fill.contains(QPointF(5.5, 5.5)));
+
+    SketchItem empty = area;
+    empty.zoneFill = ZoneFillStyle::Empty;
+    SketchItem onCopper = area;
+    onCopper.layer = BoardLayer::TopCopper;
+    QVERIFY(areaZoneFills({empty, onCopper}).isEmpty());
+    QCOMPARE(itemCopperLayers(area), 0);
+
+    // Solid area on the bottom resist: a mask opening region, written before the pad openings.
+    area.zoneFill = ZoneFillStyle::Solid;
+    area.layer = BoardLayer::BottomResist;
+    SketchItem keepout = zoneItem(QString(), {20, 0, 10, 10});
+    keepout.variant = KeepoutZoneVariant;
+    CamOptions options;
+    options.designators = false;
+    const CamOutput output = buildCamOutput({area, keepout, empty}, options);
+    const auto& mask = output.layers[static_cast<int>(CamLayerKind::BottomMask)].primitives;
+    QCOMPARE(mask.size(), 1);
+    QCOMPARE(mask.first().kind, CamPrimitive::Kind::Region);
+    QVERIFY(output.layers[static_cast<int>(CamLayerKind::TopCopper)].primitives.isEmpty());
+    QVERIFY(output.layers[static_cast<int>(CamLayerKind::TopSilk)].primitives.isEmpty());
+    QCOMPARE(output.skippedZones, 0);
+}
+
+void ZoneFillTests::zoneSummaryShowsNetClassAndFill() {
+    DesignRules rules;
+    rules.netClasses = effectiveNetClasses(rules);
+    const auto power = std::find_if(rules.netClasses.begin(), rules.netClasses.end(),
+                                    [](const NetClass& netClass) { return netClass.name == QLatin1String("POWER"); });
+    QVERIFY(power != rules.netClasses.end());
+    power->nets = {QStringLiteral("GND")};
+
+    SketchItem zone = zoneItem(QStringLiteral("GND"), {0, 0, 5, 5});
+    QCOMPARE(zoneSummary(zone, rules, {}), QStringLiteral("GND=POWER, Solid"));
+    zone.net.clear();
+    zone.zoneFill = ZoneFillStyle::Empty;
+    QCOMPARE(zoneSummary(zone, rules, {}), QStringLiteral("No net, Empty"));
+    zone.variant = KeepoutZoneVariant;
+    QCOMPARE(zoneSummary(zone, rules, {}), QStringLiteral("Keepout"));
+    zone.variant = AreaZoneVariant;
+    zone.zoneFill = ZoneFillStyle::Hatched;
+    QCOMPARE(zoneSummary(zone, rules, {}), QStringLiteral("Area, Hatched"));
+    QCOMPARE(zoneKindName(AreaZoneVariant), QStringLiteral("Area zone"));
+}
+
+void ZoneFillTests::zoneKindsAndFillRoundTripWithFormatVersion() {
+    ProjectData project;
+    project.name = QStringLiteral("zones");
+    project.board = {zoneItem(QStringLiteral("GND"), {0, 0, 5, 5})};
+    QCOMPARE(requiredFormatVersion(project), ProjectBaseFormatVersion);
+    QVERIFY(!serializeProject(project).contains("zoneFill"));
+
+    project.board.first().zoneFill = ZoneFillStyle::Hatched;
+    SketchItem keepout = zoneItem(QString(), {10, 0, 5, 5}, BoardLayer::BottomCopper);
+    keepout.variant = KeepoutZoneVariant;
+    SketchItem area = zoneItem(QString(), {20, 0, 5, 5}, BoardLayer::TopSilk);
+    area.variant = AreaZoneVariant;
+    area.zoneFill = ZoneFillStyle::Empty;
+    project.board += {keepout, area};
+    QCOMPARE(requiredFormatVersion(project), ProjectZoneFormatVersion);
+    const QByteArray bytes = serializeProject(project);
+    QVERIFY(bytes.contains("\"formatVersion\": 4"));
+    const ProjectLoad loaded = parseProject(bytes);
+    QVERIFY2(loaded.ok(), qPrintable(loaded.error));
+    QCOMPARE(loaded.project.board.size(), 3);
+    QCOMPARE(loaded.project.board[0].zoneFill, ZoneFillStyle::Hatched);
+    QCOMPARE(loaded.project.board[1].variant, KeepoutZoneVariant);
+    QCOMPARE(loaded.project.board[1].layer, BoardLayer::BottomCopper);
+    QCOMPARE(loaded.project.board[1].zoneFill, ZoneFillStyle::Solid);
+    QCOMPARE(loaded.project.board[2].variant, AreaZoneVariant);
+    QCOMPARE(loaded.project.board[2].zoneFill, ZoneFillStyle::Empty);
+    QCOMPARE(serializeProject(loaded.project), bytes);
+
+    // A keepout alone (no fill field) still needs version 4: older builds would read copper.
+    ProjectData keepoutOnly;
+    keepoutOnly.board = {keepout};
+    QCOMPARE(requiredFormatVersion(keepoutOnly), ProjectZoneFormatVersion);
+
+    QByteArray broken = bytes;
+    broken.replace("\"zoneFill\": \"hatched\"", "\"zoneFill\": \"dotted\"");
+    QVERIFY(broken.contains("dotted"));
+    QVERIFY(!parseProject(broken).ok());
+    broken = bytes;
+    broken.replace("\"zoneFill\": \"hatched\"", "\"zoneFill\": 1");
+    QVERIFY(!parseProject(broken).ok());
+}
+
+QTEST_GUILESS_MAIN(ZoneFillTests)
+#include "ZoneFillTests.moc"

@@ -1,20 +1,44 @@
 #pragma once
 
+#include "hatt/ui/DesignRules.hpp"
 #include "hatt/ui/SketchModel.hpp"
+#include "hatt/ui/Units.hpp"
 
+#include <QHash>
 #include <QLineF>
 #include <QList>
+#include <QPainterPath>
 #include <QPointF>
 #include <QString>
 #include <QWidget>
 
+#include <optional>
+
 class QPainter;
 class QUndoStack;
 class QTimer;
+class QLineEdit;
 
 namespace hatt::ui {
 
-enum class CanvasTool { Select, Symbol, Wire, Line, Polyline, Rectangle, Circle, Arc, Text, Measure };
+// Pad places a board pad of the PadStyle named by the tool variant; Via places a via. Zone draws a
+// closed zone of the kind named by the variant (CopperZoneVariant, KeepoutZoneVariant or
+// AreaZoneVariant, ADR-0012).
+enum class CanvasTool {
+    Select,
+    Symbol,
+    Wire,
+    Line,
+    Polyline,
+    Rectangle,
+    Circle,
+    Arc,
+    Text,
+    Measure,
+    Pad,
+    Via,
+    Zone
+};
 
 enum class AlignOperation {
     Left,
@@ -34,6 +58,24 @@ struct SnapSettings {
     bool centers = false;
     bool diagonal = true;
     bool orthogonal = false;
+    // Smart alignment guides against other objects' pins, vertices and origins.
+    bool guides = true;
+    // Grid step level 0..3 (Proteus style Ctrl+F1, F2, F3, F4); see DesignCanvas::gridStep.
+    int gridLevel = 2;
+};
+
+// Gap between the object being moved or placed and its nearest neighbour in one direction,
+// shown as a labelled dimension line (world coordinates, millimetres). `equal` marks gaps that
+// match another gap; those matching gaps between other objects are reported too.
+struct SpacingIndicator {
+    QLineF line;
+    double distance = 0.0;
+    bool equal = false;
+};
+
+struct CanvasAnnotation {
+    QPointF position; // world, millimetres
+    QString text;
 };
 
 class DesignCanvas final : public QWidget {
@@ -55,16 +97,52 @@ public:
     [[nodiscard]] bool hasPendingOperation() const noexcept;
     [[nodiscard]] QPointF worldToScreen(QPointF world) const;
     [[nodiscard]] QPointF screenToWorld(QPointF screen) const;
+    [[nodiscard]] QVector<QLineF> activeGuides() const;
+    // Left/right/up/down gaps while a selection is dragged or a symbol is being placed.
+    [[nodiscard]] QVector<SpacingIndicator> activeSpacings() const;
+    [[nodiscard]] LengthUnit lengthUnit() const noexcept { return unit_; }
+    // Union of the selected items' bounds, or a null rectangle without a selection.
+    [[nodiscard]] QRectF selectionBounds() const;
+
+    static constexpr int GridLevelCount = 4;
+    // Grid step in millimetres for a level: schematic 0.254 / 1.27 / 2.54 / 12.7,
+    // board 0.127 / 0.254 / 0.635 / 1.27.
+    [[nodiscard]] static double gridStep(Workspace workspace, int level);
 
     void setTool(CanvasTool tool, const QString& variant = {});
+    // Symbol tool only: the next placements copy `item` (label, value, footprint links) instead of
+    // creating a fresh part; each copy gets a new identity. Cleared by setTool.
+    void setPlacementTemplate(const SketchItem& item);
     void setSnapSettings(const SnapSettings& settings);
+    void setLengthUnit(LengthUnit unit);
     void cancelOperation();
+    // Defaults applied to newly placed text (#36); the text tool's style bar keeps these in sync.
+    // `fontFamily` is used for schematic text only (board text always renders with StrokeFont).
+    void setDefaultTextStyle(const QString& fontFamily, double height);
 
     void selectAll();
     void clearSelection();
     void deleteSelection();
     void duplicateSelection();
+    // Copies the selection into a rows × columns array (one undo step). The selection is the
+    // top-left cell; `pitch` is the centre-to-centre step (Y positive down). Copies get fresh
+    // identities and designators in row order, and everything ends up selected.
+    void createArray(int rows, int columns, QPointF pitch);
     void rotateSelection();
+    // Mirrors the selection as one group, negating X (flipX = true, hatteda.action.mirror-x) or Y
+    // (flipX = false, hatteda.action.mirror-y) around the selection bounds' centre. One undo step.
+    void mirrorSelection(bool flipX);
+    // Cut/copy/paste (#8, SketchClipboard.hpp): the selection goes on the system clipboard tagged
+    // with this canvas's workspace. Cut also deletes it as one undo step; copy does not touch undo.
+    void copySelection() const;
+    void cutSelection();
+    // True while the system clipboard holds a same-workspace payload this canvas could paste.
+    [[nodiscard]] bool canPaste() const;
+    // Pastes the clipboard at `at` (world coordinates), or offset by two grid steps from the
+    // copied items' own position when not given (matching duplicateSelection). Every pasted item
+    // gets a fresh identity, and symbols get fresh designators (nextDesignator); the paste becomes
+    // the new selection. One undo step; a no-op (false) when canPaste() is false.
+    bool pasteFromClipboard(std::optional<QPointF> at = std::nullopt);
     void selectItem(int index);
     void editItemProperties(int index, const QString& label, QPointF position, int quarterTurns);
     void editItemProperties(int index, const SketchItem& properties);
@@ -73,17 +151,78 @@ public:
     void zoomIn();
     void zoomOut();
     void zoomToFit();
+    // Selects the items with the given ids and centres the view on `location` (or on the
+    // selection when there is no location) without changing the zoom. Used by the checks report.
+    void revealItems(const QStringList& ids, std::optional<QPointF> location);
 
     // Replaces document and selection without creating an undo entry. Used by undo commands.
     void restore(const SketchDocument& document, const QList<int>& selection);
     void applyDocumentEdit(const QString& title, const SketchDocument& document);
-    void setAirwires(const QVector<QLineF>& lines);
-    [[nodiscard]] QVector<QLineF> airwires() const { return airwires_; }
+    void setAirwires(const QVector<Airwire>& wires);
+    [[nodiscard]] QVector<Airwire> airwires() const { return airwires_; }
+    // Complete ghost route currently shown by the interactive PCB router. When a route starts on
+    // an unrouted pad this includes the assisted continuation to the matching airwire endpoint.
+    [[nodiscard]] QVector<QPointF> currentRoutePreview() const;
+    // Net name of the airwire the route being drawn continues towards (see assistedRouteTarget),
+    // or an empty string when the route is not currently aimed at one. Kayra only.
+    [[nodiscard]] QString currentRouteNet() const;
+    // Read-only overlay labels such as simulated probe voltages; not part of the document.
+    void setAnnotations(const QVector<CanvasAnnotation>& annotations);
+    [[nodiscard]] QVector<CanvasAnnotation> annotations() const { return annotations_; }
+    // Poured copper of zones and filled area zones by item id (ZoneFill.hpp), drawn under the board
+    // items in the zone's layer colour; computed by the host because pouring needs the schematic nets.
+    void setZoneFills(const QHash<QString, QPainterPath>& fills);
+    [[nodiscard]] QHash<QString, QPainterPath> zoneFills() const { return zoneFills_; }
+    // Net name of each Wire item (schematic wire or PCB track), keyed by item id; computed by the
+    // host (SketchCircuit::schematicWireNets / BoardCopper::boardTrackNets, issue #47). A wire
+    // missing here has no determinable net (a connectivity error, an unrouted track, or a short)
+    // and is drawn without a label.
+    void setWireNets(const QHash<QString, QString>& netsByItemId);
+    [[nodiscard]] QHash<QString, QString> wireNets() const { return wireNets_; }
+    // Document index of the Wire item under the cursor in Select mode while nothing is being
+    // dragged, else -1 (issue #47). That item, and its connected same-net run up to the next
+    // junction/pin/pad/via, are drawn at full opacity; other wires stay dimmed.
+    [[nodiscard]] int hoveredWireIndex() const noexcept { return hoveredWire_; }
+    // Net name of the hovered wire (wireNets() looked up by its item id), or empty.
+    [[nodiscard]] QString hoveredWireNet() const;
+    // World-coordinate segments of the hovered wire's full-opacity run (issue #47): the hovered
+    // item's own segments plus any neighbouring Wire item reached by a plain two-way pass-through,
+    // stopping at the next junction, pin, pad or via. Empty when nothing is hovered. Exposed for
+    // tests, mirroring currentRoutePreview().
+    [[nodiscard]] QVector<QLineF> hoveredWireRun() const;
 
     static void paintSymbolPreview(QPainter& painter, const QRectF& target, const QString& symbolId,
                                    const QPalette& palette);
+    // Draws a pad style (or a via when `padStyleId` is empty) centred in `target`.
+    static void paintPadPreview(QPainter& painter, const QRectF& target, const QString& padStyleId,
+                                const QPalette& palette);
+
+    // Board layers (Kayra). New tracks, zones and SMD pads go to the active copper layer (a copper
+    // layer on the active layer's side when a non-copper layer is active); graphics go to the
+    // active layer, or the silk layer of its side while a copper layer is active; footprints are
+    // placed on the bottom side while a bottom layer is active. Changing the copper layer while a
+    // track is being routed inserts a via at the last corner. Hidden layers are neither drawn nor
+    // hit-tested. Ignored by schematic canvases.
+    [[nodiscard]] BoardLayer activeLayer() const noexcept { return activeLayer_; }
+    void setActiveLayer(BoardLayer layer);
+    [[nodiscard]] int visibleLayers() const noexcept { return visibleLayers_; }
+    void setVisibleLayers(int mask);
+    [[nodiscard]] double trackWidthSetting() const noexcept { return trackWidth_; }
+    void setTrackWidth(double millimetres);
+    void setViaSize(double diameter, double drill);
+    void setRoutingClearance(double millimetres);
+    // Net class routing of existing copper by routeClassKey (BoardCopper.hpp, issue #39), set by the
+    // host. A track started on such a pad, via or track uses the class trace width (still capped by
+    // the pad and by a narrower track) and keeps the class clearance while routing; elsewhere the
+    // chosen track style and the rule clearance apply.
+    void setRouteClasses(const QHash<QString, RouteClass>& classes);
+    // Class of the track being routed, when it started on class copper.
+    [[nodiscard]] std::optional<RouteClass> activeRouteClass() const { return activeRouteClass_; }
+    // Layer colour for the palette's theme (dark or light).
+    [[nodiscard]] static QColor layerColor(BoardLayer layer, const QPalette& palette);
 
 signals:
+    void activeLayerChanged(hatt::ui::BoardLayer layer);
     void documentChanged();
     void selectionChanged(int count);
     void cursorMoved(QPointF world);
@@ -93,6 +232,7 @@ signals:
     void contextMenuRequested(QPoint globalPosition, int itemIndex);
 
 protected:
+    bool eventFilter(QObject* watched, QEvent* event) override;
     void paintEvent(QPaintEvent* event) override;
     void mousePressEvent(QMouseEvent* event) override;
     void mouseMoveEvent(QMouseEvent* event) override;
@@ -101,50 +241,154 @@ protected:
     void contextMenuEvent(QContextMenuEvent* event) override;
     void wheelEvent(QWheelEvent* event) override;
     void keyPressEvent(QKeyEvent* event) override;
+    void keyReleaseEvent(QKeyEvent* event) override;
     void leaveEvent(QEvent* event) override;
 
 private:
     enum class SnapKind { None, Grid, Object, Center, Edge };
     enum class Drag { None, Move, RubberBand, Pan };
+    // What a Drag::Move edits: the whole selection, one segment/vertex of a single wire, or the
+    // height of a single selected text item dragged from its resize handle (#36).
+    enum class MoveKind { Selection, WireSegment, WireVertex, TextScale };
 
     struct Snap {
         QPointF point;
         SnapKind kind = SnapKind::None;
+        QPointF marker;           // where the snap indicator is drawn
+        QVector<QLineF> guides;   // alignment guides, world coordinates
+    };
+
+    // Result of snapping a group of points that move together (placement preview or drag).
+    struct Placement {
+        QPointF offset;
+        SnapKind kind = SnapKind::None;
+        QPointF marker;
+        QVector<QLineF> guides;
+    };
+
+    struct WirePart {
+        MoveKind kind = MoveKind::Selection;
+        int index = -1;
     };
 
     [[nodiscard]] Snap snap(QPointF screen, const QPointF* constraintOrigin = nullptr,
                             bool ignoreSelection = false) const;
+    [[nodiscard]] Placement snapPlacement(const QVector<QPointF>& points, qsizetype connectorsFrom,
+                                          QPointF rawOffset, const QList<int>& skipped,
+                                          bool movingExisting) const;
+    [[nodiscard]] Snap symbolPlacement(QPointF screen) const;
+    // Shift (within 8 px) that makes a gap of `moving` equal an existing gap between other
+    // objects, or centres it between two neighbours. With grid snap on only shifts that keep
+    // `reference` on the grid are used. Null when nothing matches or guides are off.
+    [[nodiscard]] QPointF spacingShift(const QList<int>& skipped, const QRectF& moving,
+                                       QPointF reference) const;
+    [[nodiscard]] QVector<QPointF> guideTargets(const QList<int>& skipped) const;
+    [[nodiscard]] QPointF guideShift(const QVector<QPointF>& points, QPointF offset,
+                                     const QVector<QPointF>& targets) const;
+    [[nodiscard]] static QVector<QLineF> guideLines(const QVector<QPointF>& points, QPointF offset,
+                                                    const QVector<QPointF>& targets);
+    // Target pin/airwire endpoint the route being drawn should continue to, the net name of the
+    // airwire it matched (empty when the net name could not be determined), and that airwire's
+    // index in `airwires_` (so the paint code can highlight it and dim the rest).
+    struct RouteAssist {
+        QPointF target;
+        QString net;
+        int airwireIndex = -1;
+    };
+
+    [[nodiscard]] bool routesWire() const;
+    [[nodiscard]] QVector<QPointF> routeTo(QPointF point) const;
+    [[nodiscard]] QVector<QPointF> routePreviewTo(QPointF point) const;
+    [[nodiscard]] std::optional<RouteAssist> assistedRoute(QPointF cursor) const;
+    [[nodiscard]] std::optional<QPointF> assistedRouteTarget(QPointF cursor) const;
+    [[nodiscard]] std::optional<QVector<QPointF>> obstacleAvoidingRoute(QPointF from,
+                                                                        QPointF to) const;
+    bool appendPathPoint(const Snap& point);
     [[nodiscard]] QPointF snapToGrid(QPointF world) const;
     [[nodiscard]] QPointF constrainAngle(QPointF point, QPointF origin) const;
     [[nodiscard]] const QPointF* constraintOrigin() const;
     [[nodiscard]] int hitTest(QPointF screen) const;
+    [[nodiscard]] WirePart wirePartAt(int wire, QPointF screen) const;
+    [[nodiscard]] SketchDocument movedDocument(QPointF delta) const;
     [[nodiscard]] double defaultScale() const noexcept;
+    void updateSelectCursor(QPointF screen);
 
     void pushEdit(const QString& text, const SketchDocument& document, const QList<int>& selection);
     void setSelection(QList<int> selection);
     void placeSymbol(QPointF world);
+    void placePad(QPointF world);
+    void placeVia(QPointF world);
+    [[nodiscard]] bool itemVisible(const SketchItem& item) const;
+    // Copper layer used for tracks, zones and SMD pads.
+    [[nodiscard]] BoardLayer routeLayer() const noexcept;
+    [[nodiscard]] BoardLayer graphicsLayer() const noexcept;
+    // Layer of a new zone of the current Zone tool variant: copper for copper and keepout zones, a
+    // silk, resist or paste layer for area zones.
+    [[nodiscard]] BoardLayer zoneLayer() const noexcept;
+    void beginBoardRoute(QPointF at);
+    [[nodiscard]] double currentTrackWidth() const noexcept;
+    [[nodiscard]] double currentRouteClearance() const noexcept;
+    [[nodiscard]] SketchItem pendingTrack(const QVector<QPointF>& points) const;
+    [[nodiscard]] SketchItem pendingVia(QPointF at) const;
+    // Undoes the last layer change of the route being drawn; false when there was none.
+    bool revertRouteLayerChange();
     void placeText(QPointF world);
     void finishTwoPoint(QPointF world);
     void finishPath();
     void nudgeSelection(QPointF delta);
     void zoomAround(QPointF screen, double factor);
+    // On-canvas text editing (#36): resize handle at the bottom-right corner of a single selected
+    // text item's box, and a Photoshop-style double-click-to-edit overlay for its content.
+    [[nodiscard]] bool textResizeHandleAt(QPointF screen, int& itemIndex) const;
+    void beginInlineTextEdit(int index);
+    void commitInlineTextEdit();
+    void cancelInlineTextEdit();
 
     Workspace workspace_;
     QUndoStack* undoStack_;
     SketchDocument items_;
-    QVector<QLineF> airwires_;
+    QVector<Airwire> airwires_;
+    QVector<CanvasAnnotation> annotations_;
+    QHash<QString, QPainterPath> zoneFills_;
+    QHash<QString, QString> wireNets_;
+    // Wire hover (issue #47): item index and the world point closest to the cursor on it, updated
+    // by updateSelectCursor while the Select tool has no drag pending.
+    int hoveredWire_ = -1;
+    QPointF hoveredWireWorld_;
     QList<int> selection_;
     CanvasTool tool_ = CanvasTool::Select;
     QString variant_;
+    std::optional<SketchItem> placementTemplate_;
     SnapSettings snap_;
+    LengthUnit unit_;
     int placementTurns_ = 0;
 
     double scale_;
     QPointF offset_{48.0, 48.0};
 
     QVector<QPointF> pending_;
+    // Tracks and vias of the route being drawn that are already on another layer.
+    SketchDocument routePieces_;
+    BoardLayer activeLayer_ = BoardLayer::TopCopper;
+    int visibleLayers_ = AllLayersMask;
+    double trackWidth_ = DefaultTrackWidth;
+    double activeRouteWidth_ = 0.0;
+    double routingClearance_ = 0.2;
+    QHash<QString, RouteClass> routeClasses_;
+    std::optional<RouteClass> activeRouteClass_;
+    double viaDiameter_ = DefaultViaDiameter;
+    double viaDrill_ = DefaultViaDrill;
+    double textHeight_ = TextHeightMm; // last board text height, mm
+    QString defaultTextFont_; // last schematic text font family; empty = application default
     bool pressGesture_ = false;
     QPointF pressScreen_;
+
+    // Text resize handle drag (#36); textScaleItem_ also names the item while dragging.
+    int textScaleItem_ = -1;
+    double textScaleStartHeight_ = 0.0;
+    // Inline text edit overlay (#36).
+    QLineEdit* inlineTextEdit_ = nullptr;
+    int inlineTextIndex_ = -1;
 
     Drag drag_ = Drag::None;
     QPointF dragStartScreen_;
@@ -152,6 +396,14 @@ private:
     QPointF dragStartWorld_;
     QPointF moveReference_;
     QPointF moveDelta_;
+    MoveKind moveKind_ = MoveKind::Selection;
+    int moveWire_ = -1;
+    int movePart_ = -1;
+    SketchDocument moveDocument_;
+    QVector<QLineF> moveGuides_;
+    QPointF moveMarker_;
+    bool moveJoined_ = false;
+    bool freeAngle_ = false;
     QPointF panStartOffset_;
 
     bool hoverValid_ = false;

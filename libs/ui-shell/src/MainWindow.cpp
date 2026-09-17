@@ -1,22 +1,49 @@
 #include "hatt/ui/MainWindow.hpp"
+#include "hatt/ui/AgenticGateway.hpp"
+#include "hatt/agentic/AgenticMcpServer.hpp"
+#include "hatt/ui/BoardLayerPanel.hpp"
+#include "hatt/ui/ChecksReport.hpp"
+#include "hatt/ui/DesignRuleManager.hpp"
 #include "hatt/ui/CircuitWorkflow.hpp"
+#include "hatt/ui/ComponentLibrary.hpp"
+#include "hatt/ui/CamPreview.hpp"
+#include "hatt/ui/BoardCopper.hpp"
+#include "hatt/ui/ComponentCatalog.hpp"
+#include "hatt/ui/GerberExport.hpp"
+#include "hatt/ui/PrintLayoutDialog.hpp"
+#include "hatt/ui/ZoneFill.hpp"
+#include "hatt/ui/LibraryDialogs.hpp"
+#include "hatt/ui/ManufacturingExport.hpp"
 
 #include "hatt/ui/DesignCanvas.hpp"
+#include "hatt/ui/LayerColors.hpp"
+#include "hatt/ui/PackageFromSelection.hpp"
+#include "hatt/ui/PadStyles.hpp"
+#include "hatt/ui/ProjectSafety.hpp"
+#include "hatt/ui/RoutingStyles.hpp"
+#include "hatt/ui/SketchCircuit.hpp"
 #include "hatt/ui/Theme.hpp"
 
 #include <QAction>
 #include <QActionGroup>
 #include <QApplication>
 #include <QButtonGroup>
+#include <QCheckBox>
+#include <QCoreApplication>
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QDoubleSpinBox>
 #include <QComboBox>
+#include <QCloseEvent>
 #include <QDir>
 #include <QEvent>
 #include <QFileDialog>
+#include <QSaveFile>
 #include <QFileInfo>
+#include <QFontComboBox>
 #include <QFormLayout>
+#include <QGridLayout>
+#include <QSpinBox>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QKeySequence>
@@ -30,6 +57,7 @@
 #include <QPainterPath>
 #include <QPushButton>
 #include <QSettings>
+#include <tuple>
 #include <QSet>
 #include <QSignalBlocker>
 #include <QStackedWidget>
@@ -43,6 +71,7 @@
 
 #include <algorithm>
 #include <functional>
+#include <optional>
 
 namespace hatt::ui {
 namespace {
@@ -50,6 +79,36 @@ namespace {
 constexpr int ToolRole = Qt::UserRole;
 constexpr int VariantRole = Qt::UserRole + 1;
 constexpr int IconRole = Qt::UserRole + 2;
+constexpr int PartRole = Qt::UserRole + 3;
+// Track or via style name ("T12", "V32") of a board connect or via mode row.
+constexpr int StyleRole = Qt::UserRole + 4;
+// True for the user's own track and via styles, which can be edited and deleted.
+constexpr int CustomStyleRole = Qt::UserRole + 5;
+// Item id of a ZoneList row.
+constexpr int ZoneIdRole = Qt::UserRole + 6;
+
+const QString TrackStyleKey = QStringLiteral("editor/board/trackStyle");
+const QString ViaStyleKey = QStringLiteral("editor/board/viaStyle");
+const QString TextFontKey = QStringLiteral("editor/text/fontFamily");
+const QString TextHeightKey = QStringLiteral("editor/text/height");
+
+// Board layers a context menu may offer to move `item` to (#36), matching the layer choice already
+// in editItemProperties; std::nullopt when the item has no layer (e.g. footprints, which carry a
+// board side instead).
+std::optional<int> layerMaskForItem(const SketchItem& item) {
+    switch (item.kind) {
+    case SketchItem::Kind::Wire:
+    case SketchItem::Kind::Pad:
+        return CopperLayerMask;
+    case SketchItem::Kind::Symbol:
+    case SketchItem::Kind::Via:
+        return std::nullopt;
+    default:
+        if (item.variant == BoardOutlineVariant) return std::nullopt;
+        if (item.variant == CopperZoneVariant) return CopperLayerMask;
+        return AllLayersMask;
+    }
+}
 
 QColor iconColor(const QPalette& palette) {
     return palette.color(QPalette::Window).lightness() < 128 ? QColor(QStringLiteral("#b4bfca"))
@@ -89,6 +148,28 @@ QIcon makeIcon(const QString& kind, const QColor& color) {
         painter.setPen(Qt::NoPen);
         painter.drawEllipse(QPointF(3, 18), 2, 2);
         painter.drawEllipse(QPointF(21, 6), 2, 2);
+    } else if (kind == QLatin1String("package")) {
+        // Footprint: silk outline with two rows of pads.
+        rect(6, 4, 12, 16);
+        poly({{10.5, 4}, {12, 6}, {13.5, 4}});
+        painter.setBrush(color);
+        for (double y : {7.0, 11.0, 15.0}) {
+            rect(3, y, 3, 2);
+            rect(18, y, 3, 2);
+        }
+    } else if (kind == QLatin1String("via")) {
+        painter.drawEllipse(QPointF(12, 12), 7.5, 7.5);
+        painter.drawEllipse(QPointF(12, 12), 3, 3);
+        line(3, 12, 4.5, 12);
+        line(19.5, 12, 21, 12);
+    } else if (kind == QLatin1String("pad")) {
+        QColor fill = color;
+        fill.setAlpha(110);
+        painter.setBrush(fill);
+        rect(3, 5, 9, 9);
+        painter.drawEllipse(QPointF(16, 15), 5, 5);
+        painter.setBrush(Qt::NoBrush);
+        painter.drawEllipse(QPointF(16, 15), 1.8, 1.8);
     } else if (kind == QLatin1String("terminal")) {
         poly({{3, 8}, {13, 8}, {17, 12}, {13, 16}, {3, 16}}, true);
         line(17, 12, 21, 12);
@@ -147,8 +228,46 @@ QIcon makeIcon(const QString& kind, const QColor& color) {
         poly({{7, 7}, {8, 20}, {16, 20}, {17, 7}});
         line(10.5, 10, 10.5, 17);
         line(13.5, 10, 13.5, 17);
+    } else if (kind == QLatin1String("cut")) {
+        // Scissors: two pivot circles, blades crossing to a point.
+        painter.drawEllipse(QPointF(6, 6), 2.5, 2.5);
+        painter.drawEllipse(QPointF(6, 18), 2.5, 2.5);
+        line(8, 7.5, 20, 16.5);
+        line(8, 16.5, 20, 7.5);
+    } else if (kind == QLatin1String("copy")) {
+        rect(5, 3, 10, 13);
+        rect(9, 7, 10, 13);
+    } else if (kind == QLatin1String("paste")) {
+        rect(5, 5, 14, 16);
+        rect(9, 3, 6, 3);
+        line(8, 10, 16, 10);
+        line(8, 14, 16, 14);
+        line(8, 18, 13, 18);
+    } else if (kind == QLatin1String("mirror-x") || kind == QLatin1String("mirror-y")) {
+        // A dashed mirror axis with a shape and its reflection on either side.
+        painter.save();
+        painter.setPen(QPen(color, 1.2, Qt::DashLine, Qt::RoundCap));
+        if (kind == QLatin1String("mirror-x")) line(12, 3, 12, 21);
+        else line(3, 12, 21, 12);
+        painter.restore();
+        if (kind == QLatin1String("mirror-x")) {
+            poly({{4, 7}, {9, 7}, {4, 17}}, true);
+            poly({{20, 7}, {15, 7}, {20, 17}}, true);
+        } else {
+            poly({{7, 4}, {7, 9}, {17, 4}}, true);
+            poly({{7, 20}, {7, 15}, {17, 20}}, true);
+        }
     } else if (kind == QLatin1String("check")) {
         poly({{5, 12.5}, {10, 17.5}, {19, 7}});
+    } else if (kind == QLatin1String("play")) {
+        painter.setBrush(accent);
+        painter.setPen(QPen(accent, 1.7, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+        poly({{8, 5}, {19, 12}, {8, 19}}, true);
+    } else if (kind == QLatin1String("stop")) {
+        QColor fill = color;
+        fill.setAlpha(110);
+        painter.setBrush(fill);
+        rect(6.5, 6.5, 11, 11);
     } else if (kind == QLatin1String("line")) {
         line(5, 19, 19, 5);
         rect(3, 17, 4, 4);
@@ -175,6 +294,20 @@ QIcon makeIcon(const QString& kind, const QColor& color) {
         fill.setAlpha(90);
         painter.setBrush(fill);
         poly({{4, 6}, {20, 4}, {18, 19}, {6, 18}}, true);
+    } else if (kind == QLatin1String("keepout")) {
+        // Keepout: a boundary crossed by diagonal hatching.
+        poly({{4, 5}, {20, 5}, {20, 19}, {4, 19}}, true);
+        line(4, 11, 10, 5);
+        line(4, 17, 16, 5);
+        line(8, 19, 20, 7);
+        line(14, 19, 20, 13);
+    } else if (kind == QLatin1String("area")) {
+        // Non-copper area: a boundary with a grid fill, like a hatched silkscreen area.
+        poly({{4, 5}, {20, 5}, {20, 19}, {4, 19}}, true);
+        line(9.5, 5, 9.5, 19);
+        line(14.5, 5, 14.5, 19);
+        line(4, 10, 20, 10);
+        line(4, 14.5, 20, 14.5);
     } else if (kind.startsWith(QLatin1String("align-")) ||
                kind.startsWith(QLatin1String("distribute-"))) {
         painter.save();
@@ -216,7 +349,27 @@ QIcon symbolIcon(const QString& symbolId, const QPalette& palette) {
     pixmap.setDevicePixelRatio(2.0);
     pixmap.fill(Qt::transparent);
     QPainter painter(&pixmap);
-    DesignCanvas::paintSymbolPreview(painter, QRectF(2, 2, 28, 28), symbolId, palette);
+    // Pad tool rows carry a pad style id (or "via") instead of a symbol id.
+    if (findSymbol(symbolId) != nullptr) {
+        DesignCanvas::paintSymbolPreview(painter, QRectF(2, 2, 28, 28), symbolId, palette);
+    } else {
+        DesignCanvas::paintPadPreview(painter, QRectF(6, 6, 20, 20), symbolId, palette);
+    }
+    painter.end();
+    return QIcon(pixmap);
+}
+
+// Track style row icon: a top copper stroke whose thickness follows the width (T8 thin, T100 bold).
+QIcon trackStyleIcon(double width, const QPalette& palette) {
+    QPixmap pixmap(64, 64);
+    pixmap.setDevicePixelRatio(2.0);
+    pixmap.fill(Qt::transparent);
+    QPainter painter(&pixmap);
+    painter.setRenderHint(QPainter::Antialiasing);
+    const double stroke = std::clamp(width * 7.0, 1.5, 16.0);
+    painter.setPen(QPen(DesignCanvas::layerColor(BoardLayer::TopCopper, palette), stroke, Qt::SolidLine,
+                        Qt::RoundCap, Qt::RoundJoin));
+    painter.drawPolyline(QPolygonF({QPointF(6, 24), QPointF(14, 24), QPointF(22, 8), QPointF(28, 8)}));
     painter.end();
     return QIcon(pixmap);
 }
@@ -236,8 +389,13 @@ protected:
     void paintEvent(QPaintEvent*) override {
         QPainter painter(this);
         const QRectF area = QRectF(rect()).adjusted(18, 12, -18, -30);
-        if (!symbolId_.isEmpty()) {
+        if (!symbolId_.isEmpty() && findSymbol(symbolId_) != nullptr) {
             DesignCanvas::paintSymbolPreview(painter, area, symbolId_, palette());
+        } else if (!symbolId_.isEmpty()) {
+            const double side = std::min(area.width(), area.height()) * 0.6;
+            DesignCanvas::paintPadPreview(painter, QRectF(area.center() - QPointF(side, side) / 2,
+                                                          QSizeF(side, side)),
+                                          symbolId_, palette());
         } else if (!iconKind_.isEmpty()) {
             const QRect iconRect(QPoint(0, 0), QSize(56, 56));
             makeIcon(iconKind_, iconColor(palette()))
@@ -322,11 +480,14 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     for (auto* canvas : canvases_) {
         connect(canvas, &DesignCanvas::selectionChanged, this, &MainWindow::updateEditActions);
         connect(canvas->undoStack(), &QUndoStack::indexChanged, this, &MainWindow::updateEditActions);
+        connect(canvas->undoStack(), &QUndoStack::cleanChanged, this, &MainWindow::updateProjectState);
         connect(canvas, &DesignCanvas::cursorMoved, this, [this, canvas](QPointF world) {
             if (canvas == activeCanvas()) {
-                coordinateLabel_->setText(tr("X %1   Y %2 mm")
-                                              .arg(world.x(), 0, 'f', 3)
-                                              .arg(-world.y(), 0, 'f', 3));
+                const LengthUnit unit = canvas->lengthUnit();
+                coordinateLabel_->setText(tr("X %1   Y %2 %3")
+                                              .arg(formatCoordinate(world.x(), unit),
+                                                   formatCoordinate(-world.y(), unit),
+                                                   unitSymbol(unit)));
             }
         });
         connect(canvas, &DesignCanvas::statusMessage, this, [this, canvas](const QString& message) {
@@ -341,6 +502,15 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
         });
         connect(canvas, &DesignCanvas::selectToolRequested, this,
                 [this] { activateToolMode(ToolMode::Select); });
+        // Queued: the list may be rebuilt (and the tool reset) only after the edit has finished.
+        connect(canvas, &DesignCanvas::documentChanged, this, &MainWindow::refreshComponentList,
+                Qt::QueuedConnection);
+        // Pours depend on both documents (nets come from the schematic) and on the design rules.
+        connect(canvas, &DesignCanvas::documentChanged, this, &MainWindow::refreshZoneFills);
+        connect(canvas, &DesignCanvas::documentChanged, this, &MainWindow::refreshRouteClasses);
+        // Wire/track net labels (issue #47) depend on both documents too.
+        connect(canvas, &DesignCanvas::documentChanged, this, &MainWindow::refreshWireNets);
+        connect(canvas, &DesignCanvas::selectionChanged, this, &MainWindow::syncZoneListSelection);
         connect(canvas, &DesignCanvas::contextMenuRequested, this,
                 [this, canvas](QPoint position, int index) {
                     if (canvas == editingCanvas()) showCanvasContextMenu(canvas, position, index);
@@ -349,14 +519,53 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
 
     auto* circuitMenu = menuBar()->addMenu(tr("Circuit"));
     circuitMenu->setObjectName(QStringLiteral("CircuitMenu"));
-    new CircuitWorkflow(this, circuitMenu, canvases_[0], canvases_[1],
+    circuit_ = new CircuitWorkflow(this, circuitMenu, canvases_[0], canvases_[1],
         [this](const QString& id, const QString& title, QWidget* content) { openToolWorkspace(id, title, content); },
         [this] { return shellPages_ && shellPages_->currentIndex() == 1; },
-        [this] { showKayraWorkspace(); });
+        [this] { showKayraWorkspace(); }, [this] { return rules_; },
+        [this] { editDesignRules(/*openAutorouterTab=*/true); });
+    connect(circuit_, &CircuitWorkflow::statusMessage, statusBar(), [this](const QString& message) {
+        statusBar()->showMessage(message, 5000);
+    });
+    // Simulation play/stop sit before the design checks, as in Proteus' simulation controls.
+    if (auto* commandBar = findChild<QFrame*>(QStringLiteral("CommandBar"))) {
+        auto* layout = static_cast<QHBoxLayout*>(commandBar->layout());
+        int index = layout->count() - 1;
+        for (const char* id : {"hatteda.action.simulation-start", "hatteda.action.simulation-stop"}) {
+            layout->insertWidget(index++, commandButton(findChild<QAction*>(QString::fromLatin1(id)), commandBar));
+        }
+        layout->insertWidget(index, divider(commandBar));
+    }
+    projectGuard_ = new ProjectGuard(
+        this, [this] { return currentProjectData(projectPath_); },
+        [this] { return hasUnsavedChanges(); });
+    connect(projectGuard_, &ProjectGuard::statusMessage, statusBar(), &QStatusBar::showMessage);
     applySnapSettings();
+    applyLengthUnits();
     refreshIcons();
     workspaceChanged();
+    updateProjectState();
     statusBar()->showMessage(tr("Start by creating or opening a project"));
+
+    // Local MCP server for agentic use (ADR-0013), off by default: the app's core function must
+    // not depend on it.
+    updateAgenticServer();
+}
+
+void MainWindow::updateAgenticServer() {
+    const bool enabled = QSettings().value(QStringLiteral("agentic/mcpEnabled"), false).toBool();
+    if (enabled == (agenticServer_ != nullptr)) return;
+    if (enabled) {
+        agenticGateway_ = std::make_unique<MainWindowAgenticGateway>(this);
+        agenticServer_ = new hatt::agentic::AgenticMcpServer(*agenticGateway_, this);
+        // The pid keeps the pipe name unique when more than one window is running.
+        agenticServer_->start(
+            QStringLiteral("hatteda-agentic-mcp-%1").arg(QCoreApplication::applicationPid()));
+    } else {
+        delete agenticServer_;
+        agenticServer_ = nullptr;
+        agenticGateway_.reset();
+    }
 }
 
 void MainWindow::showCanvasContextMenu(DesignCanvas* canvas, QPoint position, int index) {
@@ -365,17 +574,80 @@ void MainWindow::showCanvasContextMenu(DesignCanvas* canvas, QPoint position, in
     menu->setAttribute(Qt::WA_DeleteOnClose);
     const bool hasItem = index >= 0 && index < canvas->document().size();
     if (hasItem) {
-        canvas->selectItem(index);
-        auto* properties = menu->addAction(tr("Edit properties"));
+        if (!canvas->selection().contains(index)) canvas->selectItem(index);
+        const auto item = canvas->document().at(index);
+        const bool board = canvas->workspace() == Workspace::Board;
+        QString object = tr("Object");
+        if (item.kind == SketchItem::Kind::Symbol) object = tr("Component");
+        else if (item.kind == SketchItem::Kind::Wire) object = board ? tr("Route") : tr("Wire");
+        else if (item.kind == SketchItem::Kind::Via) object = tr("Via");
+        else if (item.kind == SketchItem::Kind::Pad) object = tr("Pad");
+        else if (item.kind == SketchItem::Kind::Text) object = tr("Text");
+        else if (isZoneVariant(item.variant)) object = tr("Zone");
+
+        auto* properties = menu->addAction(tr("Edit %1 Properties...").arg(object));
         properties->setObjectName(QStringLiteral("hatteda.context.properties"));
         connect(properties, &QAction::triggered, this,
                 [this, canvas, index] { editItemProperties(canvas, index); });
-        menu->addAction(actions_.value(QStringLiteral("hatteda.action.rotate")));
-        menu->addAction(actions_.value(QStringLiteral("hatteda.action.duplicate")));
-        menu->addAction(actions_.value(QStringLiteral("hatteda.action.delete")));
+
+        const bool rotatable = item.kind != SketchItem::Kind::Wire &&
+                               item.kind != SketchItem::Kind::Via;
+        if (rotatable) {
+            auto* rotate = menu->addAction(tr("Rotate %1 Clockwise").arg(object));
+            rotate->setObjectName(QStringLiteral("hatteda.context.rotate"));
+            connect(rotate, &QAction::triggered, canvas, &DesignCanvas::rotateSelection);
+        }
+        auto* duplicate = menu->addAction(tr("Copy %1").arg(object));
+        duplicate->setObjectName(QStringLiteral("hatteda.context.duplicate"));
+        connect(duplicate, &QAction::triggered, canvas, &DesignCanvas::duplicateSelection);
+        if (item.kind == SketchItem::Kind::Symbol || item.kind == SketchItem::Kind::Pad) {
+            auto* array = menu->addAction(tr("Create %1 Array...").arg(object));
+            array->setObjectName(QStringLiteral("hatteda.context.array"));
+            connect(array, &QAction::triggered, this, [this, canvas] { showArrayDialog(canvas); });
+        }
+        auto* remove = menu->addAction(tr("Delete %1").arg(object));
+        remove->setObjectName(QStringLiteral("hatteda.context.delete"));
+        connect(remove, &QAction::triggered, canvas, &DesignCanvas::deleteSelection);
+
+        if (board) {
+            // Quick layer change (#36), without opening the full properties dialog. Moving text (or
+            // any graphic) between a top and bottom layer mirrors it automatically: DesignCanvas
+            // paints text mirrored whenever its layer is on the bottom side (isBottomLayer), the same
+            // convention Gerber bottom-silk uses so the board reads correctly once flipped.
+            if (const auto mask = layerMaskForItem(item)) {
+                menu->addSeparator();
+                auto* layerMenu = menu->addMenu(
+                    item.kind == SketchItem::Kind::Wire ? tr("Change Route Layer") : tr("Move to Layer"));
+                layerMenu->setObjectName(QStringLiteral("hatteda.context.move-to-layer"));
+                for (int i = 0; i < BoardLayerCount; ++i) {
+                    if (!(*mask & (1 << i))) continue;
+                    const auto layer = static_cast<BoardLayer>(i);
+                    auto* action = layerMenu->addAction(boardLayerName(layer));
+                    action->setCheckable(true);
+                    action->setChecked(layer == item.layer);
+                    connect(action, &QAction::triggered, this, [canvas, index, item, layer] {
+                        auto properties = item;
+                        properties.layer = layer;
+                        canvas->editItemProperties(index, properties);
+                    });
+                }
+            }
+            if (item.kind == SketchItem::Kind::Symbol || item.kind == SketchItem::Kind::Pad) {
+                menu->addSeparator();
+                menu->addAction(actions_.value(QStringLiteral("hatteda.action.make-package")));
+                menu->addAction(actions_.value(QStringLiteral("hatteda.action.decompose")));
+            }
+        }
     } else {
         menu->addAction(actions_.value(QStringLiteral("hatteda.action.undo")));
         menu->addAction(actions_.value(QStringLiteral("hatteda.action.redo")));
+        menu->addSeparator();
+        // Paste at the click position rather than hatteda.action.paste's grid-offset fallback (#8).
+        auto* paste = menu->addAction(tr("Paste"));
+        paste->setObjectName(QStringLiteral("hatteda.context.paste"));
+        paste->setEnabled(canvas->canPaste());
+        const QPointF at = canvas->screenToWorld(canvas->mapFromGlobal(position));
+        connect(paste, &QAction::triggered, canvas, [canvas, at] { canvas->pasteFromClipboard(at); });
         menu->addSeparator();
         menu->addAction(actions_.value(QStringLiteral("hatteda.action.select-all")));
         menu->addAction(actions_.value(QStringLiteral("hatteda.action.fit")));
@@ -383,21 +655,78 @@ void MainWindow::showCanvasContextMenu(DesignCanvas* canvas, QPoint position, in
     menu->popup(position);
 }
 
+void MainWindow::showArrayDialog(DesignCanvas* canvas) {
+    const QRectF bounds = canvas->selectionBounds();
+    if (bounds.isNull()) return;
+    const LengthUnit unit = canvas->lengthUnit();
+    const double grid = canvas->gridSize();
+    // Default pitch: the selection size rounded up to the grid plus one grid step of clearance.
+    auto defaultPitch = [grid](double size) { return (std::ceil(size / grid - 1e-9) + 1.0) * grid; };
+
+    QDialog dialog(this);
+    dialog.setObjectName(QStringLiteral("ArrayDialog"));
+    dialog.setWindowTitle(tr("Create array"));
+    auto* form = new QFormLayout(&dialog);
+    auto count = [&](const QString& name, int value) {
+        auto* field = new QSpinBox(&dialog);
+        field->setObjectName(name);
+        field->setRange(1, 50);
+        field->setValue(value);
+        return field;
+    };
+    auto pitch = [&](const QString& name, double millimetres) {
+        auto* field = new QDoubleSpinBox(&dialog);
+        field->setObjectName(name);
+        field->setRange(-toDisplayUnit(1000.0, unit), toDisplayUnit(1000.0, unit));
+        field->setDecimals(unitDecimals(unit));
+        field->setSuffix(QLatin1Char(' ') + unitSymbol(unit));
+        field->setValue(toDisplayUnit(millimetres, unit));
+        return field;
+    };
+    auto* rows = count(QStringLiteral("ArrayRows"), 2);
+    auto* columns = count(QStringLiteral("ArrayColumns"), 2);
+    auto* pitchX = pitch(QStringLiteral("ArrayPitchX"), defaultPitch(bounds.width()));
+    auto* pitchY = pitch(QStringLiteral("ArrayPitchY"), defaultPitch(bounds.height()));
+    form->addRow(tr("Rows"), rows);
+    form->addRow(tr("Columns"), columns);
+    form->addRow(tr("Column pitch (X)"), pitchX);
+    form->addRow(tr("Row pitch (Y, positive down)"), pitchY);
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+    form->addRow(buttons);
+    connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    if (dialog.exec() == QDialog::Accepted) {
+        canvas->createArray(rows->value(), columns->value(),
+                            {fromDisplayUnit(pitchX->value(), unit), fromDisplayUnit(pitchY->value(), unit)});
+    }
+}
+
 void MainWindow::editItemProperties(DesignCanvas* canvas, int index) {
     if (index < 0 || index >= canvas->document().size()) return;
     const auto item = canvas->document().at(index);
     QDialog dialog(this);
     dialog.setObjectName(QStringLiteral("ItemPropertiesDialog"));
-    dialog.setWindowTitle(tr("Edit properties"));
+    QString object = tr("Object");
+    if (item.kind == SketchItem::Kind::Symbol) object = tr("Component");
+    else if (item.kind == SketchItem::Kind::Wire)
+        object = canvas->workspace() == Workspace::Board ? tr("Route") : tr("Wire");
+    else if (item.kind == SketchItem::Kind::Via) object = tr("Via");
+    else if (item.kind == SketchItem::Kind::Pad) object = tr("Pad");
+    else if (item.kind == SketchItem::Kind::Text) object = tr("Text");
+    else if (isZoneVariant(item.variant)) object = tr("Zone");
+    dialog.setWindowTitle(tr("Edit %1").arg(object));
     auto* form = new QFormLayout(&dialog);
     auto* label = new QLineEdit(item.label, &dialog);
     label->setObjectName(QStringLiteral("ItemLabel"));
     const bool hasLabel = item.kind == SketchItem::Kind::Symbol || item.kind == SketchItem::Kind::Text;
-    if (hasLabel) form->addRow(tr("Label / text"), label);
+    if (hasLabel) {
+        form->addRow(item.kind == SketchItem::Kind::Text ? tr("Text") : tr("Part reference"), label);
+    }
     else label->hide();
     QLineEdit* value = nullptr;
     QComboBox* footprint = nullptr;
     QLineEdit* mapping = nullptr;
+    QCheckBox* excludeFromBoard = nullptr;
     const auto* symbol = findSymbol(item.variant);
     if (item.kind == SketchItem::Kind::Symbol && symbol &&
         canvas->workspace() == Workspace::Schematic && symbol->category == SymbolCategory::Component) {
@@ -407,11 +736,8 @@ void MainWindow::editItemProperties(DesignCanvas* canvas, int index) {
         footprint = new QComboBox(&dialog);
         footprint->setObjectName(QStringLiteral("ItemFootprint"));
         footprint->addItem(tr("Unassigned"), QString());
-        for (const auto& candidate : symbolLibrary()) {
-            if (candidate.workspace == Workspace::Board &&
-                candidate.pins.size() == symbol->pins.size()) {
-                footprint->addItem(symbolDisplayName(candidate), candidate.id);
-            }
+        for (const auto* candidate : footprintsWithPads(library_, static_cast<int>(symbol->pins.size()))) {
+            footprint->addItem(symbolDisplayName(*candidate), candidate->id);
         }
         footprint->setCurrentIndex(qMax(0, footprint->findData(item.footprint)));
         form->addRow(tr("Footprint"), footprint);
@@ -420,26 +746,172 @@ void MainWindow::editItemProperties(DesignCanvas* canvas, int index) {
         mapping = new QLineEdit(pads.join(QStringLiteral(",")), &dialog);
         mapping->setObjectName(QStringLiteral("ItemPinPadMap"));
         form->addRow(tr("Pin to pad (1-based, comma-separated)"), mapping);
+        excludeFromBoard = new QCheckBox(tr("Exclude from PCB layout"), &dialog);
+        excludeFromBoard->setObjectName(QStringLiteral("ItemExcludeFromBoard"));
+        excludeFromBoard->setToolTip(
+            tr("The part stays in the schematic and simulation but is not placed on the PCB"));
+        excludeFromBoard->setChecked(item.excludeFromBoard);
+        form->addRow(QString(), excludeFromBoard);
     }
-    auto coordinate = [&](const QString& name, double value) {
+    const LengthUnit unit = canvas->lengthUnit();
+    // Board items (#28, #30): layer, board side, pad geometry, track width and via size.
+    QComboBox* layer = nullptr;
+    QCheckBox* bottomSide = nullptr;
+    QSpinBox* padNumber = nullptr;
+    QComboBox* padShape = nullptr;
+    QDoubleSpinBox* padWidth = nullptr;
+    QDoubleSpinBox* padHeight = nullptr;
+    QDoubleSpinBox* padDrill = nullptr;
+    QDoubleSpinBox* trackWidthField = nullptr;
+    QDoubleSpinBox* viaDiameterField = nullptr;
+    QDoubleSpinBox* viaDrillField = nullptr;
+    QComboBox* zoneNet = nullptr;
+    QComboBox* zoneFill = nullptr;
+    QDoubleSpinBox* textHeightField = nullptr;
+    QFontComboBox* fontField = nullptr;
+    auto size = [&](const QString& name, double millimetres, double minimum) {
+        auto* field = new QDoubleSpinBox(&dialog);
+        field->setObjectName(name);
+        field->setDecimals(unit == LengthUnit::Millimetre ? 3 : 4);
+        field->setRange(toDisplayUnit(minimum, unit), toDisplayUnit(100.0, unit));
+        field->setSuffix(QLatin1Char(' ') + unitSymbol(unit));
+        field->setValue(toDisplayUnit(millimetres, unit));
+        return field;
+    };
+    auto layerChoice = [&](int allowed) {
+        layer = new QComboBox(&dialog);
+        layer->setObjectName(QStringLiteral("ItemLayer"));
+        for (int index = 0; index < BoardLayerCount; ++index) {
+            if (allowed & (1 << index)) layer->addItem(boardLayerName(static_cast<BoardLayer>(index)), index);
+        }
+        layer->setCurrentIndex(qMax(0, layer->findData(static_cast<int>(item.layer))));
+        form->addRow(tr("Layer"), layer);
+    };
+    if (canvas->workspace() == Workspace::Board) {
+        switch (item.kind) {
+        case SketchItem::Kind::Symbol:
+            bottomSide = new QCheckBox(tr("Place on the bottom side (mirrored)"), &dialog);
+            bottomSide->setObjectName(QStringLiteral("ItemBottomSide"));
+            bottomSide->setChecked(item.onBottom);
+            form->addRow(QString(), bottomSide);
+            break;
+        case SketchItem::Kind::Wire:
+            layerChoice(CopperLayerMask);
+            trackWidthField = size(QStringLiteral("ItemTrackWidth"), trackWidth(item), 0.05);
+            form->addRow(tr("Track width"), trackWidthField);
+            break;
+        case SketchItem::Kind::Pad:
+            padNumber = new QSpinBox(&dialog);
+            padNumber->setObjectName(QStringLiteral("ItemPadNumber"));
+            padNumber->setRange(1, 9999);
+            padNumber->setValue(item.pad.number);
+            form->addRow(tr("Pad number"), padNumber);
+            padShape = new QComboBox(&dialog);
+            padShape->setObjectName(QStringLiteral("ItemPadShape"));
+            padShape->addItem(tr("Round"), static_cast<int>(PadShape::Round));
+            padShape->addItem(tr("Rectangular"), static_cast<int>(PadShape::Rect));
+            padShape->addItem(tr("Oval"), static_cast<int>(PadShape::Oval));
+            padShape->setCurrentIndex(qMax(0, padShape->findData(static_cast<int>(item.pad.shape))));
+            form->addRow(tr("Shape"), padShape);
+            padWidth = size(QStringLiteral("ItemPadWidth"), item.pad.width, 0.05);
+            padHeight = size(QStringLiteral("ItemPadHeight"), item.pad.height, 0.05);
+            padDrill = size(QStringLiteral("ItemPadDrill"), item.pad.drillDiameter, 0.0);
+            padDrill->setToolTip(tr("0 makes a surface mount pad on the selected copper layer"));
+            form->addRow(tr("Width (X)"), padWidth);
+            form->addRow(tr("Height (Y)"), padHeight);
+            form->addRow(tr("Drill (0 = SMD)"), padDrill);
+            layerChoice(CopperLayerMask);
+            break;
+        case SketchItem::Kind::Via:
+            viaDiameterField = size(QStringLiteral("ItemViaDiameter"), viaDiameter(item), 0.1);
+            viaDrillField = size(QStringLiteral("ItemViaDrill"), viaDrill(item), 0.05);
+            form->addRow(tr("Via diameter"), viaDiameterField);
+            form->addRow(tr("Via drill"), viaDrillField);
+            break;
+        default:
+            if (item.variant == CopperZoneVariant) {
+                layerChoice(CopperLayerMask);
+                // Pour net: the schematic's nets, or any name typed in (e.g. before the schematic exists).
+                zoneNet = new QComboBox(&dialog);
+                zoneNet->setObjectName(QStringLiteral("ItemZoneNet"));
+                zoneNet->setEditable(true);
+                zoneNet->addItem(tr("None (not poured)"), QString());
+                const BoardCopperModel model = buildBoardCopperModel(canvases_.value(0)->document(), {});
+                QStringList nets = model.netNames;
+                nets.removeAll(QString());
+                nets.sort(Qt::CaseInsensitive);
+                for (const QString& net : nets) zoneNet->addItem(net, net);
+                const int current = zoneNet->findData(item.net);
+                if (current >= 0) {
+                    zoneNet->setCurrentIndex(current);
+                } else {
+                    zoneNet->setEditText(item.net);
+                }
+                zoneNet->setToolTip(tr("The zone is poured for this net and keeps the design rule clearance "
+                                       "from other copper"));
+                form->addRow(tr("Net"), zoneNet);
+            } else if (item.variant == KeepoutZoneVariant) {
+                layerChoice(CopperLayerMask);
+            } else if (item.variant == AreaZoneVariant) {
+                layerChoice(AllLayersMask & ~CopperLayerMask & ~layerBit(BoardLayer::BoardEdge));
+            } else if (item.variant != BoardOutlineVariant) {
+                layerChoice(AllLayersMask);
+            }
+            if (item.variant == CopperZoneVariant || item.variant == AreaZoneVariant) {
+                // Fill style (ADR-0012): solid, a hatch grid inside a border, or only the boundary.
+                zoneFill = new QComboBox(&dialog);
+                zoneFill->setObjectName(QStringLiteral("ItemZoneFill"));
+                for (const ZoneFillStyle style : {ZoneFillStyle::Solid, ZoneFillStyle::Hatched, ZoneFillStyle::Empty}) {
+                    zoneFill->addItem(zoneFillStyleName(style), static_cast<int>(style));
+                }
+                zoneFill->setCurrentIndex(qMax(0, zoneFill->findData(static_cast<int>(item.zoneFill))));
+                zoneFill->setToolTip(item.variant == CopperZoneVariant
+                                         ? tr("Empty zones are only a boundary: they are not poured and do not conduct")
+                                         : tr("Empty areas are only a boundary and are not fabricated"));
+                form->addRow(tr("Fill"), zoneFill);
+            }
+            if (item.kind == SketchItem::Kind::Text) {
+                textHeightField = size(QStringLiteral("ItemTextHeight"), item.width > 0.0 ? item.width : TextHeightMm, 0.5);
+                form->addRow(tr("Text height"), textHeightField);
+            }
+            break;
+        }
+    } else if (item.kind == SketchItem::Kind::Text) {
+        // Schematic text (#36): font family (StrokeFont is fixed on the board, so no font choice
+        // there) and height, matching the text tool's style bar.
+        fontField = new QFontComboBox(&dialog);
+        fontField->setObjectName(QStringLiteral("ItemFontFamily"));
+        if (!item.fontFamily.isEmpty()) fontField->setCurrentFont(QFont(item.fontFamily));
+        form->addRow(tr("Font"), fontField);
+        textHeightField = size(QStringLiteral("ItemTextHeight"), item.width > 0.0 ? item.width : TextHeightMm, 0.5);
+        form->addRow(tr("Text height"), textHeightField);
+    }
+    auto coordinate = [&](const QString& name, double millimetres) {
         auto* field = new QDoubleSpinBox(&dialog);
         field->setObjectName(name);
         field->setRange(-1e9, 1e9);
         field->setDecimals(6);
-        field->setSuffix(tr(" mm"));
-        field->setValue(value);
+        field->setSuffix(QLatin1Char(' ') + unitSymbol(unit));
+        field->setValue(toDisplayUnit(millimetres, unit));
         return field;
     };
-    auto* x = coordinate(QStringLiteral("ItemPositionX"), item.points.value(0).x());
-    auto* y = coordinate(QStringLiteral("ItemPositionY"), item.points.value(0).y());
-    form->addRow(tr("Anchor X"), x);
-    form->addRow(tr("Anchor Y (positive down)"), y);
-    auto* rotation = new QComboBox(&dialog);
-    rotation->setObjectName(QStringLiteral("ItemRotation"));
-    rotation->addItems({tr("0 degrees"), tr("90 degrees"), tr("180 degrees"), tr("270 degrees")});
-    rotation->setCurrentIndex((item.quarterTurns % 4 + 4) % 4);
-    if (item.kind != SketchItem::Kind::Text) form->addRow(tr("Rotation"), rotation);
-    else rotation->hide();
+    QDoubleSpinBox* x = nullptr;
+    QDoubleSpinBox* y = nullptr;
+    if (item.kind == SketchItem::Kind::Symbol || item.kind == SketchItem::Kind::Pad ||
+        item.kind == SketchItem::Kind::Via || item.kind == SketchItem::Kind::Text) {
+        x = coordinate(QStringLiteral("ItemPositionX"), item.points.value(0).x());
+        y = coordinate(QStringLiteral("ItemPositionY"), item.points.value(0).y());
+        form->addRow(tr("Position X"), x);
+        form->addRow(tr("Position Y"), y);
+    }
+    QComboBox* rotation = nullptr;
+    if (item.kind == SketchItem::Kind::Symbol || item.kind == SketchItem::Kind::Pad) {
+        rotation = new QComboBox(&dialog);
+        rotation->setObjectName(QStringLiteral("ItemRotation"));
+        rotation->addItems({tr("0 degrees"), tr("90 degrees"), tr("180 degrees"), tr("270 degrees")});
+        rotation->setCurrentIndex((item.quarterTurns % 4 + 4) % 4);
+        form->addRow(tr("Rotation"), rotation);
+    }
     auto* validation = new QLabel(&dialog);
     validation->setObjectName(QStringLiteral("ItemPropertiesValidation"));
     validation->setWordWrap(true);
@@ -469,22 +941,102 @@ void MainWindow::editItemProperties(DesignCanvas* canvas, int index) {
                 }
             }
         }
+        if (padDrill && padDrill->value() > 0.0 &&
+            padDrill->value() >= std::min(padWidth->value(), padHeight->value())) {
+            validation->setText(tr("The drill must be smaller than the pad."));
+            return;
+        }
+        if (viaDrillField && viaDrillField->value() >= viaDiameterField->value()) {
+            validation->setText(tr("The via drill must be smaller than the via diameter."));
+            return;
+        }
         dialog.accept();
     });
     connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
     if (dialog.exec() == QDialog::Accepted) {
         auto properties = item;
         properties.label = label->text();
-        properties.points[0] = {x->value(), y->value()};
-        properties.quarterTurns = rotation->currentIndex();
+        if (x && y)
+            properties.points[0] = {fromDisplayUnit(x->value(), unit), fromDisplayUnit(y->value(), unit)};
+        if (rotation) properties.quarterTurns = rotation->currentIndex();
         if (value) properties.value = value->text();
         if (footprint) properties.footprint = footprint->currentData().toString();
+        if (excludeFromBoard) properties.excludeFromBoard = excludeFromBoard->isChecked();
+        if (layer) properties.layer = static_cast<BoardLayer>(layer->currentData().toInt());
+        if (fontField) properties.fontFamily = fontField->currentFont().family();
+        if (bottomSide) properties.onBottom = bottomSide->isChecked();
+        if (trackWidthField) properties.width = fromDisplayUnit(trackWidthField->value(), unit);
+        if (textHeightField) properties.width = fromDisplayUnit(textHeightField->value(), unit);
+        if (padNumber) {
+            properties.pad.number = padNumber->value();
+            properties.pad.shape = static_cast<PadShape>(padShape->currentData().toInt());
+            properties.pad.width = fromDisplayUnit(padWidth->value(), unit);
+            properties.pad.height = fromDisplayUnit(padHeight->value(), unit);
+            properties.pad.drillDiameter = fromDisplayUnit(padDrill->value(), unit);
+            // Through-hole pads conduct on both copper layers; SMD pads on their own layer.
+            properties.pad.layers = properties.pad.drillDiameter > 0.0 ? CopperLayerMask
+                                                                        : layerBit(properties.layer);
+        }
+        if (viaDiameterField) {
+            properties.width = fromDisplayUnit(viaDiameterField->value(), unit);
+            properties.drillDiameter = fromDisplayUnit(viaDrillField->value(), unit);
+        }
+        if (zoneFill) properties.zoneFill = static_cast<ZoneFillStyle>(zoneFill->currentData().toInt());
+        if (zoneNet) {
+            const bool listed = zoneNet->currentIndex() >= 0 && zoneNet->currentText() == zoneNet->itemText(zoneNet->currentIndex());
+            properties.net = listed ? zoneNet->currentData().toString() : zoneNet->currentText().trimmed();
+        }
         properties.pinPadMap = pinPadMap;
         canvas->editItemProperties(index, properties);
     }
 }
 
+void MainWindow::editAgenticSettings() {
+    QDialog dialog(this);
+    dialog.setObjectName(QStringLiteral("PreferencesDialog"));
+    dialog.setWindowTitle(tr("Preferences"));
+    auto* layout = new QVBoxLayout(&dialog);
+    auto* enabled = new QCheckBox(
+        tr("Let external agents (Claude Code, Codex, etc.) use this project over MCP"), &dialog);
+    enabled->setObjectName(QStringLiteral("AgenticMcpEnabled"));
+    enabled->setChecked(QSettings().value(QStringLiteral("agentic/mcpEnabled"), false).toBool());
+    layout->addWidget(enabled);
+    auto* info = new QLabel(&dialog);
+    info->setObjectName(QStringLiteral("AgenticMcpInfo"));
+    info->setWordWrap(true);
+    info->setText(tr("A local MCP server will listen on \"hatteda-agentic-mcp-%1\" (this "
+                     "window's process id); point an MCP-capable agent at it. The app works the "
+                     "same whether this is on or off.")
+                      .arg(QCoreApplication::applicationPid()));
+    info->setVisible(enabled->isChecked());
+    connect(enabled, &QCheckBox::toggled, info, &QLabel::setVisible);
+    layout->addWidget(info);
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+    layout->addWidget(buttons);
+    connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    if (dialog.exec() != QDialog::Accepted) return;
+    QSettings().setValue(QStringLiteral("agentic/mcpEnabled"), enabled->isChecked());
+    updateAgenticServer();
+}
+
+void MainWindow::applyTextStyle() {
+    const QString family = textFontCombo_->currentFont().family();
+    const double height = textSizeSpin_->value();
+    QFont preview = textFontCombo_->currentFont();
+    preview.setPointSizeF(std::clamp(height * 2.8, 7.0, 28.0));
+    textPreviewLabel_->setFont(preview);
+    QSettings().setValue(TextFontKey, family);
+    QSettings().setValue(TextHeightKey, height);
+    if (auto* canvas = activeCanvas()) canvas->setDefaultTextStyle(family, height);
+}
+
 MainWindow::~MainWindow() {
+    // Stop serving agentic requests before anything else is torn down: a request handled mid-
+    // teardown must not call back into a partially destroyed window.
+    if (agenticServer_ != nullptr) {
+        agenticServer_->stop();
+    }
     // Child widgets outlive this destructor body; their teardown signals (e.g. QUndoStack::clear
     // emitting indexChanged) must not reach the partially destroyed window.
     for (auto* canvas : canvases_) {
@@ -492,6 +1044,7 @@ MainWindow::~MainWindow() {
         disconnect(canvas->undoStack(), nullptr, this, nullptr);
     }
     disconnect(objectSelector_, nullptr, this, nullptr);
+    disconnect(zoneList_, nullptr, this, nullptr);
     disconnect(toolWorkspaces_, nullptr, this, nullptr);
 }
 
@@ -533,7 +1086,11 @@ void MainWindow::createActions() {
     const QList<ToolSpec> tools = {
         {ToolMode::Select, "hatteda.tool.select", tr("Selection mode"), "select", "V"},
         {ToolMode::Component, "hatteda.tool.component", tr("Component mode"), "component", "A"},
+        {ToolMode::Package, "hatteda.tool.package", tr("Package mode"), "package", "K"},
         {ToolMode::Connect, "hatteda.tool.connect", tr("Wire and track mode"), "wire", "W"},
+        {ToolMode::Via, "hatteda.tool.via", tr("Via mode"), "via", "I"},
+        {ToolMode::Pad, "hatteda.tool.pad", tr("Pad mode"), "pad", "O"},
+        {ToolMode::Zone, "hatteda.tool.zone", tr("Zone mode"), "zone", "Z"},
         {ToolMode::Terminal, "hatteda.tool.terminal", tr("Terminal and port mode"), "terminal", "R"},
         {ToolMode::Probe, "hatteda.tool.probe", tr("Probe mode"), "probe", "P"},
         {ToolMode::Draw, "hatteda.tool.draw", tr("2D graphics mode"), "draw", "D"},
@@ -586,9 +1143,27 @@ void MainWindow::createActions() {
     canvasAction("hatteda.action.duplicate", tr("Duplicate"), "duplicate",
                  {QKeySequence(QStringLiteral("Ctrl+D"))},
                  [](DesignCanvas* canvas) { canvas->duplicateSelection(); });
+    canvasAction("hatteda.action.array", tr("Create array..."), "", {},
+                 [this](DesignCanvas* canvas) { showArrayDialog(canvas); });
     canvasAction("hatteda.action.rotate", tr("Rotate 90°"), "rotate",
                  {QKeySequence(QStringLiteral("Ctrl+R"))},
                  [](DesignCanvas* canvas) { canvas->rotateSelection(); });
+    // #8: system clipboard cut/copy/paste (SketchClipboard.hpp). Paste with no explicit position
+    // (the shortcut, not the context menu) offsets from the copied items like Duplicate.
+    canvasAction("hatteda.action.cut", tr("Cut"), "cut", {QKeySequence::Cut},
+                 [](DesignCanvas* canvas) { canvas->cutSelection(); });
+    canvasAction("hatteda.action.copy", tr("Copy"), "copy", {QKeySequence::Copy},
+                 [](DesignCanvas* canvas) { canvas->copySelection(); });
+    canvasAction("hatteda.action.paste", tr("Paste"), "paste", {QKeySequence::Paste},
+                 [](DesignCanvas* canvas) { canvas->pasteFromClipboard(); });
+    // #8: schematic component mirroring; the board side already mirrors placement on the bottom
+    // side (onBottom, ItemBottomSide). Enablement (updateEditActions) restricts these to Mergen.
+    canvasAction("hatteda.action.mirror-x", tr("Mirror horizontally"), "mirror-x",
+                 {QKeySequence(QStringLiteral("X"))},
+                 [](DesignCanvas* canvas) { canvas->mirrorSelection(true); });
+    canvasAction("hatteda.action.mirror-y", tr("Mirror vertically"), "mirror-y",
+                 {QKeySequence(QStringLiteral("Y"))},
+                 [](DesignCanvas* canvas) { canvas->mirrorSelection(false); });
     canvasAction("hatteda.action.select-all", tr("Select all"), "", {QKeySequence::SelectAll},
                  [](DesignCanvas* canvas) { canvas->selectAll(); });
     canvasAction("hatteda.action.zoom-in", tr("Zoom in"), "zoom-in",
@@ -599,6 +1174,16 @@ void MainWindow::createActions() {
     canvasAction("hatteda.action.fit", tr("Fit to design"), "fit",
                  {QKeySequence(QStringLiteral("Home")), QKeySequence(QStringLiteral("Ctrl+0"))},
                  [](DesignCanvas* canvas) { canvas->zoomToFit(); });
+
+    // Proteus ARES library commands for Kayra (PackageFromSelection.hpp).
+    auto* makePackageAction = makeAction(QStringLiteral("hatteda.action.make-package"), tr("Make package..."),
+                                         QStringLiteral("package"));
+    makePackageAction->setToolTip(tr("Store the selected pads and silkscreen as a footprint in this project"));
+    connect(makePackageAction, &QAction::triggered, this, &MainWindow::makePackage);
+    auto* decomposeAction =
+        makeAction(QStringLiteral("hatteda.action.decompose"), tr("Decompose"), QStringLiteral("pad"));
+    decomposeAction->setToolTip(tr("Break the selected footprints into editable pads and silkscreen lines"));
+    connect(decomposeAction, &QAction::triggered, this, &MainWindow::decomposeSelection);
 
     struct AlignSpec {
         const char* id;
@@ -626,15 +1211,83 @@ void MainWindow::createActions() {
                      [operation](DesignCanvas* canvas) { canvas->align(operation); });
     }
 
+    // Proteus style snap grid steps: Ctrl+F1 (finest), F2, F3 (default), F4 (coarsest).
+    gridActions_ = new QActionGroup(this);
+    gridActions_->setExclusive(true);
+    gridLevel_ = std::clamp(
+        QSettings().value(QStringLiteral("editor/snap/gridLevel"), gridLevel_).toInt(), 0,
+        DesignCanvas::GridLevelCount - 1);
+    const char* gridShortcuts[DesignCanvas::GridLevelCount] = {"Ctrl+F1", "F2", "F3", "F4"};
+    for (int level = 0; level < DesignCanvas::GridLevelCount; ++level) {
+        auto* action = makeAction(QStringLiteral("hatteda.grid.step-%1").arg(level + 1), QString(),
+                                  QString());
+        action->setCheckable(true);
+        action->setChecked(level == gridLevel_);
+        action->setShortcut(QKeySequence(QString::fromLatin1(gridShortcuts[level])));
+        action->setShortcutContext(Qt::WindowShortcut);
+        action->setData(level);
+        gridActions_->addAction(action);
+        addAction(action);
+        connect(action, &QAction::triggered, this, [this, level] { setGridLevel(level); });
+    }
+
+    // PCB length units are a user preference; the schematic always uses mil (see Units.hpp).
+    unitActions_ = new QActionGroup(this);
+    unitActions_->setExclusive(true);
+    boardUnit_ = unitFromSetting(QSettings().value(QStringLiteral("editor/units/board")).toString());
+    for (const auto& [id, text, unit] :
+         {std::tuple{"hatteda.units.board-mm", tr("Millimetres (mm)"), LengthUnit::Millimetre},
+          std::tuple{"hatteda.units.board-in", tr("Inches (in)"), LengthUnit::Inch}}) {
+        auto* action = makeAction(QString::fromLatin1(id), text, QString());
+        action->setCheckable(true);
+        action->setChecked(unit == boardUnit_);
+        unitActions_->addAction(action);
+        const LengthUnit chosen = unit;
+        connect(action, &QAction::triggered, this, [this, chosen] { setBoardUnit(chosen); });
+    }
+
     auto* save = makeAction(QStringLiteral("hatteda.action.save"), tr("Save"), QString());
     save->setShortcut(QKeySequence::Save);
     save->setEnabled(false);
-    save->setToolTip(tr("Project files are not available yet"));
+    connect(save, &QAction::triggered, this, &MainWindow::saveProject);
+    auto* saveAs = makeAction(QStringLiteral("hatteda.action.save-as"), tr("Save as..."), QString());
+    saveAs->setShortcut(QKeySequence(QStringLiteral("Ctrl+Shift+S")));
+    saveAs->setEnabled(false);
+    connect(saveAs, &QAction::triggered, this, &MainWindow::saveProjectAs);
+
+    auto* fabrication =
+        makeAction(QStringLiteral("hatteda.action.export-fabrication"),
+                   tr("Export Gerber and drill files..."), QStringLiteral("package"));
+    fabrication->setEnabled(false);
+    fabrication->setToolTip(tr("Generate Gerber X2 layers and an Excellon plated drill file"));
+    connect(fabrication, &QAction::triggered, this, &MainWindow::exportFabricationFiles);
+    auto* bom = makeAction(QStringLiteral("hatteda.action.export-bom"), tr("Export bill of materials..."), QString());
+    bom->setEnabled(false);
+    bom->setToolTip(tr("Write the schematic parts grouped by value and footprint as CSV"));
+    connect(bom, &QAction::triggered, this, [this] { exportBom(); });
+    auto* placement =
+        makeAction(QStringLiteral("hatteda.action.export-pick-place"), tr("Export pick and place..."), QString());
+    placement->setEnabled(false);
+    placement->setToolTip(tr("Write footprint centres, rotations and sides as CSV for assembly"));
+    connect(placement, &QAction::triggered, this, [this] { exportPlacement(); });
+    auto* printLayout = makeAction(QStringLiteral("hatteda.action.print-layout"), tr("Print layout..."), QString());
+    printLayout->setEnabled(false);
+    printLayout->setShortcut(QKeySequence::Print);
+    printLayout->setToolTip(tr("Print or save the board artwork as PDF, repeated to fill the page"));
+    connect(printLayout, &QAction::triggered, this, &MainWindow::showPrintLayout);
 
     auto* checks = makeAction(QStringLiteral("hatteda.action.run-checks"), tr("Run design checks"),
                               QStringLiteral("check"));
     checks->setEnabled(false);
-    checks->setToolTip(tr("Electrical and design rule checks are not available yet"));
+    checks->setToolTip(tr("Run design checks: electrical rules (schematic) and design rules (PCB)"));
+    connect(checks, &QAction::triggered, this, [this] {
+        if (shellPages_->currentIndex() == 1) runDesignChecks();
+    });
+    auto* rules = makeAction(QStringLiteral("hatteda.action.design-rules"), tr("Design rules..."), QString());
+    rules->setEnabled(false);
+    connect(rules, &QAction::triggered, this, [this] {
+        if (shellPages_->currentIndex() == 1) editDesignRules();
+    });
 }
 
 QWidget* MainWindow::createEditor() {
@@ -732,13 +1385,144 @@ QWidget* MainWindow::createEditor() {
     contextLayout->addWidget(contextHint_);
     objectsLabel_ = label(tr("OBJECTS"), QStringLiteral("SectionLabel"), contextPanel);
     contextLayout->addWidget(objectsLabel_);
+    // Proteus style device list controls, shown in schematic component mode.
+    deviceBar_ = new QWidget(contextPanel);
+    deviceBar_->setObjectName(QStringLiteral("DeviceBar"));
+    auto* deviceLayout = new QGridLayout(deviceBar_);
+    deviceLayout->setContentsMargins(0, 0, 0, 0);
+    deviceLayout->setSpacing(6);
+    auto* pickDevices = new QPushButton(tr("Pick devices..."), deviceBar_);
+    pickDevices->setObjectName(QStringLiteral("hatteda.devices.pick"));
+    pickDevices->setToolTip(tr("Add devices from the library to this project"));
+    connect(pickDevices, &QPushButton::clicked, this, &MainWindow::pickDevices);
+    removeDeviceButton_ = new QPushButton(tr("Remove"), deviceBar_);
+    removeDeviceButton_->setObjectName(QStringLiteral("hatteda.devices.remove"));
+    removeDeviceButton_->setProperty("quiet", true);
+    removeDeviceButton_->setToolTip(
+        tr("Remove the selected device from the project list (only when the schematic does not use it)"));
+    connect(removeDeviceButton_, &QPushButton::clicked, this, &MainWindow::removeSelectedDevice);
+    auto* newDevice = new QPushButton(tr("New device..."), deviceBar_);
+    newDevice->setObjectName(QStringLiteral("hatteda.devices.new"));
+    newDevice->setProperty("quiet", true);
+    newDevice->setToolTip(tr("Create a device with its pins, datasheet data and footprint"));
+    connect(newDevice, &QPushButton::clicked, this, &MainWindow::newDevice);
+    deviceLayout->addWidget(pickDevices, 0, 0, 1, 2);
+    deviceLayout->addWidget(newDevice, 1, 0);
+    deviceLayout->addWidget(removeDeviceButton_, 1, 1);
+    contextLayout->addWidget(deviceBar_);
+    // Board component mode: place every waiting part at once (Proteus ARES auto placer).
+    boardPartsBar_ = new QWidget(contextPanel);
+    boardPartsBar_->setObjectName(QStringLiteral("BoardPartsBar"));
+    auto* partsLayout = new QHBoxLayout(boardPartsBar_);
+    partsLayout->setContentsMargins(0, 0, 0, 0);
+    auto* autoPlace = new QPushButton(tr("Auto placer..."), boardPartsBar_);
+    autoPlace->setObjectName(QStringLiteral("hatteda.parts.auto-place"));
+    autoPlace->setToolTip(tr("Place all listed components inside the board outline"));
+    connect(autoPlace, &QPushButton::clicked, this, [this] {
+        if (auto* action = findChild<QAction*>(QStringLiteral("hatteda.action.auto-place"))) action->trigger();
+    });
+    partsLayout->addWidget(autoPlace, 1);
+    contextLayout->addWidget(boardPartsBar_);
+    // Board track and via modes: create, edit and delete the user's own styles.
+    routingStyleBar_ = new QWidget(contextPanel);
+    routingStyleBar_->setObjectName(QStringLiteral("RoutingStyleBar"));
+    auto* styleLayout = new QHBoxLayout(routingStyleBar_);
+    styleLayout->setContentsMargins(0, 0, 0, 0);
+    styleLayout->setSpacing(6);
+    auto* newStyle = new QPushButton(tr("New style..."), routingStyleBar_);
+    newStyle->setObjectName(QStringLiteral("hatteda.styles.new"));
+    connect(newStyle, &QPushButton::clicked, this, [this] { editRoutingStyle(true); });
+    editStyleButton_ = new QPushButton(tr("Edit..."), routingStyleBar_);
+    editStyleButton_->setObjectName(QStringLiteral("hatteda.styles.edit"));
+    editStyleButton_->setProperty("quiet", true);
+    connect(editStyleButton_, &QPushButton::clicked, this, [this] { editRoutingStyle(false); });
+    deleteStyleButton_ = new QPushButton(tr("Delete"), routingStyleBar_);
+    deleteStyleButton_->setObjectName(QStringLiteral("hatteda.styles.delete"));
+    deleteStyleButton_->setProperty("quiet", true);
+    connect(deleteStyleButton_, &QPushButton::clicked, this, &MainWindow::deleteRoutingStyle);
+    styleLayout->addWidget(newStyle, 1);
+    styleLayout->addWidget(editStyleButton_);
+    styleLayout->addWidget(deleteStyleButton_);
+    contextLayout->addWidget(routingStyleBar_);
+    // Draw mode, Text tool: default font (schematic; board fabrication always uses StrokeFont),
+    // height and a live preview (#36), shown while the Text row is selected.
+    textStyleBar_ = new QWidget(contextPanel);
+    textStyleBar_->setObjectName(QStringLiteral("TextStyleBar"));
+    auto* textLayout = new QVBoxLayout(textStyleBar_);
+    textLayout->setContentsMargins(0, 0, 0, 0);
+    textLayout->setSpacing(6);
+    textFontCombo_ = new QFontComboBox(textStyleBar_);
+    textFontCombo_->setObjectName(QStringLiteral("TextFontCombo"));
+    textLayout->addWidget(textFontCombo_);
+    textSizeSpin_ = new QDoubleSpinBox(textStyleBar_);
+    textSizeSpin_->setObjectName(QStringLiteral("TextSizeSpin"));
+    textSizeSpin_->setDecimals(2);
+    textSizeSpin_->setRange(0.5, 50.0);
+    textSizeSpin_->setSingleStep(0.25);
+    textSizeSpin_->setSuffix(QStringLiteral(" mm"));
+    textLayout->addWidget(textSizeSpin_);
+    textPreviewLabel_ = new QLabel(textStyleBar_);
+    textPreviewLabel_->setObjectName(QStringLiteral("TextPreviewLabel"));
+    textPreviewLabel_->setText(QStringLiteral("Aa 123"));
+    textPreviewLabel_->setAlignment(Qt::AlignCenter);
+    textPreviewLabel_->setMinimumHeight(40);
+    textPreviewLabel_->setFrameShape(QFrame::StyledPanel);
+    textLayout->addWidget(textPreviewLabel_);
+    connect(textFontCombo_, &QFontComboBox::currentFontChanged, this, [this] { applyTextStyle(); });
+    connect(textSizeSpin_, &QDoubleSpinBox::valueChanged, this, [this] { applyTextStyle(); });
+    contextLayout->addWidget(textStyleBar_);
     objectSelector_ = new QListWidget(contextPanel);
     objectSelector_->setObjectName(QStringLiteral("ObjectSelector"));
     objectSelector_->setIconSize(QSize(32, 32));
     connect(objectSelector_, &QListWidget::currentRowChanged, this,
             [this] { applyObjectSelection(); });
     contextLayout->addWidget(objectSelector_, 1);
+    // Kayra zone mode: the board's zones with their net, class and fill (ADR-0012).
+    zonesLabel_ = label(tr("ZONES"), QStringLiteral("SectionLabel"), contextPanel);
+    contextLayout->addWidget(zonesLabel_);
+    zoneList_ = new QListWidget(contextPanel);
+    zoneList_->setObjectName(QStringLiteral("ZoneList"));
+    // Long summaries are elided in the narrow panel; the row tooltip has the full text.
+    zoneList_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    zoneList_->setTextElideMode(Qt::ElideRight);
+    // At least one row; on short windows the layer panel below keeps its room.
+    zoneList_->setMinimumHeight(48);
+    zoneList_->setToolTip(tr("Click a zone to select it on the board; double-click to edit its net, layer and fill"));
+    connect(zoneList_, &QListWidget::itemClicked, this, [this](QListWidgetItem* row) {
+        if (auto* board = canvases_.value(1, nullptr)) {
+            board->revealItems({row->data(ZoneIdRole).toString()}, std::nullopt);
+            board->setFocus();
+        }
+    });
+    connect(zoneList_, &QListWidget::itemDoubleClicked, this, [this](QListWidgetItem* row) {
+        auto* board = canvases_.value(1, nullptr);
+        if (board == nullptr) return;
+        const QString id = row->data(ZoneIdRole).toString();
+        for (int index = 0; index < board->document().size(); ++index) {
+            if (board->document().at(index).id == id) {
+                editItemProperties(board, index);
+                return;
+            }
+        }
+    });
+    contextLayout->addWidget(zoneList_, 1);
+    zonesLabel_->hide();
+    zoneList_->hide();
     contextLayout->addStretch();
+    // Board layers at the bottom left (Proteus ARES); the panel and the board canvas keep the
+    // active layer in sync, including Space / Page Up / Page Down on the canvas.
+    boardLayerPanel_ = new BoardLayerPanel(contextPanel);
+    if (auto* board = canvases_.value(1, nullptr)) {
+        board->setActiveLayer(boardLayerPanel_->activeLayer());
+        board->setVisibleLayers(boardLayerPanel_->visibleLayers());
+        connect(boardLayerPanel_, &BoardLayerPanel::activeLayerChanged, board, [board](BoardLayer layer) {
+            board->setActiveLayer(layer);
+            board->setFocus();
+        });
+        connect(boardLayerPanel_, &BoardLayerPanel::visibleLayersChanged, board, &DesignCanvas::setVisibleLayers);
+        connect(board, &DesignCanvas::activeLayerChanged, boardLayerPanel_, &BoardLayerPanel::setActiveLayer);
+    }
+    contextLayout->addWidget(boardLayerPanel_);
     bodyLayout->addWidget(contextPanel);
 
     primaryWorkspaces_ = new QStackedWidget(body);
@@ -788,6 +1572,10 @@ QWidget* MainWindow::createEditor() {
         {"objects", tr("Objects"), tr("Snap to pins, pads, vertices and corners"), true},
         {"edges", tr("Edges"), tr("Snap to the nearest point on object edges"), false},
         {"centers", tr("Centres"), tr("Snap to object centres"), false},
+        {"guides", tr("Guides"),
+         tr("Show alignment guides to other pins, vertices and symbol centres while placing, "
+            "moving and drawing"),
+         true},
         {"diagonal", tr("45°"), tr("Constrain wires and lines to 45° steps"), true},
         {"orthogonal", tr("Orthogonal"), tr("Constrain wires and lines to horizontal and vertical"), false},
     };
@@ -803,6 +1591,15 @@ QWidget* MainWindow::createEditor() {
         toggle->setChecked(settings.value(QStringLiteral("editor/snap/") + key, spec.enabledByDefault).toBool());
         snapToggles_.append(toggle);
         alignmentLayout->addWidget(toggle);
+        if (key == QLatin1String("grid")) {
+            gridStepButton_ = new QPushButton(alignmentBar);
+            gridStepButton_->setObjectName(QStringLiteral("GridStepButton"));
+            gridStepButton_->setProperty("snap", true);
+            auto* gridMenu = new QMenu(gridStepButton_);
+            gridMenu->addActions(gridActions_->actions());
+            gridStepButton_->setMenu(gridMenu);
+            alignmentLayout->addWidget(gridStepButton_);
+        }
         connect(toggle, &QPushButton::toggled, this, [this, key](bool checked) {
             if (checked && (key == QLatin1String("diagonal") || key == QLatin1String("orthogonal"))) {
                 const QString other = key == QLatin1String("diagonal") ? QStringLiteral("orthogonal")
@@ -819,8 +1616,13 @@ QWidget* MainWindow::createEditor() {
             applySnapSettings();
         });
     }
-    if (snapToggles_[4]->isChecked() && snapToggles_[5]->isChecked()) {
-        snapToggles_[4]->setChecked(false);
+    auto snapToggle = [this](const char* key) {
+        return *std::find_if(snapToggles_.begin(), snapToggles_.end(), [key](QPushButton* button) {
+            return button->property("snapKey").toString() == QLatin1String(key);
+        });
+    };
+    if (snapToggle("diagonal")->isChecked() && snapToggle("orthogonal")->isChecked()) {
+        snapToggle("diagonal")->setChecked(false);
     }
     alignmentLayout->addStretch();
     alignmentLayout->addWidget(label(tr("ALIGN"), QStringLiteral("SectionLabel"), alignmentBar));
@@ -854,13 +1656,47 @@ QWidget* MainWindow::createEditor() {
 void MainWindow::createMenus() {
     auto* fileMenu = menuBar()->addMenu(tr("&File"));
     auto* newProject = fileMenu->addAction(tr("New project"));
+    // Block-listed for agentic callers (ADR-0013): routes through the blocking
+    // Save/Discard/Cancel dialog in `maybeSaveChanges` whenever the project has unsaved changes.
+    newProject->setObjectName(QStringLiteral("hatteda.action.new-project"));
     newProject->setShortcut(QKeySequence::New);
     connect(newProject, &QAction::triggered, this, &MainWindow::createNewProject);
     auto* open = fileMenu->addAction(tr("Open project…"));
+    // Block-listed for agentic callers (ADR-0013): same blocking Save/Discard/Cancel dialog as
+    // New project, plus `ProjectGuard::confirmLock`'s blocking "Open anyway" dialog.
+    open->setObjectName(QStringLiteral("hatteda.action.open-project"));
     open->setShortcut(QKeySequence::Open);
     connect(open, &QAction::triggered, this, &MainWindow::openProject);
+    auto* openRecent = fileMenu->addAction(tr("Open recent project"));
+    // Block-listed for agentic callers (ADR-0013): openRecentProject() routes through the same
+    // blocking Save/Discard/Cancel dialog as Open project via `maybeSaveChanges`.
+    openRecent->setObjectName(QStringLiteral("hatteda.action.open-recent"));
+    connect(openRecent, &QAction::triggered, this, [this]() {
+        const QStringList recent = QSettings().value(QStringLiteral("recentProjects")).toStringList();
+        if (!recent.isEmpty()) openRecentProject(recent.first());
+    });
     fileMenu->addSeparator();
     fileMenu->addAction(actions_.value(QStringLiteral("hatteda.action.save")));
+    fileMenu->addAction(actions_.value(QStringLiteral("hatteda.action.save-as")));
+    fileMenu->addAction(actions_.value(QStringLiteral("hatteda.action.export-fabrication")));
+    fileMenu->addAction(actions_.value(QStringLiteral("hatteda.action.export-bom")));
+    fileMenu->addAction(actions_.value(QStringLiteral("hatteda.action.export-pick-place")));
+    fileMenu->addAction(actions_.value(QStringLiteral("hatteda.action.print-layout")));
+    fileMenu->addSeparator();
+    // Quitting closes the window, so closeEvent asks about unsaved changes.
+    auto* quit = fileMenu->addAction(tr("Quit"));
+    quit->setObjectName(QStringLiteral("hatteda.action.quit"));
+    quit->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_Q));
+    connect(quit, &QAction::triggered, this, &QWidget::close);
+
+    // Proteus ARES keeps fabrication and printing together in an Output menu.
+    auto* outputMenu = menuBar()->addMenu(tr("&Output"));
+    outputMenu->setObjectName(QStringLiteral("OutputMenu"));
+    outputMenu->addAction(actions_.value(QStringLiteral("hatteda.action.print-layout")));
+    outputMenu->addSeparator();
+    outputMenu->addAction(actions_.value(QStringLiteral("hatteda.action.export-fabrication")));
+    outputMenu->addAction(actions_.value(QStringLiteral("hatteda.action.export-bom")));
+    outputMenu->addAction(actions_.value(QStringLiteral("hatteda.action.export-pick-place")));
 
     auto* editMenu = menuBar()->addMenu(tr("&Edit"));
     editMenu->addAction(actions_.value(QStringLiteral("hatteda.action.undo")));
@@ -868,6 +1704,7 @@ void MainWindow::createMenus() {
     editMenu->addSeparator();
     editMenu->addAction(actions_.value(QStringLiteral("hatteda.action.rotate")));
     editMenu->addAction(actions_.value(QStringLiteral("hatteda.action.duplicate")));
+    editMenu->addAction(actions_.value(QStringLiteral("hatteda.action.array")));
     editMenu->addAction(actions_.value(QStringLiteral("hatteda.action.delete")));
     editMenu->addSeparator();
     editMenu->addAction(actions_.value(QStringLiteral("hatteda.action.select-all")));
@@ -876,6 +1713,17 @@ void MainWindow::createMenus() {
     viewMenu->addAction(actions_.value(QStringLiteral("hatteda.action.zoom-in")));
     viewMenu->addAction(actions_.value(QStringLiteral("hatteda.action.zoom-out")));
     viewMenu->addAction(actions_.value(QStringLiteral("hatteda.action.fit")));
+    viewMenu->addSeparator();
+    viewMenu->addMenu(tr("Snap grid"))->addActions(gridActions_->actions());
+    viewMenu->addMenu(tr("PCB units"))->addActions(unitActions_->actions());
+    auto* layerColors = viewMenu->addAction(tr("Layer colours..."));
+    layerColors->setObjectName(QStringLiteral("hatteda.action.layer-colors"));
+    connect(layerColors, &QAction::triggered, this, [this] {
+        if (!editLayerColorsDialog(this, palette().color(QPalette::Window).lightness() < 128)) return;
+        boardLayerPanel_->refreshColors();
+        for (auto* canvas : canvases_) canvas->update();
+        rebuildObjectSelector();
+    });
     viewMenu->addSeparator();
     auto* diagnostics = viewMenu->addAction(tr("Simulation diagnostics"));
     connect(diagnostics, &QAction::triggered, this, &MainWindow::openDiagnosticsWorkspace);
@@ -908,6 +1756,10 @@ void MainWindow::createMenus() {
             [setLanguage] { setLanguage(QStringLiteral("en")); });
     connect(languageMenu->addAction(QStringLiteral("Türkçe")), &QAction::triggered, this,
             [setLanguage] { setLanguage(QStringLiteral("tr")); });
+    viewMenu->addSeparator();
+    auto* preferences = viewMenu->addAction(tr("Preferences..."));
+    preferences->setObjectName(QStringLiteral("hatteda.action.preferences"));
+    connect(preferences, &QAction::triggered, this, &MainWindow::editAgenticSettings);
 
     auto* toolsMenu = menuBar()->addMenu(tr("&Tools"));
     toolsMenu->addActions(toolActions_->actions());
@@ -920,7 +1772,26 @@ void MainWindow::createMenus() {
         alignMenu->addAction(actions_.value(QString::fromLatin1(id)));
     }
     designMenu->addSeparator();
+    auto* pick = designMenu->addAction(tr("Pick devices..."));
+    pick->setObjectName(QStringLiteral("hatteda.action.pick-devices"));
+    connect(pick, &QAction::triggered, this, [this] {
+        if (shellPages_->currentIndex() == 1) pickDevices();
+    });
+    auto* createDevice = designMenu->addAction(tr("New device..."));
+    createDevice->setObjectName(QStringLiteral("hatteda.action.new-device"));
+    connect(createDevice, &QAction::triggered, this, [this] {
+        if (shellPages_->currentIndex() == 1) newDevice();
+    });
+    auto* createFootprint = designMenu->addAction(tr("New footprint..."));
+    createFootprint->setObjectName(QStringLiteral("hatteda.action.new-footprint"));
+    connect(createFootprint, &QAction::triggered, this, [this] {
+        if (shellPages_->currentIndex() == 1) newFootprint();
+    });
+    designMenu->addAction(actions_.value(QStringLiteral("hatteda.action.make-package")));
+    designMenu->addAction(actions_.value(QStringLiteral("hatteda.action.decompose")));
+    designMenu->addSeparator();
     designMenu->addAction(actions_.value(QStringLiteral("hatteda.action.run-checks")));
+    designMenu->addAction(actions_.value(QStringLiteral("hatteda.action.design-rules")));
 
     auto* helpMenu = menuBar()->addMenu(tr("&Help"));
     connect(helpMenu->addAction(tr("About HattEDA")), &QAction::triggered, this, [this] {
@@ -964,12 +1835,116 @@ void MainWindow::rebuildObjectSelector() {
             item->setData(VariantRole, variant);
             item->setData(IconRole, icon);
         };
+        boardParts_.clear();
+        boardPartProblems_.clear();
         switch (toolMode_) {
         case ToolMode::Component:
-            addSymbols(SymbolCategory::Component);
+            if (workspace == Workspace::Schematic) {
+                for (const auto& id : projectDevices()) {
+                    const auto* symbol = findSymbol(id);
+                    auto* item = new QListWidgetItem(symbolIcon(id, palette()), symbolDisplayName(*symbol),
+                                                     objectSelector_);
+                    item->setData(ToolRole, static_cast<int>(CanvasTool::Symbol));
+                    item->setData(VariantRole, id);
+                }
+            } else {
+                // Only schematic components that are not on the board yet, as in Proteus ARES.
+                const auto waiting = unplacedBoardParts(canvases_[0]->document(), canvases_[1]->document());
+                boardParts_ = waiting.parts;
+                boardPartProblems_ = waiting.problems;
+                for (int part = 0; part < boardParts_.size(); ++part) {
+                    const auto& footprint = boardParts_.at(part);
+                    const auto* symbol = findSymbol(footprint.variant);
+                    auto* item = new QListWidgetItem(
+                        symbolIcon(footprint.variant, palette()),
+                        QStringLiteral("%1  ·  %2").arg(footprint.label, symbolDisplayName(*symbol)),
+                        objectSelector_);
+                    item->setData(ToolRole, static_cast<int>(CanvasTool::Symbol));
+                    item->setData(VariantRole, footprint.variant);
+                    item->setData(PartRole, part);
+                    item->setToolTip(footprint.value);
+                }
+            }
+            componentKeys_ = componentListKeys();
+            break;
+        case ToolMode::Package:
+            // Proteus ARES package mode: any footprint, without a schematic part.
+            if (workspace == Workspace::Board) {
+                addSymbols(SymbolCategory::Component);
+                // Then the project's own footprints (Make package, New footprint).
+                for (const auto& footprint : library_.customFootprints) {
+                    const auto* symbol = findSymbol(footprint.id);
+                    if (symbol == nullptr) continue;
+                    auto* item = new QListWidgetItem(symbolIcon(symbol->id, palette()), symbolDisplayName(*symbol),
+                                                     objectSelector_);
+                    item->setData(ToolRole, static_cast<int>(CanvasTool::Symbol));
+                    item->setData(VariantRole, symbol->id);
+                    item->setToolTip(tr("Project footprint"));
+                }
+            }
+            break;
+        case ToolMode::Connect:
+            if (workspace == Workspace::Board) {
+                for (const auto& style : routingStyles(RoutingStyleKind::Track)) {
+                    auto* item = new QListWidgetItem(
+                        trackStyleIcon(style.width, palette()),
+                        tr("%1  ·  %2 mm  ·  %3 th")
+                            .arg(style.name)
+                            .arg(style.width, 0, 'f', 3)
+                            .arg(style.width * 1000.0 / 25.4, 0, 'f', 1),
+                        objectSelector_);
+                    item->setData(ToolRole, static_cast<int>(CanvasTool::Wire));
+                    item->setData(IconRole, QStringLiteral("wire"));
+                    item->setData(StyleRole, style.name);
+                    item->setData(CustomStyleRole, !style.builtIn);
+                    if (!style.builtIn) item->setToolTip(tr("Your own style"));
+                }
+            }
+            break;
+        case ToolMode::Via:
+            if (workspace == Workspace::Board) {
+                for (const auto& style : routingStyles(RoutingStyleKind::Via)) {
+                    auto* item = new QListWidgetItem(
+                        symbolIcon(QStringLiteral("via"), palette()),
+                        tr("%1  ·  %2 / %3 mm").arg(style.name).arg(style.width, 0, 'f', 2).arg(style.drill, 0, 'f', 2),
+                        objectSelector_);
+                    item->setData(ToolRole, static_cast<int>(CanvasTool::Via));
+                    item->setData(VariantRole, QStringLiteral("via"));
+                    item->setData(StyleRole, style.name);
+                    item->setData(CustomStyleRole, !style.builtIn);
+                    if (!style.builtIn) item->setToolTip(tr("Your own style"));
+                }
+            }
+            break;
+        case ToolMode::Pad:
+            if (workspace == Workspace::Board) {
+                for (const auto& style : padStyleEntries()) {
+                    auto* item = new QListWidgetItem(symbolIcon(style.id, palette()), style.name, objectSelector_);
+                    item->setData(ToolRole, static_cast<int>(CanvasTool::Pad));
+                    item->setData(VariantRole, style.id);
+                    item->setData(CustomStyleRole, !style.builtIn);
+                    item->setToolTip(tr("%1 × %2 mm, drill %3")
+                                         .arg(style.pad.width, 0, 'f', 2)
+                                         .arg(style.pad.height, 0, 'f', 2)
+                                         .arg(style.pad.drillDiameter > 0.0
+                                                  ? QString::number(style.pad.drillDiameter, 'f', 2)
+                                                  : tr("none (SMD)")));
+                }
+            }
             break;
         case ToolMode::Terminal:
-            addSymbols(SymbolCategory::Terminal);
+            if (workspace == Workspace::Board) {
+                // Test points and mounting holes; pads and vias have their own modes.
+                for (const auto* symbol : symbolsFor(workspace, SymbolCategory::Terminal)) {
+                    if (symbol->id == QLatin1String("board.via")) continue; // superseded by the via tool
+                    auto* item = new QListWidgetItem(symbolIcon(symbol->id, palette()),
+                                                     symbolDisplayName(*symbol), objectSelector_);
+                    item->setData(ToolRole, static_cast<int>(CanvasTool::Symbol));
+                    item->setData(VariantRole, symbol->id);
+                }
+            } else {
+                addSymbols(SymbolCategory::Terminal);
+            }
             break;
         case ToolMode::Probe:
             addSymbols(SymbolCategory::Probe);
@@ -982,22 +1957,75 @@ void MainWindow::rebuildObjectSelector() {
             addTool(CanvasTool::Arc, tr("Arc"), QStringLiteral("arc"));
             addTool(CanvasTool::Text, tr("Text"), QStringLiteral("text"));
             if (workspace == Workspace::Board) {
+                // Zones have their own mode (ToolMode::Zone).
                 addTool(CanvasTool::Polyline, tr("Board outline"), QStringLiteral("outline"),
                         BoardOutlineVariant);
-                addTool(CanvasTool::Polyline, tr("Copper zone"), QStringLiteral("zone"),
-                        CopperZoneVariant);
+            }
+            break;
+        case ToolMode::Zone:
+            if (workspace == Workspace::Board) {
+                // Copper pours first, then the non-copper kinds (ADR-0012).
+                addTool(CanvasTool::Zone, tr("Copper zone"), QStringLiteral("zone"), CopperZoneVariant);
+                objectSelector_->item(objectSelector_->count() - 1)
+                    ->setToolTip(tr("Copper pour on the active copper layer; choose its net in the properties"));
+                addTool(CanvasTool::Zone, tr("Keepout zone"), QStringLiteral("keepout"), KeepoutZoneVariant);
+                objectSelector_->item(objectSelector_->count() - 1)
+                    ->setToolTip(tr("No copper on the active copper layer: pours stay out and the DRC reports "
+                                    "tracks, pads and vias inside"));
+                addTool(CanvasTool::Zone, tr("Area zone (silk, resist, paste)"), QStringLiteral("area"),
+                        AreaZoneVariant);
+                objectSelector_->item(objectSelector_->count() - 1)
+                    ->setToolTip(tr("Filled area on the active silk, resist or paste layer"));
             }
             break;
         case ToolMode::Select:
-        case ToolMode::Connect:
         case ToolMode::Measure:
             break;
         }
         const bool hasObjects = objectSelector_->count() > 0;
-        objectSelector_->setVisible(hasObjects);
-        objectsLabel_->setVisible(hasObjects);
+        const bool componentMode = toolMode_ == ToolMode::Component;
+        objectSelector_->setVisible(hasObjects || componentMode);
+        objectsLabel_->setVisible(hasObjects || componentMode);
+        objectsLabel_->setText(!componentMode ? tr("OBJECTS")
+                               : workspace == Workspace::Schematic ? tr("DEVICES")
+                                                                   : tr("COMPONENTS TO PLACE"));
+        deviceBar_->setVisible(componentMode && workspace == Workspace::Schematic);
+        boardPartsBar_->setVisible(componentMode && workspace == Workspace::Board);
+        routingStyleBar_->setVisible(workspace == Workspace::Board &&
+                                     (toolMode_ == ToolMode::Connect || toolMode_ == ToolMode::Via ||
+                                      toolMode_ == ToolMode::Pad));
+        const bool zoneMode = toolMode_ == ToolMode::Zone && workspace == Workspace::Board;
+        zonesLabel_->setVisible(zoneMode);
+        zoneList_->setVisible(zoneMode);
+        // Zone mode shows two lists: the three zone kinds get compact rows at their exact height, and
+        // the zone list below takes the rest of the panel.
+        objectSelector_->setIconSize(zoneMode ? QSize(22, 22) : QSize(32, 32));
+        if (zoneMode) {
+            int kindsHeight = 2 * objectSelector_->frameWidth();
+            for (int row = 0; row < objectSelector_->count(); ++row) kindsHeight += objectSelector_->sizeHintForRow(row);
+            objectSelector_->setFixedHeight(kindsHeight);
+        } else {
+            objectSelector_->setMinimumHeight(0);
+            objectSelector_->setMaximumHeight(QWIDGETSIZE_MAX);
+        }
+        refreshZoneList();
+        boardLayerPanel_->setVisible(workspace == Workspace::Board);
         if (hasObjects) {
-            const int row = rememberedObjectRows_.value(rememberKey(static_cast<int>(toolMode_), workspace), 0);
+            int fallback = 0;
+            if (workspace == Workspace::Board &&
+                (toolMode_ == ToolMode::Connect || toolMode_ == ToolMode::Via)) {
+                // Track and via styles persist across sessions.
+                const bool track = toolMode_ == ToolMode::Connect;
+                const QString style = QSettings()
+                                          .value(track ? TrackStyleKey : ViaStyleKey,
+                                                 track ? QStringLiteral("T12") : QStringLiteral("V32"))
+                                          .toString();
+                for (int row = 0; row < objectSelector_->count(); ++row) {
+                    if (objectSelector_->item(row)->data(StyleRole).toString() == style) fallback = row;
+                }
+            }
+            const int row =
+                rememberedObjectRows_.value(rememberKey(static_cast<int>(toolMode_), workspace), fallback);
             objectSelector_->setCurrentRow(std::clamp(row, 0, objectSelector_->count() - 1));
         }
     }
@@ -1021,13 +2049,33 @@ void MainWindow::applyObjectSelection() {
         tool = CanvasTool::Wire;
         iconKind = QStringLiteral("wire");
         caption = workspace == Workspace::Board ? tr("Track") : tr("Wire");
+        if (auto* item = objectSelector_->currentItem()) {
+            const RoutingStyle style =
+                findRoutingStyle(RoutingStyleKind::Track, item->data(StyleRole).toString());
+            if (style.width > 0.0) canvas->setTrackWidth(style.width);
+            QSettings().setValue(TrackStyleKey, style.name);
+            caption = tr("Track %1  ·  %2").arg(style.name, formatLength(style.width, LengthUnit::Millimetre));
+            rememberedObjectRows_.insert(rememberKey(static_cast<int>(toolMode_), workspace),
+                                         objectSelector_->currentRow());
+        }
+        if (workspace == Workspace::Board) refreshRouteClasses();
         break;
     case ToolMode::Measure:
         tool = CanvasTool::Measure;
         iconKind = QStringLiteral("measure");
         caption = tr("Measure distance");
         break;
+    case ToolMode::Via:
+        if (auto* item = objectSelector_->currentItem()) {
+            const RoutingStyle style = findRoutingStyle(RoutingStyleKind::Via, item->data(StyleRole).toString());
+            if (style.width > 0.0) canvas->setViaSize(style.width, style.drill);
+            QSettings().setValue(ViaStyleKey, style.name);
+        }
+        [[fallthrough]];
     case ToolMode::Component:
+    case ToolMode::Package:
+    case ToolMode::Pad:
+    case ToolMode::Zone:
     case ToolMode::Terminal:
     case ToolMode::Probe:
     case ToolMode::Draw:
@@ -1036,7 +2084,7 @@ void MainWindow::applyObjectSelection() {
             variant = item->data(VariantRole).toString();
             iconKind = item->data(IconRole).toString();
             caption = item->text();
-            if (tool == CanvasTool::Symbol) {
+            if (tool == CanvasTool::Symbol || tool == CanvasTool::Pad || tool == CanvasTool::Via) {
                 symbolId = variant;
             }
             rememberedObjectRows_.insert(rememberKey(static_cast<int>(toolMode_), workspace),
@@ -1045,9 +2093,445 @@ void MainWindow::applyObjectSelection() {
         break;
     }
     canvas->setTool(tool, variant);
+    {
+        // Text tool style bar (#36): font choice only makes sense for schematic text (board text
+        // always renders with the fixed StrokeFont), height applies to both.
+        const bool textTool = toolMode_ == ToolMode::Draw && tool == CanvasTool::Text;
+        textStyleBar_->setVisible(textTool);
+        textFontCombo_->setVisible(workspace == Workspace::Schematic);
+        if (textTool) {
+            const QSettings settings;
+            const QSignalBlocker blockFont(textFontCombo_);
+            const QSignalBlocker blockSize(textSizeSpin_);
+            textFontCombo_->setCurrentFont(
+                QFont(settings.value(TextFontKey, textFontCombo_->currentFont().family()).toString()));
+            textSizeSpin_->setValue(settings.value(TextHeightKey, TextHeightMm).toDouble());
+            applyTextStyle();
+        }
+    }
+    {
+        const auto* item = objectSelector_->currentItem();
+        const bool custom = item != nullptr && item->data(CustomStyleRole).toBool();
+        editStyleButton_->setEnabled(custom);
+        deleteStyleButton_->setEnabled(custom);
+        const QString builtInHint = tr("Built-in styles cannot be changed; create your own style instead.");
+        editStyleButton_->setToolTip(custom ? tr("Edit the selected style") : builtInHint);
+        deleteStyleButton_->setToolTip(custom ? tr("Delete the selected style") : builtInHint);
+    }
+    QString hint = canvas->toolHint();
+    if (toolMode_ == ToolMode::Component) {
+        const auto* item = objectSelector_->currentItem();
+        if (item != nullptr && item->data(PartRole).isValid()) {
+            canvas->setPlacementTemplate(boardParts_.value(item->data(PartRole).toInt()));
+        }
+        if (workspace == Workspace::Schematic) {
+            removeDeviceButton_->setEnabled(item != nullptr);
+            if (objectSelector_->count() == 0) {
+                hint = tr("This project has no devices yet. Use Pick devices to add parts from the library.");
+            }
+        } else {
+            if (objectSelector_->count() == 0) {
+                hint = tr("Every schematic component is on the board. Components appear here after "
+                          "they are placed in the schematic.");
+            }
+            if (!boardPartProblems_.isEmpty()) {
+                hint += QLatin1Char('\n') + boardPartProblems_.join(QLatin1Char('\n'));
+            }
+        }
+    }
     static_cast<ObjectPreview*>(objectPreview_)->setContent(symbolId, iconKind, caption);
-    contextHint_->setText(canvas->toolHint());
+    contextHint_->setText(hint);
     updateEditActions();
+}
+
+void MainWindow::editRoutingStyle(bool create) {
+    if (toolMode_ == ToolMode::Pad) {
+        const auto* item = objectSelector_->currentItem();
+        PadStyleEntry style;
+        if (item != nullptr) {
+            if (const auto selected = findPadStyleEntry(item->data(VariantRole).toString())) style = *selected;
+        }
+        if (create) {
+            // Start from the selected pad so a variant is one change away.
+            style.id.clear();
+            style.name.clear();
+        } else if (item == nullptr || !item->data(CustomStyleRole).toBool()) {
+            return;
+        }
+        if (!editPadStyleDialog(this, style)) return;
+        auto styles = customPadStyles();
+        const auto existing = std::find_if(styles.begin(), styles.end(),
+                                           [&](const PadStyleEntry& other) { return other.id == style.id; });
+        if (existing != styles.end()) {
+            *existing = style;
+        } else {
+            styles.append(style);
+        }
+        setCustomPadStyles(styles);
+        rememberedObjectRows_.remove(rememberKey(static_cast<int>(toolMode_), Workspace::Board));
+        rebuildObjectSelector();
+        for (int row = 0; row < objectSelector_->count(); ++row) {
+            if (objectSelector_->item(row)->data(VariantRole).toString() == style.id) {
+                objectSelector_->setCurrentRow(row);
+            }
+        }
+        return;
+    }
+    if (toolMode_ != ToolMode::Connect && toolMode_ != ToolMode::Via) return;
+    const RoutingStyleKind kind = toolMode_ == ToolMode::Connect ? RoutingStyleKind::Track : RoutingStyleKind::Via;
+    const auto* item = objectSelector_->currentItem();
+    RoutingStyle style;
+    if (create) {
+        // Start from the selected style so a slightly wider track is one change away.
+        if (item != nullptr) style = findRoutingStyle(kind, item->data(StyleRole).toString());
+        style.name.clear();
+    } else {
+        if (item == nullptr || !item->data(CustomStyleRole).toBool()) return;
+        style = findRoutingStyle(kind, item->data(StyleRole).toString());
+    }
+    const QString previousName = style.name;
+    if (!editRoutingStyleDialog(this, kind, style)) return;
+
+    auto styles = customRoutingStyles(kind);
+    const auto existing = std::find_if(styles.begin(), styles.end(),
+                                       [&](const RoutingStyle& other) { return other.name == previousName; });
+    if (!create && existing != styles.end()) {
+        *existing = style;
+    } else {
+        styles.append(style);
+    }
+    setCustomRoutingStyles(kind, styles);
+    QSettings().setValue(kind == RoutingStyleKind::Track ? TrackStyleKey : ViaStyleKey, style.name);
+    rememberedObjectRows_.remove(rememberKey(static_cast<int>(toolMode_), Workspace::Board));
+    rebuildObjectSelector();
+}
+
+void MainWindow::deleteRoutingStyle() {
+    if (toolMode_ == ToolMode::Pad) {
+        const auto* item = objectSelector_->currentItem();
+        if (item == nullptr || !item->data(CustomStyleRole).toBool()) return;
+        const QString id = item->data(VariantRole).toString();
+        auto styles = customPadStyles();
+        // Placed pads keep their own copy of the definition.
+        styles.removeIf([&](const PadStyleEntry& style) { return style.id == id; });
+        setCustomPadStyles(styles);
+        rememberedObjectRows_.remove(rememberKey(static_cast<int>(toolMode_), Workspace::Board));
+        rebuildObjectSelector();
+        return;
+    }
+    if (toolMode_ != ToolMode::Connect && toolMode_ != ToolMode::Via) return;
+    const RoutingStyleKind kind = toolMode_ == ToolMode::Connect ? RoutingStyleKind::Track : RoutingStyleKind::Via;
+    const auto* item = objectSelector_->currentItem();
+    if (item == nullptr || !item->data(CustomStyleRole).toBool()) return;
+    const QString name = item->data(StyleRole).toString();
+    auto styles = customRoutingStyles(kind);
+    styles.removeIf([&](const RoutingStyle& style) { return style.name == name; });
+    setCustomRoutingStyles(kind, styles);
+    // Existing tracks and vias keep their sizes; new ones fall back to the default style.
+    QSettings().remove(kind == RoutingStyleKind::Track ? TrackStyleKey : ViaStyleKey);
+    rememberedObjectRows_.remove(rememberKey(static_cast<int>(toolMode_), Workspace::Board));
+    rebuildObjectSelector();
+}
+
+QStringList MainWindow::componentListKeys() const {
+    if (activeCanvas()->workspace() == Workspace::Schematic) {
+        return projectDevices();
+    }
+    QStringList keys;
+    const auto waiting = unplacedBoardParts(canvases_[0]->document(), canvases_[1]->document());
+    for (const auto& part : waiting.parts) {
+        keys << part.sourceId + QLatin1Char('|') + part.variant + QLatin1Char('|') + part.label +
+                    QLatin1Char('|') + part.value;
+    }
+    return keys + waiting.problems;
+}
+
+void MainWindow::refreshComponentList() {
+    if (toolMode_ == ToolMode::Component && componentListKeys() != componentKeys_) {
+        rebuildObjectSelector();
+    }
+}
+
+QStringList MainWindow::projectDevices() const {
+    return projectDeviceList(library_, canvases_[0]->document());
+}
+
+void MainWindow::addProjectDevices(const QStringList& ids) {
+    QString first;
+    for (const auto& id : ids) {
+        if (isPickableDevice(id) && !projectDevices().contains(id)) {
+            library_.devices.append(id);
+            if (first.isEmpty()) first = id;
+        }
+    }
+    if (first.isEmpty()) return;
+    libraryModified_ = true;
+    rememberedObjectRows_.insert(rememberKey(static_cast<int>(ToolMode::Component), Workspace::Schematic),
+                                 static_cast<int>(projectDevices().indexOf(first)));
+    if (toolMode_ == ToolMode::Component) rebuildObjectSelector();
+    updateProjectState();
+}
+
+bool MainWindow::removeProjectDevice(const QString& id) {
+    if (placedDevices(canvases_[0]->document()).contains(id)) return false;
+    if (library_.devices.removeAll(id) == 0) return false;
+    libraryModified_ = true;
+    if (toolMode_ == ToolMode::Component) rebuildObjectSelector();
+    updateProjectState();
+    return true;
+}
+
+void MainWindow::removeSelectedDevice() {
+    const auto* item = objectSelector_->currentItem();
+    if (item == nullptr) return;
+    const QString id = item->data(VariantRole).toString();
+    if (!removeProjectDevice(id)) {
+        QMessageBox::information(this, tr("Remove device"),
+                                 tr("%1 is used in the schematic. Delete its parts from the schematic "
+                                    "before removing it from the project.")
+                                     .arg(item->text()));
+    }
+}
+
+void MainWindow::newDevice() {
+    DeviceEditorDialog dialog(library_, this);
+    if (dialog.exec() != QDialog::Accepted) return;
+    library_.customFootprints += dialog.createdFootprints();
+    library_.customDevices.append(dialog.device());
+    registerProjectLibrary(library_);
+    libraryModified_ = true;
+    statusBar()->showMessage(tr("Created device %1").arg(dialog.device().name), 4000);
+    // A new device is added to the pick list, ready to place.
+    addProjectDevices({dialog.device().id});
+    updateProjectState();
+}
+
+void MainWindow::newFootprint() {
+    FootprintEditorDialog dialog(std::nullopt, this);
+    if (dialog.exec() != QDialog::Accepted) return;
+    library_.customFootprints.append(dialog.footprint());
+    registerProjectLibrary(library_);
+    libraryModified_ = true;
+    statusBar()->showMessage(tr("Created footprint %1").arg(dialog.footprint().name), 4000);
+    updateProjectState();
+}
+
+void MainWindow::makePackage() {
+    auto* canvas = editingCanvas();
+    if (canvas == nullptr || canvas->workspace() != Workspace::Board) return;
+    const QList<int> selection = canvas->selection();
+    if (extractPackage(canvas->document(), selection, PackageOrigin::FirstPad).footprint.pads.isEmpty()) {
+        QMessageBox::information(this, tr("Make package"),
+                                 tr("Select at least one pad. Place pads with Pad mode and draw the outline "
+                                    "on Top silk, then select them together."));
+        return;
+    }
+
+    QDialog dialog(this);
+    dialog.setObjectName(QStringLiteral("MakePackageDialog"));
+    dialog.setWindowTitle(tr("Make package"));
+    auto* form = new QFormLayout(&dialog);
+    auto* name = new QLineEdit(&dialog);
+    name->setObjectName(QStringLiteral("PackageName"));
+    name->setPlaceholderText(tr("e.g. SOT23-5 or TERMINAL-2P"));
+    form->addRow(tr("Package name"), name);
+    auto* origin = new QComboBox(&dialog);
+    origin->setObjectName(QStringLiteral("PackageOrigin"));
+    origin->addItem(tr("Pad 1"), static_cast<int>(PackageOrigin::FirstPad));
+    origin->addItem(tr("Centre of the pads"), static_cast<int>(PackageOrigin::PadCentre));
+    form->addRow(tr("Origin"), origin);
+    auto* replace = new QCheckBox(tr("Replace the selection with the new package"), &dialog);
+    replace->setObjectName(QStringLiteral("PackageReplace"));
+    replace->setChecked(true);
+    form->addRow(replace);
+    auto* summary = new QLabel(&dialog);
+    summary->setObjectName(QStringLiteral("PackageSummary"));
+    summary->setWordWrap(true);
+    form->addRow(summary);
+    auto* validation = new QLabel(&dialog);
+    validation->setObjectName(QStringLiteral("PackageValidation"));
+    validation->setWordWrap(true);
+    form->addRow(validation);
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+    form->addRow(buttons);
+
+    auto extraction = [&] {
+        return extractPackage(canvas->document(), selection,
+                              static_cast<PackageOrigin>(origin->currentData().toInt()));
+    };
+    auto refresh = [&] {
+        const PackageExtraction result = extraction();
+        QStringList notes{tr("%n pad(s)", nullptr, static_cast<int>(result.footprint.pads.size())),
+                          tr("%n silkscreen shape(s)", nullptr, static_cast<int>(result.footprint.shapes.size()))};
+        if (result.renumbered) notes << tr("pads renumbered 1..%1").arg(result.footprint.pads.size());
+        if (result.mirrored) notes << tr("drawn on the bottom side, stored as seen from the top");
+        if (result.ignoredItems > 0) {
+            notes << tr("%n selected item(s) ignored (only pads, vias and silkscreen graphics are used)", nullptr,
+                        result.ignoredItems);
+        }
+        summary->setText(notes.join(QStringLiteral(" · ")));
+
+        QString problem;
+        const QString trimmed = name->text().trimmed();
+        if (trimmed.isEmpty()) {
+            problem = tr("Enter a package name.");
+        } else {
+            for (const auto& footprint : library_.customFootprints) {
+                if (footprint.name.compare(trimmed, Qt::CaseInsensitive) == 0) {
+                    problem = tr("The project already has a footprint named %1.").arg(footprint.name);
+                }
+            }
+        }
+        if (problem.isEmpty()) problem = validateExplicitFootprint(result.footprint);
+        validation->setText(problem);
+        buttons->button(QDialogButtonBox::Ok)->setEnabled(problem.isEmpty());
+    };
+    connect(name, &QLineEdit::textChanged, &dialog, refresh);
+    connect(origin, &QComboBox::currentIndexChanged, &dialog, refresh);
+    connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    refresh();
+    if (dialog.exec() != QDialog::Accepted) return;
+
+    const PackageExtraction result = extraction();
+    FootprintDefinition footprint = result.footprint;
+    footprint.id = newCustomFootprintId();
+    footprint.name = name->text().trimmed();
+    library_.customFootprints.append(footprint);
+    registerProjectLibrary(library_);
+    libraryModified_ = true;
+    if (replace->isChecked()) {
+        canvas->applyDocumentEdit(tr("Make package %1").arg(footprint.name),
+                                  replaceWithPackage(canvas->document(), result, footprint.id));
+    }
+    statusBar()->showMessage(tr("Created package %1; place it from Package mode").arg(footprint.name), 5000);
+    if (toolMode_ == ToolMode::Package) rebuildObjectSelector();
+    updateProjectState();
+}
+
+void MainWindow::decomposeSelection() {
+    auto* canvas = editingCanvas();
+    if (canvas == nullptr || canvas->workspace() != Workspace::Board) return;
+    SketchDocument document = canvas->document();
+    const int count = decomposePackages(document, canvas->selection());
+    if (count == 0) {
+        statusBar()->showMessage(tr("Select a footprint to decompose"), 4000);
+        return;
+    }
+    canvas->applyDocumentEdit(tr("Decompose"), document);
+    statusBar()->showMessage(tr("Decomposed %n footprint(s) into pads and silkscreen", nullptr, count), 4000);
+}
+
+void MainWindow::pickDevices() {
+    QDialog dialog(this);
+    dialog.setObjectName(QStringLiteral("PickDevicesDialog"));
+    dialog.setWindowTitle(tr("Pick devices"));
+    dialog.resize(520, 460);
+    auto* layout = new QVBoxLayout(&dialog);
+    auto* category = new QComboBox(&dialog);
+    category->setObjectName(QStringLiteral("DeviceCategory"));
+    category->addItem(tr("All categories"), -1);
+    for (CatalogCategory value : {CatalogCategory::Passive, CatalogCategory::Diode,
+                                  CatalogCategory::Transistor, CatalogCategory::Analog,
+                                  CatalogCategory::Digital, CatalogCategory::Source,
+                                  CatalogCategory::Electromechanical, CatalogCategory::Connector}) {
+        category->addItem(catalogCategoryName(value), static_cast<int>(value));
+    }
+    layout->addWidget(category);
+    auto* search = new QLineEdit(&dialog);
+    search->setObjectName(QStringLiteral("DeviceSearch"));
+    search->setPlaceholderText(tr("Search components in English or Turkish"));
+    search->setClearButtonEnabled(true);
+    layout->addWidget(search);
+    auto* results = new QListWidget(&dialog);
+    results->setObjectName(QStringLiteral("DeviceResults"));
+    results->setIconSize(QSize(32, 32));
+    results->setSelectionMode(QAbstractItemView::ExtendedSelection);
+    layout->addWidget(results, 1);
+    auto* details = new QLabel(&dialog);
+    details->setObjectName(QStringLiteral("DeviceDetails"));
+    details->setWordWrap(true);
+    layout->addWidget(details);
+    const QStringList listed = projectDevices();
+    for (const auto* symbol : pickableDevices(library_)) {
+        const QString name = symbolDisplayName(*symbol);
+        auto* item = new QListWidgetItem(symbolIcon(symbol->id, palette()),
+                                         listed.contains(symbol->id) ? tr("%1 (in project)").arg(name) : name,
+                                         results);
+        item->setData(VariantRole, symbol->id);
+        QStringList terms{name, symbol->prefix, symbol->defaultValue};
+        int catalogCategory = -1;
+        if (const auto* entry = findCatalogComponent(symbol->id)) {
+            terms << entry->description << entry->keywords << entry->device.pinNames
+                  << entry->device.spec.manufacturer << entry->device.spec.partNumber;
+            catalogCategory = static_cast<int>(entry->category);
+        }
+        item->setData(Qt::UserRole + 10, terms.join(QLatin1Char(' ')));
+        item->setData(Qt::UserRole + 11, catalogCategory);
+    }
+    auto filter = [results, search, category] {
+        const QString text = search->text().trimmed();
+        const int selectedCategory = category->currentData().toInt();
+        for (int row = 0; row < results->count(); ++row) {
+            auto* item = results->item(row);
+            const bool textMatches = item->data(Qt::UserRole + 10).toString().contains(text, Qt::CaseInsensitive);
+            const bool categoryMatches = selectedCategory < 0 || item->data(Qt::UserRole + 11).toInt() == selectedCategory;
+            item->setHidden(!textMatches || !categoryMatches);
+        }
+    };
+    connect(search, &QLineEdit::textChanged, results, filter);
+    connect(category, &QComboBox::currentIndexChanged, results, filter);
+    connect(results, &QListWidget::currentItemChanged, details, [details](QListWidgetItem* item) {
+        const auto* symbol = item ? findSymbol(item->data(VariantRole).toString()) : nullptr;
+        if (symbol == nullptr) {
+            details->clear();
+            return;
+        }
+        const auto* footprint = findSymbol(symbol->defaultFootprint);
+        QStringList lines{MainWindow::tr("Prefix %1  ·  %2 pins  ·  value %3  ·  footprint %4")
+                              .arg(symbol->prefix)
+                              .arg(symbol->pins.size())
+                              .arg(symbol->defaultValue.isEmpty() ? MainWindow::tr("none") : symbol->defaultValue,
+                                   footprint ? symbolDisplayName(*footprint) : MainWindow::tr("unassigned"))};
+        if (const auto* entry = findCatalogComponent(symbol->id)) {
+            lines.prepend(catalogCategoryName(entry->category) + QStringLiteral(" — ") + entry->description);
+            QStringList pins;
+            for (int i = 0; i < entry->device.pinNames.size(); ++i) {
+                pins << QStringLiteral("%1 %2 (%3)")
+                            .arg(i + 1)
+                            .arg(entry->device.pinNames[i], pinElectricalTypeName(entry->pinTypes.value(i)));
+            }
+            lines << MainWindow::tr("Pins: %1").arg(pins.join(QStringLiteral(", ")));
+            if (!entry->device.spec.partNumber.isEmpty())
+                lines << MainWindow::tr("Part number: %1").arg(entry->device.spec.partNumber);
+            if (!entry->device.spec.manufacturer.isEmpty())
+                lines << MainWindow::tr("Manufacturer: %1").arg(entry->device.spec.manufacturer);
+            if (const auto* model = findSimulationModel(entry->device.simulationModel)) {
+                lines << MainWindow::tr("Simulation: %1").arg(model->name);
+                if (!model->limitation.isEmpty()) lines << model->limitation;
+            }
+            QStringList packages;
+            for (const auto& id : entry->footprintOptions) {
+                if (const auto* candidate = findSymbol(id)) packages << symbolDisplayName(*candidate);
+            }
+            if (!packages.isEmpty()) lines << MainWindow::tr("Suitable packages: %1").arg(packages.join(QStringLiteral(", ")));
+        }
+        details->setText(lines.join(QLatin1Char('\n')));
+    });
+    results->setCurrentRow(0);
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+    buttons->button(QDialogButtonBox::Ok)->setText(tr("Add to project"));
+    connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    connect(results, &QListWidget::itemDoubleClicked, &dialog, &QDialog::accept);
+    layout->addWidget(buttons);
+    search->setFocus();
+    if (dialog.exec() != QDialog::Accepted) return;
+    QStringList ids;
+    for (const auto* item : results->selectedItems()) {
+        if (!item->isHidden()) ids << item->data(VariantRole).toString();
+    }
+    addProjectDevices(ids);
 }
 
 void MainWindow::workspaceChanged() {
@@ -1056,6 +2540,14 @@ void MainWindow::workspaceChanged() {
     undoGroup_->setActiveStack(canvas->undoStack());
     mergenTab_->setChecked(!board);
     kayraTab_->setChecked(board);
+    // Kayra tracks always use the PCB router's automatic 45-degree geometry. Do not present the
+    // generic line-angle constraints as routing modes in the board workspace.
+    for (auto* toggle : snapToggles_) {
+        const QString key = toggle->property("snapKey").toString();
+        if (key == QLatin1String("diagonal") || key == QLatin1String("orthogonal")) {
+            toggle->setHidden(board);
+        }
+    }
     for (auto* other : canvases_) {
         if (other != canvas) {
             other->cancelOperation();
@@ -1065,8 +2557,18 @@ void MainWindow::workspaceChanged() {
     probe->setEnabled(!board);
     probe->setToolTip(board ? tr("Probes are only available in Mergen")
                             : withShortcut(probe->text(), probe->shortcut()));
-    activateToolMode(board && toolMode_ == ToolMode::Probe ? ToolMode::Select : toolMode_);
+    for (const char* id : {"hatteda.tool.package", "hatteda.tool.via", "hatteda.tool.pad", "hatteda.tool.zone"}) {
+        auto* boardOnly = actions_.value(QString::fromLatin1(id));
+        boardOnly->setEnabled(board);
+        boardOnly->setToolTip(board ? withShortcut(boardOnly->text(), boardOnly->shortcut())
+                                    : tr("Only available in Kayra"));
+    }
+    const bool boardMode = toolMode_ == ToolMode::Package || toolMode_ == ToolMode::Via ||
+                           toolMode_ == ToolMode::Pad || toolMode_ == ToolMode::Zone;
+    const bool unavailable = board ? toolMode_ == ToolMode::Probe : boardMode;
+    activateToolMode(unavailable ? ToolMode::Select : toolMode_);
     zoomLabel_->setText(tr("Zoom %1%").arg(canvas->zoomPercent()));
+    updateGridActions();
     if (editingCanvas() != nullptr) {
         canvas->setFocus();
     }
@@ -1083,9 +2585,63 @@ void MainWindow::applySnapSettings() {
         else if (key == QLatin1String("centers")) settings.centers = on;
         else if (key == QLatin1String("diagonal")) settings.diagonal = on;
         else if (key == QLatin1String("orthogonal")) settings.orthogonal = on;
+        else if (key == QLatin1String("guides")) settings.guides = on;
     }
+    settings.gridLevel = gridLevel_;
     for (auto* canvas : canvases_) {
         canvas->setSnapSettings(settings);
+    }
+    updateGridActions();
+}
+
+void MainWindow::setBoardUnit(LengthUnit unit) {
+    boardUnit_ = unit;
+    QSettings().setValue(QStringLiteral("editor/units/board"), unitSettingValue(unit));
+    applyLengthUnits();
+}
+
+void MainWindow::applyLengthUnits() {
+    for (auto* canvas : canvases_) {
+        canvas->setLengthUnit(displayUnit(canvas->workspace(), boardUnit_));
+    }
+    for (auto* action : unitActions_->actions()) {
+        action->setChecked(action->objectName() == QLatin1String("hatteda.units.board-") +
+                                                       unitSettingValue(boardUnit_));
+    }
+    updateGridActions();
+}
+
+void MainWindow::setGridLevel(int level) {
+    level = std::clamp(level, 0, DesignCanvas::GridLevelCount - 1);
+    gridLevel_ = level;
+    QSettings().setValue(QStringLiteral("editor/snap/gridLevel"), level);
+    applySnapSettings();
+    if (auto* canvas = activeCanvas()) {
+        statusBar()->showMessage(
+            tr("Snap grid %1").arg(formatLength(DesignCanvas::gridStep(canvas->workspace(), level),
+                                                canvas->lengthUnit())),
+            3000);
+    }
+}
+
+void MainWindow::updateGridActions() {
+    const auto* canvas = activeCanvas();
+    if (gridActions_ == nullptr || canvas == nullptr) {
+        return;
+    }
+    const auto actions = gridActions_->actions();
+    for (auto* action : actions) {
+        const int level = action->data().toInt();
+        const QString text = tr("Snap grid %1").arg(
+            formatLength(DesignCanvas::gridStep(canvas->workspace(), level), canvas->lengthUnit()));
+        action->setText(text);
+        action->setToolTip(withShortcut(text, action->shortcut()));
+        action->setChecked(level == gridLevel_);
+    }
+    if (gridStepButton_ != nullptr) {
+        gridStepButton_->setText(formatLength(DesignCanvas::gridStep(canvas->workspace(), gridLevel_),
+                                              canvas->lengthUnit()));
+        gridStepButton_->setToolTip(tr("Snap grid step (Ctrl+F1, F2, F3, F4)"));
     }
 }
 
@@ -1102,7 +2658,15 @@ void MainWindow::updateEditActions() {
     };
     enable("hatteda.action.delete", selected > 0);
     enable("hatteda.action.duplicate", selected > 0);
-    enable("hatteda.action.rotate", selected > 0 || (canvas != nullptr && canvas->tool() == CanvasTool::Symbol));
+    enable("hatteda.action.array", selected > 0);
+    enable("hatteda.action.rotate", selected > 0 || (canvas != nullptr && (canvas->tool() == CanvasTool::Symbol ||
+                                                                            canvas->tool() == CanvasTool::Pad)));
+    enable("hatteda.action.cut", selected > 0);
+    enable("hatteda.action.copy", selected > 0);
+    enable("hatteda.action.paste", canvas != nullptr && canvas->canPaste());
+    const bool schematic = canvas != nullptr && canvas->workspace() == Workspace::Schematic;
+    enable("hatteda.action.mirror-x", schematic && selected > 0);
+    enable("hatteda.action.mirror-y", schematic && selected > 0);
     enable("hatteda.action.select-all", canvas != nullptr && !canvas->document().isEmpty());
     for (const char* id : {"hatteda.action.zoom-in", "hatteda.action.zoom-out", "hatteda.action.fit"}) {
         enable(id, canvas != nullptr);
@@ -1111,6 +2675,9 @@ void MainWindow::updateEditActions() {
                            "hatteda.align.top", "hatteda.align.vcenter", "hatteda.align.bottom"}) {
         enable(id, selected >= 2);
     }
+    const bool board = canvas != nullptr && canvas->workspace() == Workspace::Board;
+    enable("hatteda.action.make-package", board && selected > 0);
+    enable("hatteda.action.decompose", board && selected > 0);
     enable("hatteda.align.distribute-h", selected >= 3);
     enable("hatteda.align.distribute-v", selected >= 3);
 }
@@ -1129,6 +2696,12 @@ void MainWindow::refreshIcons() {
             const QString icon = item->data(IconRole).toString();
             item->setIcon(icon.isEmpty() ? symbolIcon(item->data(VariantRole).toString(), palette())
                                          : makeIcon(icon, color));
+        }
+    }
+    if (zoneList_ != nullptr) {
+        for (int row = 0; row < zoneList_->count(); ++row) {
+            auto* item = zoneList_->item(row);
+            item->setIcon(makeIcon(item->data(IconRole).toString(), color));
         }
     }
     if (objectPreview_ != nullptr) {
@@ -1199,10 +2772,7 @@ QWidget* MainWindow::createWelcomePage() {
     recentProjects_->setObjectName(QStringLiteral("RecentProjects"));
     recentProjects_->setMinimumWidth(480);
     connect(recentProjects_, &QListWidget::itemDoubleClicked, this, [this](QListWidgetItem* item) {
-        const QString path = item->data(Qt::UserRole).toString();
-        if (!path.isEmpty()) {
-            activateProject(QFileInfo(path).completeBaseName(), path);
-        }
+        openRecentProject(item->data(Qt::UserRole).toString());
     });
     recentColumn->addWidget(recentProjects_, 1);
     columns->addLayout(recentColumn, 1);
@@ -1212,15 +2782,32 @@ QWidget* MainWindow::createWelcomePage() {
 }
 
 void MainWindow::createNewProject() {
+    if (!maybeSaveChanges()) {
+        return;
+    }
+    const QString defaultLocation = QSettings()
+                                        .value(QStringLiteral("projects/location"),
+                                               QDir::homePath() + QStringLiteral("/Documents"))
+                                        .toString();
+    // Suggest a name that does not overwrite an existing project in the default location.
+    QString suggested = tr("My Project");
+    for (int n = 2; QFileInfo::exists(QDir(defaultLocation).filePath(suggested + QStringLiteral(".hatt")));
+         ++n) {
+        suggested = tr("My Project %1").arg(n);
+    }
+
     QDialog dialog(this);
+    dialog.setObjectName(QStringLiteral("NewProjectDialog"));
     dialog.setWindowTitle(tr("New project"));
     dialog.setMinimumWidth(500);
     auto* layout = new QVBoxLayout(&dialog);
     layout->addWidget(label(tr("Create a HattEDA project"), QStringLiteral("WorkspaceTitle"), &dialog));
     auto* form = new QFormLayout;
-    auto* name = new QLineEdit(tr("My Project"), &dialog);
+    auto* name = new QLineEdit(suggested, &dialog);
+    name->setObjectName(QStringLiteral("NewProjectName"));
     name->selectAll();
-    auto* location = new QLineEdit(QDir::homePath() + QStringLiteral("/Documents"), &dialog);
+    auto* location = new QLineEdit(defaultLocation, &dialog);
+    location->setObjectName(QStringLiteral("NewProjectLocation"));
     form->addRow(tr("Project name"), name);
     form->addRow(tr("Location"), location);
     layout->addLayout(form);
@@ -1233,37 +2820,415 @@ void MainWindow::createNewProject() {
         return;
     }
     const QString projectName = name->text().trimmed();
-    activateProject(projectName,
-                    QDir(location->text().trimmed()).filePath(projectName + QStringLiteral(".hatt")));
+    const QDir directory(location->text().trimmed());
+    const QString path = directory.filePath(projectName + QStringLiteral(".hatt"));
+    if (QFileInfo::exists(path) &&
+        QMessageBox::question(this, tr("New project"),
+                              tr("%1 already exists. Replace it with an empty project?")
+                                  .arg(QDir::toNativeSeparators(path))) != QMessageBox::Yes) {
+        return;
+    }
+    ProjectData project;
+    project.name = projectName;
+    QString error = QDir().mkpath(directory.absolutePath())
+                        ? projectGuard_->save(path, project)
+                        : tr("Cannot create the folder %1.").arg(QDir::toNativeSeparators(directory.absolutePath()));
+    if (!error.isEmpty()) {
+        QMessageBox::warning(this, tr("New project"), error);
+        return;
+    }
+    QSettings().setValue(QStringLiteral("projects/location"), directory.absolutePath());
+    addRecentProject(path);
+    activateProject(path, project);
 }
 
 void MainWindow::openProject() {
+    if (!maybeSaveChanges()) {
+        return;
+    }
     const QString path = QFileDialog::getOpenFileName(this, tr("Open HattEDA project"), QString(),
                                                       tr("HattEDA projects (*.hatt);;All files (*.*)"));
+    if (!path.isEmpty()) {
+        openProjectFile(path);
+    }
+}
+
+bool MainWindow::openProjectFile(const QString& path) {
+    if (!projectGuard_->confirmLock(path)) {
+        return false;
+    }
+    ProjectLoad load = loadProjectFile(path);
+    if (!load.ok()) {
+        QMessageBox::warning(this, tr("Open project"),
+                             tr("%1 could not be opened.\n\n%2")
+                                 .arg(QDir::toNativeSeparators(path), load.error));
+        return false;
+    }
+    const auto recovery = projectGuard_->resolveRecovery(path, load.project);
+    if (recovery == ProjectGuard::Recovery::Cancelled) {
+        return false;
+    }
+    addRecentProject(path);
+    activateProject(path, load.project);
+    if (recovery == ProjectGuard::Recovery::Restored) {
+        // Recovered content is not on disk yet: keep the window modified until it is saved.
+        for (auto* canvas : canvases_) canvas->undoStack()->resetClean();
+        updateProjectState();
+    }
+    return true;
+}
+
+void MainWindow::openRecentProject(const QString& path) {
     if (path.isEmpty()) {
         return;
     }
+    if (!QFileInfo::exists(path)) {
+        const auto answer = QMessageBox::warning(
+            this, tr("Project not found"),
+            tr("%1 no longer exists. It may have been moved, renamed or deleted.\n\nRemove it from "
+               "the recent projects list?")
+                .arg(QDir::toNativeSeparators(path)),
+            QMessageBox::Yes | QMessageBox::No, QMessageBox::Yes);
+        if (answer == QMessageBox::Yes) {
+            QSettings settings;
+            QStringList recent = settings.value(QStringLiteral("recentProjects")).toStringList();
+            recent.removeAll(path);
+            settings.setValue(QStringLiteral("recentProjects"), recent);
+            refreshRecentProjects();
+        }
+        return;
+    }
+    if (maybeSaveChanges()) {
+        openProjectFile(path);
+    }
+}
+
+void MainWindow::activateProject(const QString& projectPath, const ProjectData& project) {
+    if (auto* circuit = findChild<CircuitWorkflow*>()) circuit->stopSimulation();
+    projectPath_ = projectPath;
+    projectGuard_->projectActivated(projectPath);
+    // The file name is the project name, so renaming or "Save as" is reflected everywhere.
+    projectName_ = QFileInfo(projectPath).completeBaseName();
+    library_ = project.library;
+    registerProjectLibrary(library_);
+    libraryModified_ = false;
+    rules_ = project.rules;
+    rulesModified_ = false;
+    if (canvases_.size() > 1) canvases_[1]->setRoutingClearance(rules_.clearance);
+    const SketchDocument* documents[] = {&project.schematic, &project.board};
+    for (int i = 0; i < canvases_.size() && i < 2; ++i) {
+        canvases_[i]->restore(*documents[i], {});
+        canvases_[i]->undoStack()->clear();
+        canvases_[i]->undoStack()->setClean();
+    }
+    shellPages_->setCurrentIndex(1);
+    coordinateLabel_->show();
+    zoomLabel_->show();
+    showMergenWorkspace();
+    for (auto* canvas : canvases_) {
+        if (!canvas->document().isEmpty()) canvas->zoomToFit();
+    }
+    if (auto* circuit = findChild<CircuitWorkflow*>()) circuit->updateSimulationActions();
+    updateProjectState();
+}
+
+bool MainWindow::saveProject() {
+    if (projectPath_.isEmpty()) {
+        return false;
+    }
+    return writeProject(projectPath_);
+}
+
+bool MainWindow::saveProjectAs() {
+    if (projectPath_.isEmpty()) {
+        return false;
+    }
+    QString path = QFileDialog::getSaveFileName(this, tr("Save HattEDA project as"), projectPath_,
+                                                tr("HattEDA projects (*.hatt)"));
+    if (path.isEmpty()) {
+        return false;
+    }
+    if (!path.endsWith(QStringLiteral(".hatt"), Qt::CaseInsensitive)) {
+        path += QStringLiteral(".hatt");
+    }
+    if (!writeProject(path)) {
+        return false;
+    }
+    projectPath_ = path;
+    projectGuard_->projectActivated(path);
+    projectName_ = QFileInfo(path).completeBaseName();
+    addRecentProject(path);
+    updateProjectState();
+    return true;
+}
+
+ProjectData MainWindow::currentProjectData(const QString& path) const {
+    ProjectData project;
+    project.name = QFileInfo(path).completeBaseName();
+    project.schematic = canvases_.value(0)->document();
+    project.board = canvases_.value(1)->document();
+    project.library = library_;
+    project.library.devices = projectDevices();
+    project.rules = rules_;
+    return project;
+}
+
+ProjectData MainWindow::currentProjectData() const {
+    return projectPath_.isEmpty() ? ProjectData{} : currentProjectData(projectPath_);
+}
+
+QVector<CheckViolation> MainWindow::lastCheckViolations() const {
+    return checksReport_ ? checksReport_->violations() : QVector<CheckViolation>{};
+}
+
+bool MainWindow::hasDesignChecksReport() const { return !checksReport_.isNull(); }
+
+bool MainWindow::writeProject(const QString& path) {
+    const ProjectData project = currentProjectData(path);
+    const QString error = projectGuard_->save(path, project);
+    if (!error.isEmpty()) {
+        QMessageBox::warning(this, tr("Save project"), error);
+        return false;
+    }
+    projectGuard_->projectSaved(path);
+    libraryModified_ = false;
+    rulesModified_ = false;
+    for (auto* canvas : canvases_) {
+        canvas->undoStack()->setClean();
+    }
+    statusBar()->showMessage(tr("Saved %1").arg(QDir::toNativeSeparators(path)), 4000);
+    updateProjectState();
+    return true;
+}
+
+bool MainWindow::hasUnsavedChanges() const {
+    return !projectPath_.isEmpty() &&
+           (libraryModified_ || rulesModified_ ||
+            std::any_of(canvases_.begin(), canvases_.end(),
+                        [](const DesignCanvas* canvas) { return !canvas->undoStack()->isClean(); }));
+}
+
+bool MainWindow::maybeSaveChanges() {
+    if (!hasUnsavedChanges()) {
+        return true;
+    }
+    const auto answer = QMessageBox::warning(
+        this, tr("Unsaved changes"),
+        tr("%1 has unsaved changes. Save them before continuing?").arg(projectName_),
+        QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel, QMessageBox::Save);
+    if (answer == QMessageBox::Save) {
+        // A failed save reports its error and cancels whatever asked (close, open, new).
+        return saveProject();
+    }
+    if (answer == QMessageBox::Discard) {
+        projectGuard_->discardRecovery();
+        return true;
+    }
+    return false;
+}
+
+void MainWindow::updateProjectState() {
+    const bool open = !projectPath_.isEmpty();
+    if (open) {
+        projectTitle_->setText(projectName_);
+        projectTitle_->setToolTip(QDir::toNativeSeparators(projectPath_));
+        setWindowTitle(QStringLiteral("HattEDA - %1[*]").arg(projectName_));
+    }
+    setWindowModified(hasUnsavedChanges());
+    if (auto* save = actions_.value(QStringLiteral("hatteda.action.save"))) {
+        save->setEnabled(open);
+        save->setToolTip(open ? withShortcut(tr("Save"), save->shortcut()) : QString());
+    }
+    if (auto* saveAs = actions_.value(QStringLiteral("hatteda.action.save-as"))) {
+        saveAs->setEnabled(open);
+    }
+    if (auto* fabrication = actions_.value(QStringLiteral("hatteda.action.export-fabrication"))) {
+        fabrication->setEnabled(open);
+    }
+    for (const auto* name : {"hatteda.action.run-checks", "hatteda.action.design-rules", "hatteda.action.export-bom",
+                             "hatteda.action.export-pick-place", "hatteda.action.print-layout"}) {
+        if (auto* action = actions_.value(QString::fromLatin1(name))) action->setEnabled(open);
+    }
+}
+
+void MainWindow::showPrintLayout() {
+    if (projectPath_.isEmpty()) return;
+    CamOptions options;
+    options.zoneFills = pourZones(canvases_.value(0)->document(), canvases_.value(1)->document(),
+                                  pourOptionsFor(rules_, canvases_.value(0)->document()));
+    options.maskExpansion = rules_.defaults.solderResistGuard;
+    const CamOutput output = buildCamOutput(canvases_.value(1)->document(), options);
+    PrintLayoutDialog dialog(output, QFileInfo(projectPath_).completeBaseName(), this);
+    dialog.resize(1100, 720);
+    dialog.exec();
+}
+
+void MainWindow::exportFabricationFiles() {
+    if (projectPath_.isEmpty()) return;
+    // Fabrication files should not silently carry rule errors: ask before exporting (warnings such
+    // as unfilled zones do not ask; they are reported with the result).
+    const CheckReport checks =
+        runDesignRuleCheck(canvases_.value(0)->document(), canvases_.value(1)->document(), rules_);
+    const int errors = checks.count(CheckSeverity::Error);
+    if (errors > 0) {
+        QMessageBox box(QMessageBox::Warning, tr("Export fabrication files"),
+                        tr("The board has %n design rule error(s). Boards made from these files may not "
+                           "work.",
+                           nullptr, errors),
+                        QMessageBox::NoButton, this);
+        box.setObjectName(QStringLiteral("FabricationChecksDialog"));
+        auto* exportAnyway = box.addButton(tr("Export anyway"), QMessageBox::AcceptRole);
+        exportAnyway->setObjectName(QStringLiteral("hatteda.fabrication.export-anyway"));
+        auto* openReport = box.addButton(tr("Open report"), QMessageBox::ActionRole);
+        openReport->setObjectName(QStringLiteral("hatteda.fabrication.open-report"));
+        auto* cancel = box.addButton(QMessageBox::Cancel);
+        box.setDefaultButton(qobject_cast<QPushButton*>(openReport));
+        box.setEscapeButton(cancel);
+        box.exec();
+        if (box.clickedButton() == openReport) {
+            runDesignChecks();
+            return;
+        }
+        if (box.clickedButton() != exportAnyway) return;
+    }
+
+    const QString directory = QFileDialog::getExistingDirectory(
+        this, tr("Export fabrication files"), QFileInfo(projectPath_).absolutePath());
+    if (directory.isEmpty()) return;
+
+    CamOptions options;
+    options.zoneFills = pourZones(canvases_.value(0)->document(), canvases_.value(1)->document(),
+                                  pourOptionsFor(rules_, canvases_.value(0)->document()));
+    options.maskExpansion = rules_.defaults.solderResistGuard;
+    const CamOutput output = buildCamOutput(canvases_.value(1)->document(), options);
+    const QString baseName = QFileInfo(projectPath_).completeBaseName();
+    const QString version = QCoreApplication::applicationVersion().isEmpty()
+                                ? QStringLiteral("development")
+                                : QCoreApplication::applicationVersion();
+    const QVector<CamFile> files = camFiles(output, baseName, version);
+    const QString error = writeCamFiles(files, directory);
+    if (!error.isEmpty()) {
+        QMessageBox::warning(this, tr("Export fabrication files"), error);
+        return;
+    }
+
+    auto* page = new QWidget;
+    auto* pageLayout = new QVBoxLayout(page);
+    if (output.skippedZones > 0) {
+        auto* notice = new QLabel(
+            tr("%n copper zone(s) without a net were NOT exported: an unpoured zone would short every net it "
+               "covers. Choose the zone's net in its properties to pour it with clearance.",
+               nullptr, output.skippedZones),
+            page);
+        notice->setObjectName(QStringLiteral("FabricationZonesNotice"));
+        notice->setWordWrap(true);
+        pageLayout->addWidget(notice);
+    }
+    auto* layout = new QHBoxLayout;
+    pageLayout->addLayout(layout, 1);
+
+    // Left: layer toggles for the graphical preview, then the written files.
+    auto* side = new QVBoxLayout;
+    auto* layers = new QListWidget(page);
+    layers->setObjectName(QStringLiteral("CamLayerList"));
+    layers->setMinimumWidth(210);
+    auto* graphic = new CamPreview(page);
+    graphic->setOutput(output);
+    for (const CamLayer& layer : output.layers) {
+        auto* item = new QListWidgetItem(
+            tr("%1  (%2)").arg(camLayerName(layer.kind)).arg(layer.primitives.size()), layers);
+        item->setFlags(Qt::ItemIsEnabled | Qt::ItemIsUserCheckable);
+        item->setCheckState(Qt::Checked);
+        item->setData(Qt::UserRole, static_cast<int>(layer.kind));
+    }
+    auto* drills = new QListWidgetItem(tr("Drill holes  (%1)").arg(output.drills.size()), layers);
+    drills->setFlags(Qt::ItemIsEnabled | Qt::ItemIsUserCheckable);
+    drills->setCheckState(Qt::Checked);
+    drills->setData(Qt::UserRole, -1);
+    connect(layers, &QListWidget::itemChanged, graphic, [graphic](QListWidgetItem* item) {
+        const int kind = item->data(Qt::UserRole).toInt();
+        const bool visible = item->checkState() == Qt::Checked;
+        if (kind < 0) {
+            graphic->setDrillsVisible(visible);
+        } else {
+            graphic->setLayerVisible(static_cast<CamLayerKind>(kind), visible);
+        }
+    });
+    side->addWidget(layers, 1);
+    auto* list = new QListWidget(page);
+    list->setObjectName(QStringLiteral("GerberFileList"));
+    list->setMinimumWidth(210);
+    side->addWidget(list, 1);
+    layout->addLayout(side);
+
+    // Right: the preview drawing and the raw text of the selected file.
+    auto* views = new QTabWidget(page);
+    views->setObjectName(QStringLiteral("CamViews"));
+    views->setDocumentMode(true);
+    views->addTab(graphic, tr("Preview"));
+    auto* preview = new QTextEdit(page);
+    preview->setObjectName(QStringLiteral("GerberTextPreview"));
+    preview->setReadOnly(true);
+    preview->setLineWrapMode(QTextEdit::NoWrap);
+    views->addTab(preview, tr("File text"));
+    for (const CamFile& file : files) {
+        auto* item = new QListWidgetItem(file.fileName, list);
+        item->setData(Qt::UserRole, file.content);
+    }
+    connect(list, &QListWidget::currentRowChanged, preview, [list, preview](int row) {
+        if (row >= 0) {
+            preview->setPlainText(QString::fromUtf8(list->item(row)->data(Qt::UserRole).toByteArray()));
+        }
+    });
+    connect(list, &QListWidget::itemClicked, views, [views, preview] { views->setCurrentWidget(preview); });
+    layout->addWidget(views, 1);
+    list->setCurrentRow(0);
+    // A new export replaces the previous result instead of re-showing stale files.
+    for (int index = 0; index < toolWorkspaces_->count(); ++index) {
+        if (toolWorkspaces_->widget(index)->objectName() == QLatin1String("hatteda.tool.gerber-viewer")) {
+            auto* old = toolWorkspaces_->widget(index);
+            toolWorkspaces_->removeTab(index);
+            old->deleteLater();
+            break;
+        }
+    }
+    openToolWorkspace(QStringLiteral("hatteda.tool.gerber-viewer"), tr("Gerber output"), page);
+
+    QString message = tr("Exported %1 fabrication files to %2")
+                          .arg(files.size())
+                          .arg(QDir::toNativeSeparators(directory));
+    if (output.skippedTexts > 0) {
+        message += tr("; skipped %1 text items").arg(output.skippedTexts);
+    }
+    if (output.skippedZones > 0) {
+        message += tr("; %n copper zone(s) not exported", nullptr, output.skippedZones);
+    }
+    if (errors > 0) {
+        message += tr("; %n design rule error(s)", nullptr, errors);
+    }
+    const int warnings = checks.count(CheckSeverity::Warning);
+    if (warnings > 0) {
+        message += tr("; %n design rule warning(s)", nullptr, warnings);
+    }
+    statusBar()->showMessage(message, 8000);
+}
+
+void MainWindow::addRecentProject(const QString& path) {
     QSettings settings;
     QStringList recent = settings.value(QStringLiteral("recentProjects")).toStringList();
     recent.removeAll(path);
     recent.prepend(path);
     settings.setValue(QStringLiteral("recentProjects"), recent.mid(0, 10));
     refreshRecentProjects();
-    activateProject(QFileInfo(path).completeBaseName(), path);
 }
 
-void MainWindow::activateProject(const QString& projectName, const QString& projectPath) {
-    projectTitle_->setText(projectName);
-    projectTitle_->setToolTip(QDir::toNativeSeparators(projectPath));
-    setWindowTitle(QStringLiteral("HattEDA - %1").arg(projectName));
-    for (auto* canvas : canvases_) {
-        canvas->restore({}, {});
-        canvas->undoStack()->clear();
+void MainWindow::closeEvent(QCloseEvent* event) {
+    if (maybeSaveChanges()) {
+        projectGuard_->projectClosed();
+        event->accept();
+    } else {
+        event->ignore();
     }
-    shellPages_->setCurrentIndex(1);
-    coordinateLabel_->show();
-    zoomLabel_->show();
-    showMergenWorkspace();
 }
 
 void MainWindow::refreshRecentProjects() {
@@ -1302,6 +3267,149 @@ void MainWindow::openToolWorkspace(const QString& stableId, const QString& title
     }
     undoGroup_->setActiveStack(nullptr);
     updateEditActions();
+}
+
+void MainWindow::runDesignChecks() {
+    if (projectPath_.isEmpty()) return;
+    const bool created = checksReport_.isNull();
+    if (created) {
+        checksReport_ = new ChecksReport;
+        connect(checksReport_, &ChecksReport::rerunRequested, this, &MainWindow::runDesignChecks);
+        connect(checksReport_, &ChecksReport::violationActivated, this, [this](const CheckViolation& violation) {
+            const bool schematic = violation.workspace == Workspace::Schematic;
+            if (schematic) showMergenWorkspace();
+            else showKayraWorkspace();
+            if (auto* canvas = canvases_.value(schematic ? 0 : 1)) {
+                canvas->revealItems(violation.itemIds, violation.hasLocation ? std::optional<QPointF>(violation.location)
+                                                                             : std::nullopt);
+                canvas->setFocus();
+            }
+        });
+    }
+    const CheckReport electrical = runElectricalRuleCheck(canvases_.value(0)->document());
+    const CheckReport design = runDesignRuleCheck(canvases_.value(0)->document(), canvases_.value(1)->document(), rules_);
+    checksReport_->setResults(electrical, design);
+    openToolWorkspace(QStringLiteral("hatteda.tool.design-checks"), tr("Design checks"), checksReport_);
+    const int errors = electrical.count(CheckSeverity::Error) + design.count(CheckSeverity::Error);
+    const int warnings = electrical.count(CheckSeverity::Warning) + design.count(CheckSeverity::Warning);
+    statusBar()->showMessage(tr("Design checks: %1 error(s), %2 warning(s)").arg(errors).arg(warnings), 6000);
+}
+
+void MainWindow::editDesignRules(bool openAutorouterTab) {
+    if (projectPath_.isEmpty()) return;
+    const SketchDocument& schematic = canvases_.value(0)->document();
+    const QHash<QString, QString> automaticClasses = netClassAssignments(DesignRules{}, schematic);
+    DesignRuleManagerDialog dialog(rules_, automaticClasses.keys(), automaticClasses, this, openAutorouterTab);
+    if (dialog.exec() != QDialog::Accepted) return;
+    const bool routeRequested = dialog.routeRequested();
+    if (dialog.rules() != rules_) {
+        rules_ = dialog.rules();
+        if (canvases_.size() > 1) canvases_[1]->setRoutingClearance(rules_.clearance);
+        rulesModified_ = true;
+        refreshZoneFills();
+        refreshRouteClasses();
+        updateProjectState();
+    }
+    // Issue #49: Route Board applies the rules above, then starts routing with the pcb/freerouting/*
+    // settings the Autorouter tab just persisted.
+    if (routeRequested && circuit_) circuit_->runAutorouter();
+}
+
+bool MainWindow::writeAssemblyFile(QString path, const QString& title, const QString& suffix, const QByteArray& content) {
+    if (path.isEmpty()) {
+        const QFileInfo project(projectPath_);
+        path = QFileDialog::getSaveFileName(this, title,
+                                            project.absoluteDir().filePath(project.completeBaseName() + suffix),
+                                            tr("CSV files (*.csv);;All files (*.*)"));
+        if (path.isEmpty()) return false;
+    }
+    QSaveFile file(path);
+    if (!file.open(QIODevice::WriteOnly) || file.write(content) != content.size() || !file.commit()) {
+        QMessageBox::warning(this, title, tr("Cannot write %1: %2").arg(QDir::toNativeSeparators(path), file.errorString()));
+        return false;
+    }
+    statusBar()->showMessage(tr("Saved %1").arg(QDir::toNativeSeparators(path)), 4000);
+    return true;
+}
+
+bool MainWindow::exportBom(const QString& path) {
+    if (projectPath_.isEmpty()) return false;
+    const QVector<BomLine> lines = buildBom(canvases_.value(0)->document(), library_);
+    return writeAssemblyFile(path, tr("Export bill of materials"), QStringLiteral("-bom.csv"), bomCsv(lines));
+}
+
+bool MainWindow::exportPlacement(const QString& path) {
+    if (projectPath_.isEmpty()) return false;
+    const QVector<PlacementLine> lines = buildPlacement(canvases_.value(1)->document());
+    return writeAssemblyFile(path, tr("Export pick and place"), QStringLiteral("-pick-place.csv"), placementCsv(lines));
+}
+
+void MainWindow::refreshZoneFills() {
+    auto* board = canvases_.value(1, nullptr);
+    if (board == nullptr) return;
+    QHash<QString, QPainterPath> fills;
+    const SketchDocument& schematic = canvases_.value(0)->document();
+    const ZonePourOptions options = pourOptionsFor(rules_, schematic);
+    for (const ZoneFillResult& fill : pourZones(schematic, board->document(), options)) {
+        fills.insert(fill.zoneId, fill.fill);
+    }
+    for (const ZoneFillResult& fill : areaZoneFills(board->document(), options)) fills.insert(fill.zoneId, fill.fill);
+    board->setZoneFills(fills);
+    // Summaries follow the zones, the schematic nets and the net classes.
+    refreshZoneList();
+}
+
+void MainWindow::refreshWireNets() {
+    auto* schematic = canvases_.value(0, nullptr);
+    auto* board = canvases_.value(1, nullptr);
+    if (schematic == nullptr) return;
+    schematic->setWireNets(schematicWireNets(schematic->document()));
+    if (board != nullptr) board->setWireNets(boardTrackNets(schematic->document(), board->document()));
+}
+
+void MainWindow::refreshZoneList() {
+    auto* board = canvases_.value(1, nullptr);
+    // Summaries resolve net classes, so the list is only kept up to date while zone mode shows it;
+    // rebuildObjectSelector refreshes it when the mode opens.
+    if (zoneList_ == nullptr || zoneList_->isHidden() || board == nullptr) return;
+    const QColor color = iconColor(palette());
+    {
+        const QSignalBlocker blocker(zoneList_);
+        zoneList_->clear();
+        for (const SketchItem& zone : board->document()) {
+            if (!isZoneVariant(zone.variant)) continue;
+            const QString icon = zone.variant == KeepoutZoneVariant ? QStringLiteral("keepout")
+                                 : zone.variant == AreaZoneVariant  ? QStringLiteral("area")
+                                                                    : QStringLiteral("zone");
+            const QString text = QStringLiteral("%1  ·  %2").arg(zoneSummary(zone, rules_, canvases_.value(0)->document()),
+                                                                  boardLayerName(zone.layer));
+            auto* row = new QListWidgetItem(makeIcon(icon, color), text, zoneList_);
+            row->setData(ZoneIdRole, zone.id);
+            row->setData(IconRole, icon);
+            row->setToolTip(QStringLiteral("%1\n%2").arg(zoneKindName(zone.variant), text));
+        }
+    }
+    syncZoneListSelection();
+}
+
+void MainWindow::syncZoneListSelection() {
+    auto* board = canvases_.value(1, nullptr);
+    if (zoneList_ == nullptr || board == nullptr) return;
+    const QSignalBlocker blocker(zoneList_);
+    const QList<int> selection = board->selection();
+    const QString selected = selection.size() == 1 ? board->document().value(selection.first()).id : QString();
+    zoneList_->setCurrentRow(-1);
+    for (int row = 0; row < zoneList_->count(); ++row) {
+        if (!selected.isEmpty() && zoneList_->item(row)->data(ZoneIdRole).toString() == selected) {
+            zoneList_->setCurrentRow(row);
+        }
+    }
+}
+
+void MainWindow::refreshRouteClasses() {
+    auto* board = canvases_.value(1, nullptr);
+    if (board == nullptr || toolMode_ != ToolMode::Connect || activeCanvas() != board) return;
+    board->setRouteClasses(boardRouteClasses(canvases_.value(0)->document(), board->document(), rules_));
 }
 
 } // namespace hatt::ui

@@ -1,21 +1,77 @@
 add_library(hatt-ui-shell STATIC
     include/hatt/ui/DesignCanvas.hpp
     include/hatt/ui/MainWindow.hpp
+    include/hatt/ui/ProjectFile.hpp
     include/hatt/ui/SketchModel.hpp
     include/hatt/ui/Theme.hpp
+    include/hatt/ui/Units.hpp
     src/DesignCanvas.cpp
     src/MainWindow.cpp
+    src/ProjectFile.cpp
+    include/hatt/ui/ProjectSafety.hpp
+    src/ProjectSafety.cpp
     src/SketchModel.cpp
     src/SketchCircuit.cpp
     include/hatt/ui/CircuitWorkflow.hpp
     src/CircuitWorkflow.cpp
+    include/hatt/ui/ComponentLibrary.hpp
+    src/ComponentLibrary.cpp
+    include/hatt/ui/ComponentCatalog.hpp
+    src/ComponentCatalog.cpp
+    include/hatt/ui/LibraryDialogs.hpp
+    src/LibraryDialogs.cpp
+    include/hatt/ui/BoardCopper.hpp
+    src/BoardCopper.cpp
+    include/hatt/ui/DesignRules.hpp
+    src/DesignRules.cpp
+    include/hatt/ui/DesignChecks.hpp
+    src/DesignChecks.cpp
+    include/hatt/ui/ChecksReport.hpp
+    src/ChecksReport.cpp
+    include/hatt/ui/DesignRuleManager.hpp
+    src/DesignRuleManager.cpp
+    include/hatt/ui/ManufacturingExport.hpp
+    src/ManufacturingExport.cpp
     src/Theme.cpp
+    src/Units.cpp
+    include/hatt/ui/BoardLayerPanel.hpp
+    src/BoardLayerPanel.cpp
+    include/hatt/ui/RoutingStyles.hpp
+    src/RoutingStyles.cpp
+    include/hatt/ui/PackageFromSelection.hpp
+    src/PackageFromSelection.cpp
+    include/hatt/ui/PadStyles.hpp
+    src/PadStyles.cpp
+    include/hatt/ui/LayerColors.hpp
+    src/LayerColors.cpp
+    include/hatt/ui/GerberExport.hpp
+    src/GerberExport.cpp
+    include/hatt/ui/StrokeFont.hpp
+    src/StrokeFont.cpp
+    include/hatt/ui/CamPreview.hpp
+    src/CamPreview.cpp
+    include/hatt/ui/ZoneFill.hpp
+    src/ZoneFill.cpp
+    include/hatt/ui/SpecctraDsn.hpp
+    src/SpecctraDsn.cpp
+    include/hatt/ui/SpecctraSes.hpp
+    src/SpecctraSes.cpp
+    include/hatt/ui/FreeroutingRunner.hpp
+    src/FreeroutingRunner.cpp
+    include/hatt/ui/PrintLayout.hpp
+    src/PrintLayout.cpp
+    include/hatt/ui/PrintLayoutDialog.hpp
+    src/PrintLayoutDialog.cpp
+    include/hatt/ui/AgenticGateway.hpp
+    src/AgenticGateway.cpp
+    include/hatt/ui/SketchClipboard.hpp
+    src/SketchClipboard.cpp
 )
 
 add_library(HattEDA::UiShell ALIAS hatt-ui-shell)
 
 target_include_directories(hatt-ui-shell PUBLIC include)
-target_link_libraries(hatt-ui-shell PUBLIC Qt6::Widgets HattEDA::Electrical)
+target_link_libraries(hatt-ui-shell PUBLIC Qt6::Widgets HattEDA::Electrical HattEDA::AgenticMcp PRIVATE Qt6::PrintSupport)
 
 if(MSVC)
     target_compile_options(hatt-ui-shell PRIVATE /W4 /permissive-)

@@ -51,6 +51,34 @@ private slots:
         QCOMPARE(result.nets.size(), std::size_t(1));
         QCOMPARE(result.nets.front().name, std::string("0"));
     }
+    void junctionPointsMarkJoinsNotCrossings() {
+        ConnectivityInput input;
+        // Crossing: no dot.
+        input.wires = {{{{-2, 0}, {2, 0}}}, {{{0, -2}, {0, 2}}}};
+        QVERIFY(junctionPoints(input).empty());
+        // T join onto the middle of a segment: one dot.
+        input.wires = {{{{-2, 0}, {2, 0}}}, {{{0, 0}, {0, 2}}}};
+        auto dots = junctionPoints(input);
+        QCOMPARE(dots.size(), std::size_t(1));
+        QCOMPARE(dots.front().x, 0.0);
+        QCOMPARE(dots.front().y, 0.0);
+        // T join onto an internal bend, and two wire ends meeting on a third wire end.
+        input.wires = {{{{-2, 0}, {0, 0}, {0, -2}}}, {{{0, 0}, {2, 0}}}};
+        QCOMPARE(junctionPoints(input).size(), std::size_t(1));
+        input.wires = {{{{-2, 0}, {0, 0}}}, {{{0, 0}, {2, 0}}}, {{{0, 0}, {0, 2}}}};
+        QCOMPARE(junctionPoints(input).size(), std::size_t(1));
+        // Two wires continuing end to end, or a single wire on a pin: no dot.
+        input.wires = {{{{-2, 0}, {0, 0}}}, {{{0, 0}, {2, 0}}}};
+        QVERIFY(junctionPoints(input).empty());
+        input.pins = {{"R1", "1", {0, 0}}};
+        input.wires = {{{{0, 0}, {2, 0}}}};
+        QVERIFY(junctionPoints(input).empty());
+        // Two wires on one pin: dot. An explicit junction there is drawn by its own symbol.
+        input.wires = {{{{0, 0}, {2, 0}}}, {{{0, 0}, {0, 2}}}};
+        QCOMPARE(junctionPoints(input).size(), std::size_t(1));
+        input.junctions = {{0, 0}};
+        QVERIFY(junctionPoints(input).empty());
+    }
     void globalNamesAndConflicts() {
         ConnectivityInput input;
         input.pins = {{"A", "1", {1, 1}}, {"B", "1", {20, 20}}};
