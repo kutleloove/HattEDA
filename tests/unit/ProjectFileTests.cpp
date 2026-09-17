@@ -348,6 +348,36 @@ private slots:
         QCOMPARE(load.project.schematic.first().variant, QStringLiteral("schematic.resistor"));
     }
 
+    // Review follow-up: a document item can reference a custom device id that IS declared in the
+    // same file's library section (the normal case, unlike the unmapped-id test above).
+    // `libraryFromJson`/`registerProjectLibrary` registers `library.customDevices` before
+    // `documentFromJson` validates document items, so the real definition must already be in the
+    // registry by the time any item is checked -- the placeholder path in documentFromJson is
+    // never reached, and registerSymbols' last-write-wins replacement never gets a chance to let a
+    // placeholder clobber it. Confirms a project's own device is never permanently reduced to an
+    // empty placeholder box.
+    void properlyDeclaredCustomDeviceNeverShadowedByAPlaceholder() {
+        ProjectData project;
+        project.name = QStringLiteral("CustomDeviceWins");
+        DeviceDefinition device;
+        device.id = newCustomDeviceId();
+        device.name = QStringLiteral("Real Part");
+        device.prefix = QStringLiteral("Z");
+        device.pinCount = 3;
+        device.pinNames = {QStringLiteral("A"), QStringLiteral("B"), QStringLiteral("C")};
+        project.library.customDevices = {device};
+        project.library.devices = {device.id};
+        project.schematic = {item(SketchItem::Kind::Symbol, {{0, 0}}, device.id)};
+
+        const ProjectLoad load = parseProject(serializeProject(project));
+        QVERIFY2(load.ok(), qPrintable(load.error));
+        QVERIFY2(load.warnings.isEmpty(), qPrintable(load.warnings.join(QStringLiteral("; "))));
+        const auto* symbol = findSymbol(device.id);
+        QVERIFY(symbol != nullptr);
+        QCOMPARE(symbol->prefix, QStringLiteral("Z"));
+        QCOMPARE(symbol->pins.size(), 3); // the real device's pin count, not the placeholder's one pin
+    }
+
     void padItemRoundTrip() {
         ProjectData project;
         project.name = QStringLiteral("PadTest");

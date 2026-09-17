@@ -93,7 +93,13 @@ current strict "unknown symbol rejects the file": `ProjectFile.cpp`'s reader now
 a minimal dashed box, one pin at the anchor, registered under the item's own unresolved id so every
 other reader of the document stays safe too — instead of rejecting the whole file, and the load
 produces a non-fatal warning (`ProjectLoad::warnings`, surfaced by `MainWindow::openProjectFile` as
-a `QMessageBox::warning` after the project opens). Newly-saved projects always write the new `lib.*`
+a `QMessageBox::warning` after the project opens). The placeholder's single pin is a known,
+accepted limitation: a real multi-pin part reduced to a placeholder shows its wires as
+disconnected, which the warning already calls out rather than silently fixing. Because
+`libraryFromJson`/`registerProjectLibrary` always registers a file's own project devices/footprints
+before `documentFromJson` validates any document item, a properly-declared custom device is never
+shadowed by a placeholder regardless of registration order elsewhere in the process (a dedicated
+test, `properlyDeclaredCustomDeviceNeverShadowedByAPlaceholder`, pins this down). Newly-saved projects always write the new `lib.*`
 ids (nothing re-canonicalizes an *existing* item's stored id on load — only new placements use
 `symbolLibrary()`, which only contains new ids); the alias table is read-direction only.
 
@@ -111,7 +117,9 @@ ids (nothing re-canonicalizes an *existing* item's stored id on load — only ne
 
 `ProjectFileTests`: `unknownSymbolLoadsAsPlaceholderWithWarning` (unmapped id → placeholder, one
 warning naming it, byte-identical re-save of the untouched item), `legacyIdResolvesWithoutWarningOrPlaceholder`
-(a known legacy id → no warning, `findSymbol` resolves it), `formatVersionPicksTheHighestFeatureInUse`
+(a known legacy id → no warning, `findSymbol` resolves it), `properlyDeclaredCustomDeviceNeverShadowedByAPlaceholder`
+(a project's own, properly-declared custom device is never reduced to a placeholder),
+`formatVersionPicksTheHighestFeatureInUse`
 (variant > mirror > zone > base priority, extended for the v6 tier), `v1FileIsUpgradedToV2` (default
 `symbolVariant` on upgrade). `hatt-component-library-tests`/`hatt-design-canvas-tests`/
 `hatt-ui-shell-tests` exercise the migrated library through the existing suite; the handful of
