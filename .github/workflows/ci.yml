@@ -104,3 +104,39 @@ jobs:
 
       - name: Build (Release)
         run: cmake --build --preset ci-release
+
+      # Bundles Qt/MinGW runtime and plugins into a flat, self-contained folder (ADR-0016), so a
+      # user can run hatteda.exe without Qt or MinGW on PATH.
+      - name: Deploy (Release)
+        run: cmake --install build/ci-mingw-release --prefix build/ci-mingw-release/dist
+
+      # The deployed folder ships only the "windows" platform plugin (a real end-user need); add
+      # "offscreen" here only for this CI smoke test, matching the debug test presets' platform.
+      - name: Smoke test deployed Release build
+        shell: pwsh
+        run: |
+          Copy-Item "$env:QT_ROOT_DIR/plugins/platforms/qoffscreen.dll" `
+            "build/ci-mingw-release/dist/plugins/platforms/qoffscreen.dll"
+          $env:QT_QPA_PLATFORM = "offscreen"
+          $env:QT_QPA_FONTDIR = "$env:SystemRoot/Fonts"
+          $env:PATH = "C:/WINDOWS/system32;C:/WINDOWS"
+          $proc = Start-Process -FilePath "build/ci-mingw-release/dist/hatteda.exe" -PassThru `
+            -RedirectStandardError "hatteda-smoke-err.txt" -RedirectStandardOutput "hatteda-smoke-out.txt"
+          Start-Sleep -Seconds 5
+          $running = Get-Process -Id $proc.Id -ErrorAction SilentlyContinue
+          if (-not $running) {
+            Write-Host "::error::hatteda.exe exited within 5s (exit code $($proc.ExitCode)) with only" `
+              "C:/WINDOWS on PATH - it is not self-contained"
+            Get-Content hatteda-smoke-err.txt -ErrorAction SilentlyContinue
+            exit 1
+          }
+          Stop-Process -Id $proc.Id -Force
+          Write-Host "hatteda.exe ran for 5s with no Qt/MinGW on PATH: deploy is self-contained"
+
+      - name: Upload deployed Release build
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: hatteda-windows-mingw-release
+          path: build/ci-mingw-release/dist/
+          if-no-files-found: error
+          retention-days: 14
