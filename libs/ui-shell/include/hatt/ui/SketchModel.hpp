@@ -149,6 +149,11 @@ struct SketchItem {
     QString fontFamily;
     // Copper and area zones: how the zone is filled (ADR-0012).
     ZoneFillStyle zoneFill = ZoneFillStyle::Solid;
+    // Kind::Symbol only (#61/ADR-0017): which LibrarySymbolVariant of the device to draw, e.g.
+    // "standard" or "animated". Model and persistence only in this issue -- no variant-aware
+    // rendering yet (findSymbol still returns one registered SymbolDefinition per id, always its
+    // "standard" variant); the picker UI and rendering switch are #64.
+    QString symbolVariant = QStringLiteral("standard");
 };
 
 using SketchDocument = QVector<SketchItem>;

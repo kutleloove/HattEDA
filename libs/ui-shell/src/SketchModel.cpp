@@ -1,4 +1,5 @@
 #include "hatt/ui/SketchModel.hpp"
+#include "hatt/ui/LibraryModel.hpp"
 
 #include <QCoreApplication>
 #include <QPolygonF>
@@ -18,42 +19,6 @@ namespace hatt::ui {
 namespace {
 
 constexpr double Pi = 3.14159265358979323846;
-
-SymbolShape polyline(std::initializer_list<QPointF> points) {
-    SymbolShape shape;
-    shape.points = points;
-    return shape;
-}
-
-SymbolShape polygon(std::initializer_list<QPointF> points, bool filled = false) {
-    SymbolShape shape;
-    shape.points = points;
-    shape.closed = true;
-    shape.filled = filled;
-    return shape;
-}
-
-SymbolShape rectangle(double x, double y, double w, double h) {
-    return polygon({{x, y}, {x + w, y}, {x + w, y + h}, {x, y + h}});
-}
-
-SymbolShape arc(QPointF center, double radius, double startDegrees, double spanDegrees,
-                int segments = 12) {
-    SymbolShape shape;
-    for (int i = 0; i <= segments; ++i) {
-        const double angle = (startDegrees + spanDegrees * i / segments) * Pi / 180.0;
-        shape.points.append(center + QPointF(radius * std::cos(angle), -radius * std::sin(angle)));
-    }
-    return shape;
-}
-
-SymbolShape circle(QPointF center, double radius, bool filled = false) {
-    SymbolShape shape = arc(center, radius, 0.0, 360.0, 28);
-    shape.points.removeLast();
-    shape.closed = true;
-    shape.filled = filled;
-    return shape;
-}
 
 // v2 pad helpers — build PadDefinition for footprint pad lists.
 PadDefinition makePad(int number, double w, double h) {
@@ -104,268 +69,6 @@ PadDefinition makeSquareThroughPad(int number, double size, double drill) {
     return p;
 }
 
-SymbolDefinition define(const char* id, const char* name, Workspace workspace,
-                        SymbolCategory category, const char* prefix, const char* label = "") {
-    SymbolDefinition symbol;
-    symbol.id = QString::fromLatin1(id);
-    symbol.name = name;
-    symbol.workspace = workspace;
-    symbol.category = category;
-    symbol.prefix = QString::fromLatin1(prefix);
-    symbol.defaultLabel = QString::fromLatin1(label);
-    return symbol;
-}
-
-QVector<SymbolDefinition> buildLibrary() {
-    using W = Workspace;
-    using C = SymbolCategory;
-    QVector<SymbolDefinition> library;
-
-    auto resistor = define("schematic.resistor", QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Resistor"),
-                           W::Schematic, C::Component, "R");
-    resistor.shapes = {rectangle(-2.54, -1.016, 5.08, 2.032), polyline({{-5.08, 0}, {-2.54, 0}}),
-                       polyline({{2.54, 0}, {5.08, 0}})};
-    resistor.pins = {{-5.08, 0}, {5.08, 0}};
-    resistor.defaultValue = QStringLiteral("1k");
-    resistor.defaultFootprint = QStringLiteral("board.r0603");
-    library.append(resistor);
-
-    auto voltage = define("schematic.vdc", QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "DC voltage source"),
-                          W::Schematic, C::Component, "V");
-    voltage.shapes = {circle({0, 0}, 2.54), polyline({{0, -5.08}, {0, -2.54}}),
-                      polyline({{0, 2.54}, {0, 5.08}}), polyline({{-0.8, -1}, {0.8, -1}}),
-                      polyline({{0, -1.8}, {0, -0.2}}), polyline({{-0.8, 1}, {0.8, 1}})};
-    voltage.pins = {{0, -5.08}, {0, 5.08}};
-    voltage.defaultValue = QStringLiteral("5");
-    voltage.defaultFootprint = QStringLiteral("board.header-1x2");
-    library.append(voltage);
-
-    auto capacitor = define("schematic.capacitor", QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Capacitor"),
-                            W::Schematic, C::Component, "C");
-    capacitor.shapes = {polyline({{-5.08, 0}, {-0.635, 0}}), polyline({{-0.635, -2.032}, {-0.635, 2.032}}),
-                        polyline({{0.635, -2.032}, {0.635, 2.032}}), polyline({{0.635, 0}, {5.08, 0}})};
-    capacitor.pins = {{-5.08, 0}, {5.08, 0}};
-    capacitor.defaultValue = QStringLiteral("100n");
-    capacitor.defaultFootprint = QStringLiteral("board.c0805");
-    library.append(capacitor);
-
-    auto inductor = define("schematic.inductor", QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Inductor"),
-                           W::Schematic, C::Component, "L");
-    inductor.shapes = {polyline({{-5.08, 0}, {-2.54, 0}}), polyline({{2.54, 0}, {5.08, 0}})};
-    for (double x : {-1.905, -0.635, 0.635, 1.905}) {
-        inductor.shapes.append(arc({x, 0}, 0.635, 180.0, -180.0, 8));
-    }
-    inductor.pins = {{-5.08, 0}, {5.08, 0}};
-    inductor.defaultValue = QStringLiteral("10u");
-    inductor.defaultFootprint = QStringLiteral("board.c0805");
-    library.append(inductor);
-
-    auto diode = define("schematic.diode", QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Diode"),
-                        W::Schematic, C::Component, "D");
-    diode.shapes = {polyline({{-5.08, 0}, {-1.27, 0}}), polyline({{1.27, 0}, {5.08, 0}}),
-                    polygon({{-1.27, -1.524}, {-1.27, 1.524}, {1.27, 0}}),
-                    polyline({{1.27, -1.524}, {1.27, 1.524}})};
-    diode.pins = {{-5.08, 0}, {5.08, 0}};
-    diode.defaultFootprint = QStringLiteral("board.c0805");
-    library.append(diode);
-
-    auto led = diode;
-    led.id = QStringLiteral("schematic.led");
-    led.name = QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "LED");
-    for (double dx : {0.0, 1.3}) {
-        led.shapes.append(polyline({{-0.2 + dx, -2.0}, {1.0 + dx, -3.2}}));
-        led.shapes.append(polyline({{0.35 + dx, -3.15}, {1.0 + dx, -3.2}, {0.95 + dx, -2.55}}));
-    }
-    library.append(led);
-
-    auto npn = define("schematic.npn", QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "NPN transistor"),
-                      W::Schematic, C::Component, "Q");
-    npn.shapes = {circle({0.9, 0}, 3.3), polyline({{-5.08, 0}, {-0.635, 0}}),
-                  polyline({{-0.635, -1.905}, {-0.635, 1.905}}),
-                  polyline({{-0.635, -0.8}, {2.54, -2.8}, {2.54, -5.08}}),
-                  polyline({{-0.635, 0.8}, {2.54, 2.8}, {2.54, 5.08}}),
-                  polygon({{2.54, 2.8}, {1.35, 2.75}, {1.95, 1.8}}, true)};
-    npn.pins = {{-5.08, 0}, {2.54, -5.08}, {2.54, 5.08}};
-    npn.defaultFootprint = QStringLiteral("board.sot23");
-    library.append(npn);
-
-    auto opamp = define("schematic.opamp", QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Operational amplifier"),
-                        W::Schematic, C::Component, "U");
-    opamp.shapes = {polygon({{-3.81, -5.08}, {-3.81, 5.08}, {5.08, 0}}),
-                    polyline({{-7.62, -2.54}, {-3.81, -2.54}}), polyline({{-7.62, 2.54}, {-3.81, 2.54}}),
-                    polyline({{5.08, 0}, {7.62, 0}}), polyline({{-3.2, -2.54}, {-2.2, -2.54}}),
-                    polyline({{-3.2, 2.54}, {-2.2, 2.54}}), polyline({{-2.7, 2.04}, {-2.7, 3.04}})};
-    opamp.pins = {{-7.62, -2.54}, {-7.62, 2.54}, {7.62, 0}};
-    opamp.defaultFootprint = QStringLiteral("board.sot23");
-    library.append(opamp);
-
-    auto ic = define("schematic.ic8", QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Integrated circuit (8 pins)"),
-                     W::Schematic, C::Component, "U");
-    ic.shapes = {rectangle(-5.08, -7.62, 10.16, 12.7), circle({-3.81, -6.35}, 0.45)};
-    for (double y : {-5.08, -2.54, 0.0, 2.54}) {
-        ic.shapes.append(polyline({{-7.62, y}, {-5.08, y}}));
-        ic.shapes.append(polyline({{5.08, y}, {7.62, y}}));
-        ic.pins.append({-7.62, y});
-    }
-    for (double y : {2.54, 0.0, -2.54, -5.08}) {
-        ic.pins.append({7.62, y});
-    }
-    ic.defaultFootprint = QStringLiteral("board.soic8");
-    library.append(ic);
-
-    auto input = define("schematic.input", QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Input port"),
-                        W::Schematic, C::Terminal, "", "IN");
-    input.shapes = {polygon({{-6.35, -1.016}, {-2.286, -1.016}, {-1.27, 0}, {-2.286, 1.016}, {-6.35, 1.016}}),
-                    polyline({{-1.27, 0}, {0, 0}})};
-    input.pins = {{0, 0}};
-    library.append(input);
-
-    auto output = define("schematic.output", QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Output port"),
-                         W::Schematic, C::Terminal, "", "OUT");
-    output.shapes = {polygon({{-1.27, -1.016}, {-5.334, -1.016}, {-6.35, 0}, {-5.334, 1.016}, {-1.27, 1.016}}),
-                     polyline({{-1.27, 0}, {0, 0}})};
-    output.pins = {{0, 0}};
-    library.append(output);
-
-    auto bidirectional = define("schematic.bidirectional",
-                                QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Bidirectional port"),
-                                W::Schematic, C::Terminal, "", "IO");
-    bidirectional.shapes = {polygon({{-1.27, 0}, {-2.286, -1.016}, {-5.334, -1.016}, {-6.35, 0},
-                                     {-5.334, 1.016}, {-2.286, 1.016}}),
-                            polyline({{-1.27, 0}, {0, 0}})};
-    bidirectional.pins = {{0, 0}};
-    library.append(bidirectional);
-
-    auto power = define("schematic.power", QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Power rail"),
-                        W::Schematic, C::Terminal, "", "VCC");
-    power.shapes = {polyline({{0, 0}, {0, -2.54}}), polyline({{-1.524, -2.54}, {1.524, -2.54}})};
-    power.pins = {{0, 0}};
-    library.append(power);
-
-    auto ground = define("schematic.ground", QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Ground"),
-                         W::Schematic, C::Terminal, "", "");
-    ground.shapes = {polyline({{0, 0}, {0, 2.54}}), polyline({{-1.905, 2.54}, {1.905, 2.54}}),
-                     polyline({{-1.143, 3.302}, {1.143, 3.302}}), polyline({{-0.381, 4.064}, {0.381, 4.064}})};
-    ground.pins = {{0, 0}};
-    library.append(ground);
-
-    auto junction = define("schematic.junction", QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Junction"),
-                           W::Schematic, C::Terminal, "", "");
-    junction.shapes = {circle({0, 0}, 0.5, true)};
-    junction.pins = {{0, 0}};
-    library.append(junction);
-
-    auto voltageProbe = define("schematic.voltage-probe",
-                               QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Voltage probe"),
-                               W::Schematic, C::Probe, "VP");
-    voltageProbe.shapes = {polyline({{0, 0}, {1.6, -1.6}}), circle({2.6, -2.6}, 1.4),
-                           polyline({{2.0, -3.3}, {2.6, -1.9}, {3.2, -3.3}})};
-    voltageProbe.pins = {{0, 0}};
-    library.append(voltageProbe);
-
-    auto currentProbe = define("schematic.current-probe",
-                               QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Current probe"),
-                               W::Schematic, C::Probe, "IP");
-    currentProbe.shapes = {circle({0, 0}, 1.6), polyline({{-1.0, 0}, {1.0, 0}}),
-                           polyline({{0.35, -0.55}, {1.0, 0}, {0.35, 0.55}})};
-    currentProbe.pins = {{0, 0}};
-    library.append(currentProbe);
-
-    // --- Board footprints ---
-    // `shapes` is the silkscreen outline; copper is drawn from `pads`, one pad per pin.
-
-    auto header2 = define("board.header-1x2", QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Pin header 1x2"),
-                           W::Board, C::Component, "J");
-    header2.shapes = {rectangle(-1.27, -1.27, 5.08, 2.54)};
-    header2.pins = {{0, 0}, {2.54, 0}};
-    header2.pads = {makeSquareThroughPad(1, 1.6, 0.8), makeThroughPad(2, 1.6, 0.8)};
-    library.append(header2);
-
-    auto r0603 = define("board.r0603", QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Resistor 0603"),
-                        W::Board, C::Component, "R");
-    r0603.shapes = {rectangle(-1.45, -0.8, 2.9, 1.6)};
-    r0603.pins = {{-0.8, 0}, {0.8, 0}};
-    r0603.pads = {makePad(1, 0.8, 0.95), makePad(2, 0.8, 0.95)};
-    library.append(r0603);
-
-    auto c0805 = define("board.c0805", QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Capacitor 0805"),
-                        W::Board, C::Component, "C");
-    c0805.shapes = {rectangle(-1.8, -1.0, 3.6, 2.0)};
-    c0805.pins = {{-0.95, 0}, {0.95, 0}};
-    c0805.pads = {makePad(1, 1.0, 1.3), makePad(2, 1.0, 1.3)};
-    library.append(c0805);
-
-    auto sot23 = define("board.sot23", QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "SOT-23"),
-                        W::Board, C::Component, "Q");
-    sot23.shapes = {rectangle(-1.6, -0.7, 3.2, 1.4)};
-    sot23.pins = {{-0.95, 1.1}, {0.95, 1.1}, {0, -1.1}};
-    sot23.pads = {makePad(1, 0.8, 0.9), makePad(2, 0.8, 0.9), makePad(3, 0.8, 0.9)};
-    library.append(sot23);
-
-    auto soic8 = define("board.soic8", QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "SOIC-8"),
-                        W::Board, C::Component, "U");
-    soic8.shapes = {rectangle(-1.95, -2.5, 3.9, 5.0), circle({-1.4, -1.95}, 0.2, true)};
-    int soic8PadNum = 1;
-    for (double y : {-1.905, -0.635, 0.635, 1.905}) {
-        soic8.pins.append({-2.7, y});
-        soic8.pads.append(makePad(soic8PadNum++, 1.55, 0.6));
-    }
-    for (double y : {1.905, 0.635, -0.635, -1.905}) {
-        soic8.pins.append({2.7, y});
-        soic8.pads.append(makePad(soic8PadNum++, 1.55, 0.6));
-    }
-    library.append(soic8);
-
-    auto dip8 = define("board.dip8", QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "DIP-8"),
-                       W::Board, C::Component, "U");
-    dip8.shapes = {rectangle(-2.6, -5.1, 5.2, 10.2)};
-    int dip8PadNum = 1;
-    for (double y : {-3.81, -1.27, 1.27, 3.81}) {
-        dip8.pins.append({-3.81, y});
-        dip8.pads.append(dip8PadNum == 1 ? makeSquareThroughPad(dip8PadNum++, 1.6, 0.8)
-                                         : makeThroughPad(dip8PadNum++, 1.6, 0.8));
-    }
-    for (double y : {3.81, 1.27, -1.27, -3.81}) {
-        dip8.pins.append({3.81, y});
-        dip8.pads.append(makeThroughPad(dip8PadNum++, 1.6, 0.8));
-    }
-    library.append(dip8);
-
-    auto header = define("board.header-1x4", QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Pin header 1x4"),
-                         W::Board, C::Component, "J");
-    header.shapes = {rectangle(-1.27, -5.08, 2.54, 10.16)};
-    int headerPadNum = 1;
-    for (double y : {-3.81, -1.27, 1.27, 3.81}) {
-        header.pins.append({0, y});
-        header.pads.append(headerPadNum == 1 ? makeSquareThroughPad(headerPadNum++, 1.7, 1.0)
-                                             : makeThroughPad(headerPadNum++, 1.7, 1.0));
-    }
-    library.append(header);
-
-    // Kept so older files that placed the via symbol still open; new vias are Kind::Via items.
-    auto via = define("board.via", QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Via"),
-                      W::Board, C::Terminal, "");
-    via.pins = {{0, 0}};
-    via.pads = {makeThroughPad(1, 0.8, 0.4)};
-    library.append(via);
-
-    auto testPoint = define("board.test-point", QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Test point"),
-                            W::Board, C::Terminal, "TP");
-    testPoint.pins = {{0, 0}};
-    testPoint.pads = {makeRoundPad(1, 1.5)};
-    library.append(testPoint);
-
-    auto mountingHole = define("board.mounting-hole",
-                               QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Mounting hole"),
-                               W::Board, C::Terminal, "H");
-    mountingHole.shapes = {circle({0, 0}, 3.4)};
-    mountingHole.pins = {{0, 0}};
-    mountingHole.pads = {makeThroughPad(1, 6.0, 3.2)};
-    library.append(mountingHole);
-
-    return library;
-}
-
 QPointF rotateQuarter(QPointF point) { return {-point.y(), point.x()}; }
 
 void appendPolyline(QVector<QLineF>& segments, const QVector<QPointF>& points, bool closed) {
@@ -388,8 +91,9 @@ QSizeF textBox(const SketchItem& item) {
 } // namespace
 
 const QVector<SymbolDefinition>& symbolLibrary() {
-    static const QVector<SymbolDefinition> library = buildLibrary();
-    return library;
+    // Data-driven since #61 (ADR-0017): loaded from the embedded builtin.json resource by
+    // LibraryModel.hpp, not built from C++ literals.
+    return builtInLibrary().symbols;
 }
 
 namespace {
@@ -412,7 +116,17 @@ const SymbolDefinition* findSymbol(const QString& id) {
         }
     }
     const auto found = registry().symbols.find(id);
-    return found != registry().symbols.end() ? found->second.get() : nullptr;
+    if (found != registry().symbols.end()) {
+        return found->second.get();
+    }
+    // Legacy id (schematic.*, board.*; #61/ADR-0017): resolved once here so every caller --
+    // rendering, connectivity, existing tests, ProjectFile's reader -- transparently sees the
+    // current lib.* symbol without special-casing old ids at each call site.
+    const auto alias = builtInLibrary().aliases.constFind(id);
+    if (alias != builtInLibrary().aliases.constEnd() && alias.value() != id) {
+        return findSymbol(alias.value());
+    }
+    return nullptr;
 }
 
 void registerSymbols(const QVector<SymbolDefinition>& symbols) {

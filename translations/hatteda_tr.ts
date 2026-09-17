@@ -803,157 +803,167 @@
         <translation>Bağlı değil</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="179"/>
+        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="198"/>
         <source>The %1 section is missing or invalid.</source>
         <translation>%1 bölümü eksik veya geçersiz.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="184"/>
+        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="203"/>
         <source>%1 item %2</source>
         <translation>%1 öğe %2</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="185"/>
+        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="204"/>
         <source>%1 is not an object.</source>
         <translation>%1 bir nesne değil.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="190"/>
+        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="209"/>
         <source>%1 has no valid id.</source>
         <translation>%1 geçerli bir kimliğe sahip değil.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="191"/>
+        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="210"/>
         <source>%1 repeats the id %2.</source>
         <translation>%1, %2 kimliğini tekrar kullanıyor.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="196"/>
+        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="215"/>
         <source>%1 has an unknown kind.</source>
         <translation>%1 bilinmeyen bir türde.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="200"/>
+        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="219"/>
         <source>%1 has no point list.</source>
         <translation>%1 nokta listesi içermiyor.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="205"/>
+        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="224"/>
         <source>%1 has an invalid point.</source>
         <translation>%1 geçersiz bir nokta içeriyor.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="209"/>
+        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="228"/>
         <source>%1 has too few points.</source>
         <translation>%1 çok az nokta içeriyor.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="217"/>
+        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="236"/>
         <source>%1 has a text field of the wrong type.</source>
         <translation>%1 yanlış türde bir metin alanı içeriyor.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="222"/>
+        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="241"/>
         <source>%1 has an invalid rotation.</source>
         <translation>%1 geçersiz bir dönüş içeriyor.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="228"/>
+        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="247"/>
         <source>%1 has an invalid closed flag.</source>
         <translation>%1 geçersiz bir kapalı işareti içeriyor.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="233"/>
-        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="236"/>
+        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="252"/>
+        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="255"/>
         <source>%1 has an invalid pin to pad map.</source>
         <translation>%1 geçersiz bir pin → pad eşlemesi içeriyor.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="262"/>
+        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="274"/>
+        <source>%1 has an invalid symbol variant.</source>
+        <translation>%1 geçersiz bir sembol varyantı içeriyor.</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="286"/>
         <source>%1 has an invalid width.</source>
         <translation>%1 geçersiz genişliğe sahip.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="269"/>
+        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="293"/>
         <source>%1 has an invalid net.</source>
         <translation>%1 geçersiz bir net içeriyor.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="276"/>
+        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="300"/>
         <source>%1 has an invalid zone fill.</source>
         <translation>%1 geçersiz bir alan dolgusu içeriyor.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="282"/>
+        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="306"/>
         <source>%1 uses the unknown symbol &apos;%2&apos;.</source>
         <translation>%1 bilinmeyen &apos;%2&apos; sembolünü kullanıyor.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="396"/>
-        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="402"/>
+        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="315"/>
+        <source>%1 uses the unknown symbol &apos;%2&apos;; kept as a placeholder.</source>
+        <translation>%1 bilinmeyen &apos;%2&apos; sembolünü kullanıyor; yer tutucu olarak korundu.</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="429"/>
+        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="435"/>
         <source>The library section is invalid.</source>
         <translation>Kütüphane bölümü geçersiz.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="441"/>
-        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="457"/>
+        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="474"/>
+        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="490"/>
         <source>The library has an invalid footprint &apos;%1&apos;.</source>
         <translation>Kütüphanede geçersiz bir kılıf var: &apos;%1&apos;.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="443"/>
-        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="461"/>
+        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="476"/>
+        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="494"/>
         <source>The footprint &apos;%1&apos; is invalid: %2</source>
         <translation>&apos;%1&apos; kılıfı geçersiz: %2</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="511"/>
+        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="544"/>
         <source>The library has an invalid device &apos;%1&apos;.</source>
         <translation>Kütüphanede geçersiz bir eleman var: &apos;%1&apos;.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="518"/>
+        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="551"/>
         <source>The library lists the unknown device &apos;%1&apos;.</source>
         <translation>Kütüphane bilinmeyen &apos;%1&apos; elemanını içeriyor.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="571"/>
+        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="613"/>
         <source>The file is not a HattEDA project (invalid JSON).</source>
         <translation>Dosya bir HattEDA projesi değil (geçersiz JSON).</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="576"/>
+        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="618"/>
         <source>The file is not a HattEDA project.</source>
         <translation>Dosya bir HattEDA projesi değil.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="582"/>
+        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="624"/>
         <source>The project format version is missing or invalid.</source>
         <translation>Proje biçim sürümü eksik veya geçersiz.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="586"/>
+        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="628"/>
         <source>The project was saved by a newer HattEDA (format %1; this version reads up to %2). Update HattEDA to open it.</source>
         <translation>Proje daha yeni bir HattEDA ile kaydedilmiş (biçim %1; bu sürüm en fazla %2 okuyabilir). Açmak için HattEDA&apos;yı güncelleyin.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="598"/>
+        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="640"/>
         <source>schematic</source>
         <translation>şema</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="601"/>
+        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="643"/>
         <source>board</source>
         <translation>PCB</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="614"/>
-        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="618"/>
+        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="657"/>
+        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="661"/>
         <source>Cannot write %1: %2</source>
         <translation>%1 yazılamıyor: %2</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="627"/>
+        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="670"/>
         <source>Cannot open %1: %2</source>
         <translation>%1 açılamıyor: %2</translation>
     </message>
@@ -1737,47 +1747,47 @@
 <context>
     <name>hatt::ui::BoardLayer</name>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="494"/>
+        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="208"/>
         <source>Top copper</source>
         <translation>Üst bakır</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="495"/>
+        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="209"/>
         <source>Bottom copper</source>
         <translation>Alt bakır</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="496"/>
+        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="210"/>
         <source>Top silk</source>
         <translation>Üst serigrafi</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="497"/>
+        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="211"/>
         <source>Bottom silk</source>
         <translation>Alt serigrafi</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="498"/>
+        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="212"/>
         <source>Top resist</source>
         <translation>Üst lehim maskesi</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="499"/>
+        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="213"/>
         <source>Bottom resist</source>
         <translation>Alt lehim maskesi</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="500"/>
+        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="214"/>
         <source>Top paste</source>
         <translation>Üst pasta</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="501"/>
+        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="215"/>
         <source>Bottom paste</source>
         <translation>Alt pasta</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="502"/>
+        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="216"/>
         <source>Board edge</source>
         <translation>Kart kenarı</translation>
     </message>
@@ -3483,6 +3493,7 @@
     <message>
         <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2761"/>
         <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2862"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2876"/>
         <source>Open project</source>
         <translation>Proje aç</translation>
     </message>
@@ -3498,7 +3509,7 @@
     </message>
     <message>
         <location filename="../libs/ui-shell/src/MainWindow.cpp" line="1249"/>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3040"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3049"/>
         <source>Save</source>
         <translation>Kaydet</translation>
     </message>
@@ -4153,34 +4164,43 @@ Schematic, simulation, PCB and CAM design suite.</source>
 
 %2</translation>
     </message>
+    <message numerus="yes">
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2877"/>
+        <source>%1 opened, but %n item(s) use a symbol this version of HattEDA does not recognize and were kept as placeholders:
+
+%2</source>
+        <translation><numerusform>%1 açıldı, ancak %n öğe bu HattEDA sürümünün tanımadığı bir sembol kullanıyor ve yer tutucu olarak korundu:
+
+%2</numerusform></translation>
+    </message>
     <message>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2946"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2955"/>
         <source>Save HattEDA project as</source>
         <translation>HattEDA projesini farklı kaydet</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2947"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2956"/>
         <source>HattEDA projects (*.hatt)</source>
         <translation>HattEDA projeleri (*.hatt)</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2990"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2999"/>
         <source>Save project</source>
         <translation>Projeyi kaydet</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2999"/>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3331"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3008"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3340"/>
         <source>Saved %1</source>
         <translation>%1 kaydedildi</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3016"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3025"/>
         <source>Unsaved changes</source>
         <translation>Kaydedilmemiş değişiklikler</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3017"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3026"/>
         <source>%1 has unsaved changes. Save them before continuing?</source>
         <translation>%1 projesinde kaydedilmemiş değişiklikler var. Devam etmeden önce kaydedilsin mi?</translation>
     </message>
@@ -4190,12 +4210,12 @@ Schematic, simulation, PCB and CAM design suite.</source>
         <translation>Çıkış</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2887"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2896"/>
         <source>Project not found</source>
         <translation>Proje bulunamadı</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2888"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2897"/>
         <source>%1 no longer exists. It may have been moved, renamed or deleted.
 
 Remove it from the recent projects list?</source>
@@ -4676,24 +4696,24 @@ Son projeler listesinden kaldırılsın mı?</translation>
         <translation>Gerber X2 katmanları ve Excellon kaplamalı delik dosyası üret</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3074"/>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3096"/>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3111"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3083"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3105"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3120"/>
         <source>Export fabrication files</source>
         <translation>Üretim dosyalarını dışa aktar</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3195"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3204"/>
         <source>Gerber output</source>
         <translation>Gerber çıktısı</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3197"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3206"/>
         <source>Exported %1 fabrication files to %2</source>
         <translation>%1 üretim dosyası %2 konumuna aktarıldı</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3201"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3210"/>
         <source>; skipped %1 text items</source>
         <translation>; %1 metin öğesi atlandı</translation>
     </message>
@@ -4708,12 +4728,12 @@ Son projeler listesinden kaldırılsın mı?</translation>
         <translation>Tasarım kuralları...</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3292"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3301"/>
         <source>Design checks</source>
         <translation>Tasarım denetimi</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3295"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3304"/>
         <source>Design checks: %1 error(s), %2 warning(s)</source>
         <translation>Tasarım denetimi: %1 hata, %2 uyarı</translation>
     </message>
@@ -4738,49 +4758,49 @@ Son projeler listesinden kaldırılsın mı?</translation>
         <translation>Montaj için kılıf merkezlerini, dönüşlerini ve yüzlerini CSV olarak yaz</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3246"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3255"/>
         <source>No recent projects yet</source>
         <translation>Henüz son proje yok</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3323"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3332"/>
         <source>CSV files (*.csv);;All files (*.*)</source>
         <translation>CSV dosyaları (*.csv);;Tüm dosyalar (*.*)</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3338"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3347"/>
         <source>Export bill of materials</source>
         <translation>Malzeme listesini dışa aktar</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3344"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3353"/>
         <source>Export pick and place</source>
         <translation>Dizgi dosyasını dışa aktar</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3328"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3337"/>
         <source>Cannot write %1: %2</source>
         <translation>%1 yazılamıyor: %2</translation>
     </message>
     <message numerus="yes">
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3075"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3084"/>
         <source>The board has %n design rule error(s). Boards made from these files may not work.</source>
         <translation>
             <numerusform>Kartta %n tasarım kuralı hatası var. Bu dosyalarla üretilen kart çalışmayabilir.</numerusform>
         </translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3080"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3089"/>
         <source>Export anyway</source>
         <translation>Yine de dışa aktar</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3082"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3091"/>
         <source>Open report</source>
         <translation>Raporu aç</translation>
     </message>
     <message numerus="yes">
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3119"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3128"/>
         <source>%n copper zone(s) without a net were NOT exported: an unpoured zone would short every net it covers. Choose the zone&apos;s net in its properties to pour it with clearance.</source>
         <translation>
             <numerusform>Netsiz %n bakır alan dışa AKTARILMADI: dökülmemiş bir alan kapsadığı bütün netleri kısa devre ederdi. Clearance ile dökülmesi için alanın özelliklerinden netini seçin.</numerusform>
@@ -4802,43 +4822,43 @@ Son projeler listesinden kaldırılsın mı?</translation>
         <translation>Net</translation>
     </message>
     <message numerus="yes">
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3204"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3213"/>
         <source>; %n copper zone(s) not exported</source>
         <translation>
             <numerusform>; %n bakır alan dışa aktarılmadı</numerusform>
         </translation>
     </message>
     <message numerus="yes">
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3207"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3216"/>
         <source>; %n design rule error(s)</source>
         <translation>
             <numerusform>; %n tasarım kuralı hatası</numerusform>
         </translation>
     </message>
     <message numerus="yes">
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3211"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3220"/>
         <source>; %n design rule warning(s)</source>
         <translation>
             <numerusform>; %n tasarım kuralı uyarısı</numerusform>
         </translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3139"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3148"/>
         <source>%1  (%2)</source>
         <translation>%1  (%2)</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3144"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3153"/>
         <source>Drill holes  (%1)</source>
         <translation>Delikler  (%1)</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3168"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3177"/>
         <source>Preview</source>
         <translation>Önizleme</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3173"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3182"/>
         <source>File text</source>
         <translation>Dosya metni</translation>
     </message>
@@ -5068,32 +5088,32 @@ Son projeler listesinden kaldırılsın mı?</translation>
 <context>
     <name>hatt::ui::PadStyle</name>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="526"/>
+        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="240"/>
         <source>Round through-hole pad</source>
         <translation>Yuvarlak delikli pad</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="528"/>
+        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="242"/>
         <source>Square through-hole pad</source>
         <translation>Kare delikli pad</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="533"/>
+        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="247"/>
         <source>Oval (DIL) pad</source>
         <translation>Oval (DIL) pad</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="534"/>
+        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="248"/>
         <source>SMD rectangular pad</source>
         <translation>Dikdörtgen SMD pad</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="536"/>
+        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="250"/>
         <source>SMD round pad</source>
         <translation>Yuvarlak SMD pad</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="539"/>
+        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="253"/>
         <source>Edge connector pad</source>
         <translation>Kenar konnektörü pad&apos;i</translation>
     </message>
@@ -5421,137 +5441,137 @@ Son projeler listesinden kaldırılsın mı?</translation>
 <context>
     <name>hatt::ui::SymbolLibrary</name>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="124"/>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="22"/>
         <source>Resistor</source>
         <translation>Direnç</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="133"/>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="23"/>
         <source>DC voltage source</source>
         <translation>DC gerilim kaynağı</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="143"/>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="24"/>
         <source>Capacitor</source>
         <translation>Kondansatör</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="152"/>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="25"/>
         <source>Inductor</source>
         <translation>Bobin</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="163"/>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="26"/>
         <source>Diode</source>
         <translation>Diyot</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="174"/>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="27"/>
         <source>LED</source>
         <translation>LED</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="181"/>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="28"/>
         <source>NPN transistor</source>
         <translation>NPN transistör</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="192"/>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="29"/>
         <source>Operational amplifier</source>
         <translation>İşlemsel yükselteç</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="202"/>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="30"/>
         <source>Integrated circuit (8 pins)</source>
         <translation>Tümleşik devre (8 pin)</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="216"/>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="31"/>
         <source>Input port</source>
         <translation>Giriş portu</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="223"/>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="32"/>
         <source>Output port</source>
         <translation>Çıkış portu</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="231"/>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="33"/>
         <source>Bidirectional port</source>
         <translation>Çift yönlü port</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="239"/>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="34"/>
         <source>Power rail</source>
         <translation>Güç hattı</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="245"/>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="35"/>
         <source>Ground</source>
         <translation>Ground</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="252"/>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="36"/>
         <source>Junction</source>
         <translation>Kavşak</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="259"/>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="37"/>
         <source>Voltage probe</source>
         <translation>Gerilim probu</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="267"/>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="38"/>
         <source>Current probe</source>
         <translation>Akım probu</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="277"/>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="39"/>
         <source>Pin header 1x2</source>
         <translation>Pin başlığı 1x2</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="284"/>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="40"/>
         <source>Resistor 0603</source>
         <translation>Direnç 0603</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="291"/>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="41"/>
         <source>Capacitor 0805</source>
         <translation>Kondansatör 0805</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="298"/>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="42"/>
         <source>SOT-23</source>
         <translation>SOT-23</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="305"/>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="43"/>
         <source>SOIC-8</source>
         <translation>SOIC-8</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="319"/>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="44"/>
         <source>DIP-8</source>
         <translation>DIP-8</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="334"/>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="45"/>
         <source>Pin header 1x4</source>
         <translation>Pin header 1x4</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="346"/>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="46"/>
         <source>Via</source>
         <translation>Via</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="352"/>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="47"/>
         <source>Test point</source>
         <translation>Test noktası</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="359"/>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="48"/>
         <source>Mounting hole</source>
         <translation>Montaj deliği</translation>
     </message>
@@ -5559,17 +5579,17 @@ Son projeler listesinden kaldırılsın mı?</translation>
 <context>
     <name>hatt::ui::ZoneFill</name>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="693"/>
+        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="407"/>
         <source>Solid</source>
         <translation>Dolu</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="694"/>
+        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="408"/>
         <source>Hatched</source>
         <translation>Taralı</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="695"/>
+        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="409"/>
         <source>Empty</source>
         <translation>Boş</translation>
     </message>
