@@ -137,6 +137,54 @@ MosfetCore mosfetCore(double v1, double v2, double vto, double k) {
     return core;
 }
 
+// Ideal op-amp, modelled as a Norton-equivalent voltage-controlled voltage source: a smooth
+// tanh saturation between the (fixed) supply rails, so it needs no auxiliary MNA unknown (see
+// the call site's derivation in the doc comment above the stamping code). `diff` is
+// Vplus - Vminus. Returns the target output voltage and dTarget/dDiff.
+struct OpAmpCore { double target, gm; };
+OpAmpCore opAmpCore(double diff, double gain, double vpos, double vneg) {
+    const double vmid = (vpos + vneg) / 2.0;
+    const double vswing = (vpos - vneg) / 2.0;
+    if (vswing <= 0) return {vmid, 0.0};
+    const double t = std::tanh(gain * diff / vswing);
+    return {vmid + vswing * t, gain * (1.0 - t * t)};
+}
+
+// A logic gate's output as a smooth "soft" boolean function of one or two input voltages, each
+// compared to `vth` via tanh (steepness controls how sharp the digital transition is). Returns
+// the target output voltage and its two partial derivatives (dTarget/dVa, dTarget/dVb; the
+// second is 0 for LogicFunction::Not, which ignores vb entirely).
+struct LogicCore { double target, ga, gb; };
+LogicCore logicGateCore(double va, double vb, LogicFunction function, double vth, double steepness,
+                         double vol, double voh) {
+    const double vmid = (voh + vol) / 2.0, vswing = (voh - vol) / 2.0;
+    const double sa = std::tanh((va - vth) * steepness);
+    const double dsa = steepness * (1.0 - sa * sa);
+    double sb = 0, dsb = 0;
+    if (function != LogicFunction::Not) {
+        sb = std::tanh((vb - vth) * steepness);
+        dsb = steepness * (1.0 - sb * sb);
+    }
+    double combined = 0, dCombinedA = 0, dCombinedB = 0;
+    switch (function) {
+    case LogicFunction::Not: combined = -sa; dCombinedA = -1.0; break;
+    case LogicFunction::And:
+        if (sa <= sb) { combined = sa; dCombinedA = 1.0; } else { combined = sb; dCombinedB = 1.0; }
+        break;
+    case LogicFunction::Or:
+        if (sa >= sb) { combined = sa; dCombinedA = 1.0; } else { combined = sb; dCombinedB = 1.0; }
+        break;
+    case LogicFunction::Nand:
+        if (sa <= sb) { combined = -sa; dCombinedA = -1.0; } else { combined = -sb; dCombinedB = -1.0; }
+        break;
+    case LogicFunction::Nor:
+        if (sa >= sb) { combined = -sa; dCombinedA = -1.0; } else { combined = -sb; dCombinedB = -1.0; }
+        break;
+    case LogicFunction::Xor: combined = -sa * sb; dCombinedA = -sb; dCombinedB = -sa; break;
+    }
+    return {vmid + vswing * combined, vswing * dCombinedA * dsa, vswing * dCombinedB * dsb};
+}
+
 // Row-normalized, partial-pivot Gaussian elimination on the n x (n+1) augmented matrix `a`
 // (consumed by value: each Newton iteration and continuation stage solves its own copy).
 std::optional<std::vector<double>> gaussianSolve(std::vector<std::vector<double>> a, int n,
@@ -235,6 +283,32 @@ DcResult solveDc(const DcCircuit& circuit, const std::atomic_bool* cancelled) {
                 return failure("K must be finite and strictly positive: " + element.reference + ".");
             continue;
         }
+        if (element.kind == NonlinearKind::OpAmp) {
+            if (element.parameters.size() != 4)
+                return failure("Wrong parameter count for " + element.reference + ".");
+            if (element.parameters[0] <= 0)
+                return failure("Gain must be finite and strictly positive: " + element.reference + ".");
+            if (element.parameters[1] <= 0)
+                return failure("Output conductance must be finite and strictly positive: " + element.reference + ".");
+            if (element.parameters[2] <= element.parameters[3])
+                return failure("Vpos must be greater than Vneg: " + element.reference + ".");
+            continue;
+        }
+        if (element.kind == NonlinearKind::LogicGate) {
+            if (element.parameters.size() != 6)
+                return failure("Wrong parameter count for " + element.reference + ".");
+            const double function = element.parameters[0];
+            if (function != std::floor(function) || function < 0 ||
+                function > static_cast<double>(LogicFunction::Xor))
+                return failure("Invalid logic function: " + element.reference + ".");
+            if (element.parameters[2] <= 0)
+                return failure("Steepness must be finite and strictly positive: " + element.reference + ".");
+            if (element.parameters[4] <= element.parameters[3])
+                return failure("Voh must be greater than Vol: " + element.reference + ".");
+            if (element.parameters[5] <= 0)
+                return failure("Output conductance must be finite and strictly positive: " + element.reference + ".");
+            continue;
+        }
         const std::size_t expectedParams = element.kind == NonlinearKind::Zener ? 5
             : element.kind == NonlinearKind::Led ? 4 : 3;
         if (element.parameters.size() != expectedParams)
@@ -306,12 +380,21 @@ DcResult solveDc(const DcCircuit& circuit, const std::atomic_bool* cancelled) {
             link(adjacent, c, b); link(coupled, c, b);
             link(adjacent, b, e); link(coupled, b, e);
             link(adjacent, c, e); link(coupled, c, e);
-        } else {
+        } else if (element.kind == NonlinearKind::NMosfet || element.kind == NonlinearKind::PMosfet) {
             // Drain-source conducts; the gate carries no current (ideal, no leakage) and must
             // reach ground through some other element, or it is reported as a floating net.
             const int d = element.nets[0], s = element.nets[2];
             link(adjacent, d, s);
             link(coupled, d, s);
+        } else {
+            // OpAmp/LogicGate: the output is strongly driven by the device itself (Norton
+            // companion model with a large conductance), so it needs no gmin fallback - treat it
+            // as if conducting straight to ground for reachability purposes. The inputs carry no
+            // current (ideal) and must reach ground through some other element, or they are
+            // reported as floating nets.
+            const int output = element.nets[0];
+            link(adjacent, output, circuit.ground);
+            link(coupled, output, circuit.ground);
         }
     }
     const auto reach = [&](const std::vector<std::vector<int>>& graph) {
@@ -431,7 +514,7 @@ DcResult solveDc(const DcCircuit& circuit, const std::atomic_bool* cancelled) {
                 stampRow(matrix, pc, pc, dIcDc, pb, dIcDb, pe, dIcDe, icEq);
                 stampRow(matrix, pb, pc, dIbDc, pb, dIbDb, pe, dIbDe, ibEq);
                 stampRow(matrix, pe, pc, -(dIcDc + dIbDc), pb, -(dIcDb + dIbDb), pe, -(dIcDe + dIbDe), -(icEq + ibEq));
-            } else {
+            } else if (element.kind == NonlinearKind::NMosfet || element.kind == NonlinearKind::PMosfet) {
                 // v1/v2 are (Vgs, Vds) for NMOS, (Vsg, Vsd) for PMOS; `vto` is passed with the
                 // sign that makes it a positive "overdrive" threshold in either frame.
                 const bool nmos = element.kind == NonlinearKind::NMosfet;
@@ -450,6 +533,40 @@ DcResult solveDc(const DcCircuit& circuit, const std::atomic_bool* cancelled) {
                     stampRow(matrix, ps, pd, -core.gds, pg, -core.gm, ps, core.gm + core.gds, idEq);
                     stampRow(matrix, pd, pd, core.gds, pg, core.gm, ps, -(core.gm + core.gds), -idEq);
                 }
+            } else if (element.kind == NonlinearKind::OpAmp) {
+                // v1 = Vplus - Vminus (v2 unused). Modelled as a Norton-equivalent VCVS: a huge
+                // output conductance pulling the output toward a smooth, rail-saturating target;
+                // the inputs draw no current (ideal). See opAmpCore's doc comment for why this
+                // needs no auxiliary MNA unknown.
+                const double gain = element.parameters[0], gOut = element.parameters[1];
+                const double vpos = element.parameters[2], vneg = element.parameters[3];
+                const auto core = opAmpCore(v1, gain, vpos, vneg);
+                const int pOut = nodeIndex(element.nets[2]), pPlus = nodeIndex(element.nets[0]),
+                          pMinus = nodeIndex(element.nets[1]);
+                const double ga = gOut * core.gm;
+                const double xEq = gOut * core.target - ga * v1;
+                stampRow(matrix, pOut, pOut, -gOut, pPlus, ga, pMinus, -ga, xEq);
+                // A tiny, element-index-dependent conductance to ground (~1 gigaohm - negligible
+                // next to any real load or gOut itself). Two identically-parameterized op-amps or
+                // gates in a symmetric feedback loop (e.g. a latch) would otherwise linearize to
+                // an exactly singular Jacobian at their unstable symmetric point; this nudges that
+                // without measurably affecting any non-degenerate circuit's answer.
+                if (pOut >= 0) matrix[pOut][pOut] += (i % 2 == 0 ? 1.0 : -1.0) * 1e-9;
+            } else {
+                // LogicGate: v1/v2 are the two input voltages (v2 unused for LogicFunction::Not).
+                // Same Norton-equivalent technique as the op-amp, driven by a "soft" boolean
+                // function of the inputs instead of their difference.
+                const auto function = static_cast<LogicFunction>(static_cast<int>(element.parameters[0]));
+                const double vth = element.parameters[1], steepness = element.parameters[2];
+                const double vol = element.parameters[3], voh = element.parameters[4], gOut = element.parameters[5];
+                const auto core = logicGateCore(v1, v2, function, vth, steepness, vol, voh);
+                const int pOut = nodeIndex(element.nets[0]), pA = nodeIndex(element.nets[1]),
+                          pB = nodeIndex(element.nets[2]);
+                const double ga = gOut * core.ga, gb = gOut * core.gb;
+                const double xEq = gOut * core.target - ga * v1 - gb * v2;
+                stampRow(matrix, pOut, pOut, -gOut, pA, ga, pB, gb, xEq);
+                // See the identical comment on the OpAmp branch above.
+                if (pOut >= 0) matrix[pOut][pOut] += (i % 2 == 0 ? 1.0 : -1.0) * 1e-9;
             }
         }
         return matrix;
@@ -481,7 +598,7 @@ DcResult solveDc(const DcCircuit& circuit, const std::atomic_bool* cancelled) {
     // Damped Newton-Raphson: iterate the junction voltage guesses to self-consistency. Returns the
     // converged full node-voltage vector, or nullopt if this stage did not converge (the caller
     // tries a more gradual continuation stage next; only the final failure is reported).
-    constexpr int maxIterations = 100;
+    constexpr int maxIterations = 300;
     constexpr double voltageTolerance = 1e-9;
     const auto newton = [&](double sourceScale, double gminExtra, std::vector<double>& guess,
                              std::string& error) -> std::optional<std::vector<double>> {
@@ -514,7 +631,7 @@ DcResult solveDc(const DcCircuit& circuit, const std::atomic_bool* cancelled) {
                     const double v2 = npn ? (vb - vc) : (vc - vb);
                     update(2 * i, v1, 4.0 * ThermalVoltage);
                     update(2 * i + 1, v2, 4.0 * ThermalVoltage);
-                } else {
+                } else if (element.kind == NonlinearKind::NMosfet || element.kind == NonlinearKind::PMosfet) {
                     // nets = {drain, gate, source}. NMOS tracks (Vgs, Vds); PMOS tracks the
                     // mirrored (Vsg, Vsd) - see mosfetCore's doc comment.
                     const bool nmos = element.kind == NonlinearKind::NMosfet;
@@ -523,6 +640,25 @@ DcResult solveDc(const DcCircuit& circuit, const std::atomic_bool* cancelled) {
                     const double v2 = nmos ? (vd - vs) : (vs - vd);
                     update(2 * i, v1, MosfetVoltageStep);
                     update(2 * i + 1, v2, MosfetVoltageStep);
+                } else if (element.kind == NonlinearKind::OpAmp) {
+                    // nets = {nonInvertingIn, invertingIn, output}; tracks Vplus - Vminus. A very
+                    // high gain makes the sensitive transition width (vswing/gain) far too small
+                    // to use directly as a step cap - reaching a saturated operating point can
+                    // genuinely need a multi-volt change in diff. A step of vswing/10 comfortably
+                    // reaches saturation in a handful of iterations while staying bounded by the
+                    // supply range; once |diff| is a few vswing/gain past the transition, tanh is
+                    // already flat there, so stepping past it does not cause the oscillation a
+                    // similarly oversized step would on the exp()-based junctions above.
+                    const double diff = voltages[element.nets[0]] - voltages[element.nets[1]];
+                    const double vswing = (element.parameters[2] - element.parameters[3]) / 2.0;
+                    update(2 * i, diff, vswing / 10.0);
+                } else {
+                    // LogicGate: nets = {output, inputA, inputB}; tracks the two input voltages,
+                    // capped to a small multiple of the tanh's sensitive width (1/steepness).
+                    const double va = voltages[element.nets[1]], vb = voltages[element.nets[2]];
+                    const double step = 10.0 / element.parameters[2];
+                    update(2 * i, va, step);
+                    update(2 * i + 1, vb, step);
                 }
             }
             if (maxDelta < voltageTolerance) return voltages;
@@ -531,13 +667,53 @@ DcResult solveDc(const DcCircuit& circuit, const std::atomic_bool* cancelled) {
         return std::nullopt;
     };
 
+    // Warm start (#62): seed each nonlinear element's guess from a previous solve's node voltages
+    // instead of 0 V, so a bistable circuit (e.g. a latch) keeps its state across repeated solves
+    // (the live simulation mode re-solves on every edit) instead of always settling to the same
+    // one. Falls back to 0 V unless the caller supplied exactly `netCount` voltages. For a
+    // 2-terminal element with a series resistance, this approximates the internal auxiliary node
+    // as the anode itself (ignoring the Rs drop) - only the seed, not the final answer, so a few
+    // Newton iterations refine it either way.
     std::vector<double> guess(2 * circuit.nonlinear.size(), 0.0);
+    if (circuit.initialVoltages.size() == static_cast<std::size_t>(circuit.netCount)) {
+        const auto& seed = circuit.initialVoltages;
+        for (std::size_t i = 0; i < circuit.nonlinear.size(); ++i) {
+            const auto& element = circuit.nonlinear[i];
+            if (isTwoTerminal(element.kind)) {
+                guess[2 * i] = seed[element.nets[0]] - seed[element.nets[1]];
+            } else if (element.kind == NonlinearKind::BjtNpn || element.kind == NonlinearKind::BjtPnp) {
+                const double vc = seed[element.nets[0]], vb = seed[element.nets[1]], ve = seed[element.nets[2]];
+                const bool npn = element.kind == NonlinearKind::BjtNpn;
+                guess[2 * i] = npn ? (vb - ve) : (ve - vb);
+                guess[2 * i + 1] = npn ? (vb - vc) : (vc - vb);
+            } else if (element.kind == NonlinearKind::NMosfet || element.kind == NonlinearKind::PMosfet) {
+                const bool nmos = element.kind == NonlinearKind::NMosfet;
+                const double vd = seed[element.nets[0]], vg = seed[element.nets[1]], vs = seed[element.nets[2]];
+                guess[2 * i] = nmos ? (vg - vs) : (vs - vg);
+                guess[2 * i + 1] = nmos ? (vd - vs) : (vs - vd);
+            } else if (element.kind == NonlinearKind::OpAmp) {
+                guess[2 * i] = seed[element.nets[0]] - seed[element.nets[1]];
+            } else {
+                guess[2 * i] = seed[element.nets[1]];
+                guess[2 * i + 1] = seed[element.nets[2]];
+            }
+        }
+    } else {
+        // No warm start: a tiny alternating perturbation instead of an exact 0 V guess for every
+        // element. A perfectly symmetric bistable circuit (e.g. two identically-parameterized
+        // cross-coupled gates) linearized exactly at its unstable symmetric point has a genuinely
+        // singular Jacobian; this breaks that exact symmetry (voltages elsewhere are unaffected
+        // to far better than any test tolerance - Newton converges to within 1e-9 V regardless of
+        // which side of a symmetric point it starts from).
+        for (std::size_t i = 0; i < guess.size(); ++i) guess[i] = (i % 2 == 0) ? 1e-6 : -1e-6;
+    }
+    const std::vector<double> coldGuess = guess;
     std::string error;
     auto voltages = newton(1.0, 0.0, guess, error);
     if (!voltages) {
         // Source stepping: ramp independent sources up from a small fraction, each stage seeded
         // from the previous stage's converged junction voltages.
-        std::fill(guess.begin(), guess.end(), 0.0);
+        guess = coldGuess;
         bool ok = true;
         for (double scale : {1e-3, 1e-2, 1e-1, 0.3, 1.0}) {
             auto stage = newton(scale, 0.0, guess, error);
@@ -546,7 +722,7 @@ DcResult solveDc(const DcCircuit& circuit, const std::atomic_bool* cancelled) {
         }
         if (!ok || !voltages) {
             // Gmin stepping: add a large parallel conductance at every node and anneal it away.
-            std::fill(guess.begin(), guess.end(), 0.0);
+            guess = coldGuess;
             ok = true;
             for (double gminExtra : {1e-1, 1e-2, 1e-3, 1e-4, 1e-5, 1e-6, 1e-7, 1e-8, 1e-9, 0.0}) {
                 auto stage = newton(1.0, gminExtra, guess, error);
@@ -596,13 +772,21 @@ DcResult solveDc(const DcCircuit& circuit, const std::atomic_bool* cancelled) {
             // Reported current is into the first listed terminal (collector).
             const double sign = element.kind == NonlinearKind::BjtNpn ? 1.0 : -1.0;
             current = sign * bjtCore(v1, v2, element.parameters[0], element.parameters[1], element.parameters[2]).ic;
-        } else {
+        } else if (element.kind == NonlinearKind::NMosfet || element.kind == NonlinearKind::PMosfet) {
             // Reported current is into the first listed terminal (drain): +Id for NMOS, -Isd for
             // PMOS (PMOS conducting current flows out of the drain into the external circuit).
             const bool nmos = element.kind == NonlinearKind::NMosfet;
             const double vto = nmos ? element.parameters[0] : -element.parameters[0];
             const double id = mosfetCore(v1, v2, vto, element.parameters[1]).id;
             current = nmos ? id : -id;
+        } else if (element.kind == NonlinearKind::OpAmp) {
+            current = 0.0; // ideal: no current into either input
+        } else {
+            current = 0.0; // LogicGate: ideal, no current into either input
+            const double vol = element.parameters[3], voh = element.parameters[4];
+            if (voh > vol)
+                result.nonlinearAux[i] =
+                    std::clamp((result.voltages[element.nets[0]] - vol) / (voh - vol), 0.0, 1.0);
         }
         if (!std::isfinite(current)) return failure("DC current exceeds numerical range.");
         result.nonlinearCurrents[i] = current;
