@@ -348,6 +348,26 @@ private slots:
         QCOMPARE(load.project.schematic.first().variant, QStringLiteral("schematic.resistor"));
     }
 
+    // #61 PR (b) review: registerBuiltInCatalog() (which used to register ComponentCatalog's
+    // symbols into the runtime registry before any lookup) was removed -- the catalog's devices
+    // and footprints are folded into builtInLibrary()/symbolLibrary() now, and findSymbol()
+    // already reads that on every call, registry or not. This test calls parseProject() as the
+    // very first thing this executable does with a catalog.device.* id (no prior findSymbol,
+    // registerSymbols or UI interaction), matching "the app opens a .hatt file with nothing else
+    // touched yet" -- proving there is no hidden ordering dependency on a call that no longer
+    // exists.
+    void catalogDeviceIdResolvesOnAColdProjectLoad() {
+        ProjectData project;
+        project.name = QStringLiteral("ColdCatalogLoad");
+        project.schematic = {item(SketchItem::Kind::Symbol, {{0, 0}}, QStringLiteral("catalog.device.bc547"))};
+
+        const ProjectLoad load = parseProject(serializeProject(project));
+        QVERIFY2(load.ok(), qPrintable(load.error));
+        QVERIFY(load.warnings.isEmpty());
+        QCOMPARE(load.project.schematic.first().variant, QStringLiteral("catalog.device.bc547"));
+        QVERIFY(findSymbol(QStringLiteral("catalog.device.bc547")) != nullptr);
+    }
+
     // Review follow-up: a document item can reference a custom device id that IS declared in the
     // same file's library section (the normal case, unlike the unmapped-id test above).
     // `libraryFromJson`/`registerProjectLibrary` registers `library.customDevices` before

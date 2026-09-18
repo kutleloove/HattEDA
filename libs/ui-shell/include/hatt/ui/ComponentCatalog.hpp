@@ -1,60 +1,32 @@
 #pragma once
 
+#include "hatt/ui/LibraryModel.hpp"
 #include "hatt/ui/SketchModel.hpp"
 
 #include <QMap>
 
 namespace hatt::ui {
 
-// Stable, UI-independent catalog vocabulary. Display strings are translated by the accessors.
-enum class CatalogCategory {
-    Passive,
-    Diode,
-    Transistor,
-    Analog,
-    Digital,
-    Source,
-    Electromechanical,
-    Connector,
-};
+// CatalogCategory, PinElectricalType, AnalysisSupport and SimulationModelDefinition live in
+// LibraryModel.hpp (moved there in #61 PR (b) when ComponentCatalogEntry folded into
+// LibraryDevice); still visible here as hatt::ui::* through the include above.
 
-enum class PinElectricalType { Passive, Input, Output, PowerInput, PowerOutput, OpenCollector, NoConnect };
-
-enum class AnalysisSupport { None, DcOperatingPoint };
-
-struct SimulationModelDefinition {
-    QString id;                 // stable token, e.g. "dc.resistor"
-    QString name;               // translated display name
-    AnalysisSupport support = AnalysisSupport::None;
-    QMap<QString, double> parameters; // editable SI defaults for later property editors
-    QString limitation;         // translated, empty only when the declared support really works
-};
-
-struct ComponentCatalogEntry {
-    DeviceDefinition device;
-    CatalogCategory category = CatalogCategory::Passive;
-    QString description;
-    QStringList keywords;       // English and Turkish aliases, normalized by search
-    QVector<PinElectricalType> pinTypes;
-    QStringList footprintOptions;
-    QString symbolTemplate;     // optional existing symbol whose geometry is reused
-};
-
-// Generated once from compact family tables. Definitions are built-in and are never copied into
-// ProjectLibrary::customDevices/customFootprints; projects store only picked ids.
-[[nodiscard]] const QVector<ComponentCatalogEntry>& componentCatalog();
-[[nodiscard]] const QVector<FootprintDefinition>& footprintCatalog();
+// The built-in, pickable schematic components: every LibraryDevice with
+// `category == SymbolCategory::Component`, read straight out of builtInLibrary() so this, the
+// symbol/footprint registry and the device picker all read one model (#61 PR (b) closes the old
+// split between symbolLibrary()'s literal devices and ComponentCatalog's generated
+// ComponentCatalogEntry list).
+[[nodiscard]] const QVector<LibraryDevice>& componentCatalog();
 [[nodiscard]] const QVector<SimulationModelDefinition>& simulationModelCatalog();
-[[nodiscard]] const ComponentCatalogEntry* findCatalogComponent(const QString& id);
+// Resolves legacy catalog.device.* ids via the alias table before searching, same as findSymbol().
+[[nodiscard]] const LibraryDevice* findCatalogComponent(const QString& id);
 [[nodiscard]] const SimulationModelDefinition* findSimulationModel(const QString& id);
-[[nodiscard]] QList<const ComponentCatalogEntry*> searchComponentCatalog(const QString& query,
-                                                                          CatalogCategory* category = nullptr);
+[[nodiscard]] QList<const LibraryDevice*> searchComponentCatalog(const QString& query,
+                                                                   CatalogCategory* category = nullptr);
 [[nodiscard]] QString catalogCategoryName(CatalogCategory category);
 [[nodiscard]] QString pinElectricalTypeName(PinElectricalType type);
-
-// Makes generated catalog symbols and footprints visible through the existing symbol registry.
-// Safe to call repeatedly.
-void registerBuiltInCatalog();
+// LibraryDevice::description translated at the point of use (like displayNameKey); empty in -> empty out.
+[[nodiscard]] QString catalogDescription(const QString& description);
 
 // A conservative creator suggestion: only unambiguous source/passive choices are inferred.
 [[nodiscard]] QString suggestedSimulationModel(const QString& typeToken, int pinCount);
