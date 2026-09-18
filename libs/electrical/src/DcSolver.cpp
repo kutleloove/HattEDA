@@ -84,13 +84,57 @@ void zenerCurrent(double v, double is, double n, double vz, double rz, double& c
     conductance = 1.0 / rz;
 }
 
-// Limits how far a junction voltage guess may move in one Newton iteration so exp() never
-// overflows and the iteration does not overshoot into a wildly wrong region.
-double limitJunctionVoltage(double previous, double proposed, double n) {
-    const double step = 4.0 * n * ThermalVoltage;
-    if (proposed - previous > step) return previous + step;
-    if (previous - proposed > step) return previous - step;
+// Limits how far a voltage guess may move in one Newton iteration: exp()-based junctions (diode/
+// zener/LED/BJT) use 4*n*Vt so exp() never overflows; MOSFET terminal voltages are not exponential,
+// but a fixed cap still keeps Newton from bouncing between conduction regions (cutoff/triode/
+// saturation) on a wild first step from a zero guess.
+double limitStep(double previous, double proposed, double maxStep) {
+    if (proposed - previous > maxStep) return previous + maxStep;
+    if (previous - proposed > maxStep) return previous - maxStep;
     return proposed;
+}
+constexpr double MosfetVoltageStep = 1.0;
+
+// BJT Ebers-Moll transport model (junction ideality 1), NPN sign convention: v1 = Vbe = Vb - Ve,
+// v2 = Vbc = Vb - Vc. Returns collector/base current (into the device at each terminal) and the
+// four partial derivatives needed to linearize both around (v1, v2): gm = dIc/dv1, goMag =
+// -dIc/dv2 (always used with a minus sign; kept positive here), gpi = dIb/dv1, gmu = dIb/dv2.
+// PNP reuses this with v1 = Veb = Ve - Vb, v2 = Vcb = Vc - Vb (see the `sign` handling at the call
+// site): the four conductances are identical in that frame, only the reported currents and the
+// linearization constants flip sign.
+struct BjtCore { double ic, ib, gm, goMag, gpi, gmu; };
+BjtCore bjtCore(double v1, double v2, double is, double bf, double br) {
+    const double e1 = std::exp(std::min(v1 / ThermalVoltage, 80.0));
+    const double e2 = std::exp(std::min(v2 / ThermalVoltage, 80.0));
+    BjtCore core;
+    core.ic = is * (e1 - e2) - (is / br) * (e2 - 1.0);
+    core.ib = (is / bf) * (e1 - 1.0) + (is / br) * (e2 - 1.0);
+    core.gm = is * e1 / ThermalVoltage;
+    core.goMag = is * (1.0 + 1.0 / br) * e2 / ThermalVoltage;
+    core.gpi = (is / bf) * e1 / ThermalVoltage;
+    core.gmu = (is / br) * e2 / ThermalVoltage;
+    return core;
+}
+
+// MOSFET level-1 square law (no channel-length modulation), NMOS sign convention: v1 = Vgs =
+// Vg - Vs, v2 = Vds = Vd - Vs, vto > 0. Returns drain current (into the device at the drain) and
+// its two partial derivatives. PMOS reuses this with v1 = Vsg = Vs - Vg, v2 = Vsd = Vs - Vd and
+// vto = -Vto_param > 0 (see the call site): `id` then means Isd (source to drain).
+struct MosfetCore { double id, gm, gds; };
+MosfetCore mosfetCore(double v1, double v2, double vto, double k) {
+    const double vov = v1 - vto;
+    MosfetCore core{0, 0, 0};
+    if (vov <= 0) return core; // cutoff
+    if (v2 < vov) { // triode
+        core.id = k * (2.0 * vov * v2 - v2 * v2);
+        core.gm = 2.0 * k * v2;
+        core.gds = 2.0 * k * (vov - v2);
+    } else { // saturation
+        core.id = k * vov * vov;
+        core.gm = 2.0 * k * vov;
+        core.gds = 0.0;
+    }
+    return core;
 }
 
 // Row-normalized, partial-pivot Gaussian elimination on the n x (n+1) augmented matrix `a`
@@ -160,19 +204,41 @@ DcResult solveDc(const DcCircuit& circuit, const std::atomic_bool* cancelled) {
     // sees these indices (they exist only inside this solve).
     std::vector<int> auxNode(circuit.nonlinear.size(), -1);
     int totalNets = circuit.netCount;
+    const auto isTwoTerminal = [](NonlinearKind kind) {
+        return kind == NonlinearKind::Diode || kind == NonlinearKind::Zener || kind == NonlinearKind::Led;
+    };
     for (std::size_t i = 0; i < circuit.nonlinear.size(); ++i) {
         const auto& element = circuit.nonlinear[i];
-        if (element.nets.size() != 2)
-            return failure("Nonlinear element needs exactly 2 terminals: " + element.reference + ".");
+        const std::size_t expectedNets = isTwoTerminal(element.kind) ? 2 : 3;
+        if (element.nets.size() != expectedNets)
+            return failure("Wrong terminal count for " + element.reference + ".");
         for (int net : element.nets)
             if (net < 0 || net >= circuit.netCount)
                 return failure("Invalid net index for " + element.reference + ".");
+        for (double value : element.parameters)
+            if (!std::isfinite(value)) return failure("Non-finite parameter for " + element.reference + ".");
+        if (element.kind == NonlinearKind::BjtNpn || element.kind == NonlinearKind::BjtPnp) {
+            if (element.parameters.size() != 3)
+                return failure("Wrong parameter count for " + element.reference + ".");
+            if (element.parameters[0] <= 0)
+                return failure("Saturation current must be finite and strictly positive: " + element.reference + ".");
+            if (element.parameters[1] <= 0)
+                return failure("Forward beta must be finite and strictly positive: " + element.reference + ".");
+            if (element.parameters[2] <= 0)
+                return failure("Reverse beta must be finite and strictly positive: " + element.reference + ".");
+            continue;
+        }
+        if (element.kind == NonlinearKind::NMosfet || element.kind == NonlinearKind::PMosfet) {
+            if (element.parameters.size() != 2)
+                return failure("Wrong parameter count for " + element.reference + ".");
+            if (element.parameters[1] <= 0)
+                return failure("K must be finite and strictly positive: " + element.reference + ".");
+            continue;
+        }
         const std::size_t expectedParams = element.kind == NonlinearKind::Zener ? 5
             : element.kind == NonlinearKind::Led ? 4 : 3;
         if (element.parameters.size() != expectedParams)
             return failure("Wrong parameter count for " + element.reference + ".");
-        for (double value : element.parameters)
-            if (!std::isfinite(value)) return failure("Non-finite parameter for " + element.reference + ".");
         const double is = element.parameters[0];
         const double n = element.parameters[1];
         const double rs = element.parameters[2];
@@ -222,15 +288,30 @@ DcResult solveDc(const DcCircuit& circuit, const std::atomic_bool* cancelled) {
     }
     for (std::size_t i = 0; i < circuit.nonlinear.size(); ++i) {
         const auto& element = circuit.nonlinear[i];
-        const int anode = element.nets[0], cathode = element.nets[1];
-        if (auxNode[i] < 0) {
-            link(adjacent, anode, cathode);
-            link(coupled, anode, cathode);
+        if (isTwoTerminal(element.kind)) {
+            const int anode = element.nets[0], cathode = element.nets[1];
+            if (auxNode[i] < 0) {
+                link(adjacent, anode, cathode);
+                link(coupled, anode, cathode);
+            } else {
+                link(adjacent, anode, auxNode[i]);
+                link(coupled, anode, auxNode[i]);
+                link(adjacent, auxNode[i], cathode);
+                link(coupled, auxNode[i], cathode);
+            }
+        } else if (element.kind == NonlinearKind::BjtNpn || element.kind == NonlinearKind::BjtPnp) {
+            // Collector, base and emitter all conduct through the device; generous (all pairs)
+            // rather than modelling exactly which path gmin would need to avoid a spurious tie.
+            const int c = element.nets[0], b = element.nets[1], e = element.nets[2];
+            link(adjacent, c, b); link(coupled, c, b);
+            link(adjacent, b, e); link(coupled, b, e);
+            link(adjacent, c, e); link(coupled, c, e);
         } else {
-            link(adjacent, anode, auxNode[i]);
-            link(coupled, anode, auxNode[i]);
-            link(adjacent, auxNode[i], cathode);
-            link(coupled, auxNode[i], cathode);
+            // Drain-source conducts; the gate carries no current (ideal, no leakage) and must
+            // reach ground through some other element, or it is reported as a floating net.
+            const int d = element.nets[0], s = element.nets[2];
+            link(adjacent, d, s);
+            link(coupled, d, s);
         }
     }
     const auto reach = [&](const std::vector<std::vector<int>>& graph) {
@@ -304,27 +385,72 @@ DcResult solveDc(const DcCircuit& circuit, const std::atomic_bool* cancelled) {
         return a;
     };
 
-    // Stamps every nonlinear junction's Norton companion model (conductance in parallel with a
-    // current source) at `guess`, the present per-element junction voltage, onto a copy of `base`.
+    // Stamps every nonlinear element's linearized companion model at `guess` (two scalars per
+    // element - a single junction voltage in slot 0, slot 1 unused, for the 2-terminal kinds; two
+    // independent junction/gate-overdrive voltages for BJT/MOSFET) onto a copy of `base`.
+    const auto stampRow = [&](std::vector<std::vector<double>>& matrix, int row, int colA, double dA,
+                               int colB, double dB, int colC, double dC, double xEq) {
+        if (row < 0) return;
+        if (colA >= 0) matrix[row][colA] += dA;
+        if (colB >= 0) matrix[row][colB] += dB;
+        if (colC >= 0) matrix[row][colC] += dC;
+        matrix[row][n] -= xEq;
+    };
     const auto stampJunctions = [&](std::vector<std::vector<double>> matrix,
                                      const std::vector<double>& guess) {
         for (std::size_t i = 0; i < circuit.nonlinear.size(); ++i) {
             const auto& element = circuit.nonlinear[i];
-            const int junctionAnode = auxNode[i] < 0 ? element.nets[0] : auxNode[i];
-            const int p = nodeIndex(junctionAnode), m = nodeIndex(element.nets[1]);
-            if (p == m) continue;
-            double current = 0, conductance = 0;
-            const double is = element.parameters[0], nn = element.parameters[1];
-            if (element.kind == NonlinearKind::Zener)
-                zenerCurrent(guess[i], is, nn, element.parameters[3], element.parameters[4], current, conductance);
-            else
-                diodeCurrent(guess[i], is, nn, current, conductance);
-            const double ieq = current - conductance * guess[i];
-            if (p >= 0) matrix[p][p] += conductance;
-            if (m >= 0) matrix[m][m] += conductance;
-            if (p >= 0 && m >= 0) { matrix[p][m] -= conductance; matrix[m][p] -= conductance; }
-            if (p >= 0) matrix[p][n] -= ieq;
-            if (m >= 0) matrix[m][n] += ieq;
+            const double v1 = guess[2 * i], v2 = guess[2 * i + 1];
+            if (isTwoTerminal(element.kind)) {
+                const int junctionAnode = auxNode[i] < 0 ? element.nets[0] : auxNode[i];
+                const int p = nodeIndex(junctionAnode), m = nodeIndex(element.nets[1]);
+                if (p == m) continue;
+                double current = 0, conductance = 0;
+                const double is = element.parameters[0], nn = element.parameters[1];
+                if (element.kind == NonlinearKind::Zener)
+                    zenerCurrent(v1, is, nn, element.parameters[3], element.parameters[4], current, conductance);
+                else
+                    diodeCurrent(v1, is, nn, current, conductance);
+                const double ieq = current - conductance * v1;
+                if (p >= 0) matrix[p][p] += conductance;
+                if (m >= 0) matrix[m][m] += conductance;
+                if (p >= 0 && m >= 0) { matrix[p][m] -= conductance; matrix[m][p] -= conductance; }
+                if (p >= 0) matrix[p][n] -= ieq;
+                if (m >= 0) matrix[m][n] += ieq;
+            } else if (element.kind == NonlinearKind::BjtNpn || element.kind == NonlinearKind::BjtPnp) {
+                // v1/v2 are (Vbe, Vbc) for NPN, (Veb, Vcb) for PNP; `sign` flips the reported
+                // currents and the linearization constants for PNP - the four conductances below
+                // are identical in either frame (see bjtCore's doc comment).
+                const double sign = element.kind == NonlinearKind::BjtNpn ? 1.0 : -1.0;
+                const auto core = bjtCore(v1, v2, element.parameters[0], element.parameters[1], element.parameters[2]);
+                const int pc = nodeIndex(element.nets[0]), pb = nodeIndex(element.nets[1]), pe = nodeIndex(element.nets[2]);
+                const double dIcDb = core.gm - core.goMag, dIcDc = core.goMag, dIcDe = -core.gm;
+                const double dIbDb = core.gpi + core.gmu, dIbDc = -core.gmu, dIbDe = -core.gpi;
+                const double icEq = sign * (core.ic - core.gm * v1 + core.goMag * v2);
+                const double ibEq = sign * (core.ib - core.gpi * v1 - core.gmu * v2);
+                stampRow(matrix, pc, pc, dIcDc, pb, dIcDb, pe, dIcDe, icEq);
+                stampRow(matrix, pb, pc, dIbDc, pb, dIbDb, pe, dIbDe, ibEq);
+                stampRow(matrix, pe, pc, -(dIcDc + dIbDc), pb, -(dIcDb + dIbDb), pe, -(dIcDe + dIbDe), -(icEq + ibEq));
+            } else {
+                // v1/v2 are (Vgs, Vds) for NMOS, (Vsg, Vsd) for PMOS; `vto` is passed with the
+                // sign that makes it a positive "overdrive" threshold in either frame.
+                const bool nmos = element.kind == NonlinearKind::NMosfet;
+                const double vto = nmos ? element.parameters[0] : -element.parameters[0];
+                const auto core = mosfetCore(v1, v2, vto, element.parameters[1]);
+                const int pd = nodeIndex(element.nets[0]), pg = nodeIndex(element.nets[1]), ps = nodeIndex(element.nets[2]);
+                const double idEq = core.id - core.gds * v2 - core.gm * v1;
+                if (nmos) {
+                    // Current into drain = +id, into source = -id, into gate = 0.
+                    stampRow(matrix, pd, pd, core.gds, pg, core.gm, ps, -(core.gm + core.gds), idEq);
+                    stampRow(matrix, ps, pd, -core.gds, pg, -core.gm, ps, core.gm + core.gds, -idEq);
+                } else {
+                    // `core.id` is Isd (source to drain); current into source = +Isd, into drain
+                    // = -Isd, into gate = 0. Same conductance magnitudes as NMOS (source/drain
+                    // swapped in the v1/v2 frame above).
+                    stampRow(matrix, ps, pd, -core.gds, pg, -core.gm, ps, core.gm + core.gds, idEq);
+                    stampRow(matrix, pd, pd, core.gds, pg, core.gm, ps, -(core.gm + core.gds), -idEq);
+                }
+            }
         }
         return matrix;
     };
@@ -368,12 +494,36 @@ DcResult solveDc(const DcCircuit& circuit, const std::atomic_bool* cancelled) {
             for (int net = 0; net < totalNets; ++net)
                 if (net != circuit.ground) voltages[net] = (*solution)[nodeIndex(net)];
             double maxDelta = 0;
+            const auto update = [&](std::size_t slot, double newV, double maxStep) {
+                const double limited = limitStep(guess[slot], newV, maxStep);
+                maxDelta = std::max(maxDelta, std::abs(limited - guess[slot]));
+                guess[slot] = limited;
+            };
             for (std::size_t i = 0; i < circuit.nonlinear.size(); ++i) {
-                const int junctionAnode = auxNode[i] < 0 ? circuit.nonlinear[i].nets[0] : auxNode[i];
-                const double newV = voltages[junctionAnode] - voltages[circuit.nonlinear[i].nets[1]];
-                const double limited = limitJunctionVoltage(guess[i], newV, circuit.nonlinear[i].parameters[1]);
-                maxDelta = std::max(maxDelta, std::abs(limited - guess[i]));
-                guess[i] = limited;
+                const auto& element = circuit.nonlinear[i];
+                if (isTwoTerminal(element.kind)) {
+                    const int junctionAnode = auxNode[i] < 0 ? element.nets[0] : auxNode[i];
+                    const double newV = voltages[junctionAnode] - voltages[element.nets[1]];
+                    update(2 * i, newV, 4.0 * element.parameters[1] * ThermalVoltage);
+                } else if (element.kind == NonlinearKind::BjtNpn || element.kind == NonlinearKind::BjtPnp) {
+                    // nets = {collector, base, emitter}. NPN tracks (Vbe, Vbc); PNP tracks the
+                    // mirrored (Veb, Vcb) - see bjtCore's doc comment.
+                    const double vc = voltages[element.nets[0]], vb = voltages[element.nets[1]], ve = voltages[element.nets[2]];
+                    const bool npn = element.kind == NonlinearKind::BjtNpn;
+                    const double v1 = npn ? (vb - ve) : (ve - vb);
+                    const double v2 = npn ? (vb - vc) : (vc - vb);
+                    update(2 * i, v1, 4.0 * ThermalVoltage);
+                    update(2 * i + 1, v2, 4.0 * ThermalVoltage);
+                } else {
+                    // nets = {drain, gate, source}. NMOS tracks (Vgs, Vds); PMOS tracks the
+                    // mirrored (Vsg, Vsd) - see mosfetCore's doc comment.
+                    const bool nmos = element.kind == NonlinearKind::NMosfet;
+                    const double vd = voltages[element.nets[0]], vg = voltages[element.nets[1]], vs = voltages[element.nets[2]];
+                    const double v1 = nmos ? (vg - vs) : (vs - vg);
+                    const double v2 = nmos ? (vd - vs) : (vs - vd);
+                    update(2 * i, v1, MosfetVoltageStep);
+                    update(2 * i + 1, v2, MosfetVoltageStep);
+                }
             }
             if (maxDelta < voltageTolerance) return voltages;
         }
@@ -381,7 +531,7 @@ DcResult solveDc(const DcCircuit& circuit, const std::atomic_bool* cancelled) {
         return std::nullopt;
     };
 
-    std::vector<double> guess(circuit.nonlinear.size(), 0.0);
+    std::vector<double> guess(2 * circuit.nonlinear.size(), 0.0);
     std::string error;
     auto voltages = newton(1.0, 0.0, guess, error);
     if (!voltages) {
@@ -431,16 +581,31 @@ DcResult solveDc(const DcCircuit& circuit, const std::atomic_bool* cancelled) {
     result.nonlinearAux.resize(circuit.nonlinear.size(), 0.0);
     for (std::size_t i = 0; i < circuit.nonlinear.size(); ++i) {
         const auto& element = circuit.nonlinear[i];
-        double current = 0, conductance = 0;
-        if (element.kind == NonlinearKind::Zener)
-            zenerCurrent(guess[i], element.parameters[0], element.parameters[1], element.parameters[3],
-                         element.parameters[4], current, conductance);
-        else
-            diodeCurrent(guess[i], element.parameters[0], element.parameters[1], current, conductance);
+        const double v1 = guess[2 * i], v2 = guess[2 * i + 1];
+        double current = 0;
+        if (isTwoTerminal(element.kind)) {
+            double conductance = 0;
+            if (element.kind == NonlinearKind::Zener)
+                zenerCurrent(v1, element.parameters[0], element.parameters[1], element.parameters[3],
+                             element.parameters[4], current, conductance);
+            else
+                diodeCurrent(v1, element.parameters[0], element.parameters[1], current, conductance);
+            if (element.kind == NonlinearKind::Led && element.parameters[3] > 0)
+                result.nonlinearAux[i] = std::clamp(current / element.parameters[3], 0.0, 1.0);
+        } else if (element.kind == NonlinearKind::BjtNpn || element.kind == NonlinearKind::BjtPnp) {
+            // Reported current is into the first listed terminal (collector).
+            const double sign = element.kind == NonlinearKind::BjtNpn ? 1.0 : -1.0;
+            current = sign * bjtCore(v1, v2, element.parameters[0], element.parameters[1], element.parameters[2]).ic;
+        } else {
+            // Reported current is into the first listed terminal (drain): +Id for NMOS, -Isd for
+            // PMOS (PMOS conducting current flows out of the drain into the external circuit).
+            const bool nmos = element.kind == NonlinearKind::NMosfet;
+            const double vto = nmos ? element.parameters[0] : -element.parameters[0];
+            const double id = mosfetCore(v1, v2, vto, element.parameters[1]).id;
+            current = nmos ? id : -id;
+        }
         if (!std::isfinite(current)) return failure("DC current exceeds numerical range.");
         result.nonlinearCurrents[i] = current;
-        if (element.kind == NonlinearKind::Led && element.parameters[3] > 0)
-            result.nonlinearAux[i] = std::clamp(current / element.parameters[3], 0.0, 1.0);
     }
     result.success = true;
     return result;
