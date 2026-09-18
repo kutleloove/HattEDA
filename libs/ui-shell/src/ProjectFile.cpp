@@ -423,7 +423,6 @@ bool readLength(const QJsonObject& object, const char* key, double& target) {
 // Reads the library before the documents: custom symbols must be registered so that document items
 // using them validate.
 QString libraryFromJson(const QJsonValue& value, ProjectLibrary& library) {
-    registerBuiltInCatalog();
     // The library is optional: v1 files and early v2 files have none or an empty object.
     if (value.isUndefined()) return {};
     if (!value.isObject()) return tr("The library section is invalid.");

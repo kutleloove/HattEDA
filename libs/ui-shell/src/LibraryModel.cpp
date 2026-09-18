@@ -46,6 +46,147 @@ namespace {
     QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Via"),
     QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Test point"),
     QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Mounting hole"),
+    // #61 PR (b): ComponentCatalog's device/footprint names, folded into this same library.
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "1N4007"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "1N4148"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "2N2222 / PN2222A"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "2N7000"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "555 timer"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "5V1 Zener"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "7805"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "AND gate"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Adjustable linear regulator"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Axial DO-35, 10.16 mm"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Axial DO-41, 12.70 mm"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "BAT54"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "BC547"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "BC557"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Battery"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Bridge rectifier"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Bridge rectifier, 4 pin"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Buffer"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Buzzer"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Capacitor, polarized"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Comparator"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Crystal"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "D flip-flop"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "DC current source"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "DC motor"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "DIP"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Digital clock"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Fixed linear regulator"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Fuse"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "IRLZ44N"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "LDR / photoresistor"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "LED 3 mm, 2.54 mm pitch"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "LED 5 mm, 2.54 mm pitch"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "LM317"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "LM358"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "LM393"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "N-channel JFET"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "N-channel MOSFET"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "NAND gate"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "NE555"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "NOR gate"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "NOT gate"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "NTC thermistor"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "OR gate"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "P-channel MOSFET"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "PNP transistor"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "PTC thermistor"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Photodiode"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Pin header"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Pin header 1x1, 2.54 mm"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Pin header 1x10, 2.54 mm"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Pin header 1x11, 2.54 mm"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Pin header 1x12, 2.54 mm"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Pin header 1x13, 2.54 mm"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Pin header 1x14, 2.54 mm"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Pin header 1x15, 2.54 mm"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Pin header 1x16, 2.54 mm"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Pin header 1x17, 2.54 mm"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Pin header 1x18, 2.54 mm"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Pin header 1x19, 2.54 mm"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Pin header 1x2, 2.54 mm"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Pin header 1x20, 2.54 mm"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Pin header 1x3, 2.54 mm"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Pin header 1x4, 2.54 mm"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Pin header 1x5, 2.54 mm"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Pin header 1x6, 2.54 mm"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Pin header 1x7, 2.54 mm"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Pin header 1x8, 2.54 mm"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Pin header 1x9, 2.54 mm"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Pin header 2x1, 2.54 mm"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Pin header 2x10, 2.54 mm"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Pin header 2x2, 2.54 mm"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Pin header 2x3, 2.54 mm"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Pin header 2x4, 2.54 mm"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Pin header 2x5, 2.54 mm"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Pin header 2x6, 2.54 mm"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Pin header 2x7, 2.54 mm"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Pin header 2x8, 2.54 mm"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Pin header 2x9, 2.54 mm"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Potentiometer"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Pulse / clock source"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Push button"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "QFN-16 (perimeter pads)"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "QFN-20 (perimeter pads)"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "QFN-24 (perimeter pads)"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "QFN-32 (perimeter pads)"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "QFN-48 (perimeter pads)"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Radial capacitor, 2 mm pitch"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Radial capacitor, 2.5 mm pitch"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Radial capacitor, 5 mm pitch"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Radial capacitor, 7.5 mm pitch"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Relay"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Relay, generic 5 pin"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "SMA / DO-214AC"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "SMB / DO-214AA"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "SMD passive 0201"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "SMD passive 0402"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "SMD passive 0603"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "SMD passive 0805"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "SMD passive 1206"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "SMD passive 1210"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "SOD-123"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "SOD-323"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "SOIC-14"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "SOIC-16"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "SOIC-20"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "SOIC-28"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "SOT-223"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "SPST switch"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "SSOP-14"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "SSOP-16"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "SSOP-20"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "SSOP-24"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "SSOP-28"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "SSOP-8"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Schottky diode"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Sine voltage source"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "TO-220-3 vertical"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "TO-252 / DPAK"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "TO-92 inline"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "TQFP-100"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "TQFP-32"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "TQFP-44"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "TQFP-48"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "TQFP-64"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "TSSOP-14"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "TSSOP-16"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "TSSOP-20"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "TSSOP-24"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "TSSOP-28"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "TSSOP-8"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Terminal block"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Terminal block 2 pin, 5.08 mm"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Terminal block 3 pin, 5.08 mm"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Terminal block 4 pin, 5.08 mm"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Transformer"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Tri-state buffer"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Trimmer potentiometer, 3 pin"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "XOR gate"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Zener diode"),
 };
 
 QJsonArray pointToJson(QPointF p) { return {p.x(), p.y()}; }
@@ -163,6 +304,66 @@ bool categoryFromToken(const QString& token, SymbolCategory& out) {
     return false;
 }
 
+const char* catalogCategoryToken(CatalogCategory c) {
+    switch (c) {
+    case CatalogCategory::Passive: return "passive";
+    case CatalogCategory::Diode: return "diode";
+    case CatalogCategory::Transistor: return "transistor";
+    case CatalogCategory::Analog: return "analog";
+    case CatalogCategory::Digital: return "digital";
+    case CatalogCategory::Source: return "source";
+    case CatalogCategory::Electromechanical: return "electromechanical";
+    case CatalogCategory::Connector: return "connector";
+    }
+    return "passive";
+}
+
+bool catalogCategoryFromToken(const QString& token, CatalogCategory& out) {
+    static const QHash<QString, CatalogCategory> map{
+        {QStringLiteral("passive"), CatalogCategory::Passive},
+        {QStringLiteral("diode"), CatalogCategory::Diode},
+        {QStringLiteral("transistor"), CatalogCategory::Transistor},
+        {QStringLiteral("analog"), CatalogCategory::Analog},
+        {QStringLiteral("digital"), CatalogCategory::Digital},
+        {QStringLiteral("source"), CatalogCategory::Source},
+        {QStringLiteral("electromechanical"), CatalogCategory::Electromechanical},
+        {QStringLiteral("connector"), CatalogCategory::Connector},
+    };
+    const auto it = map.constFind(token);
+    if (it == map.constEnd()) return false;
+    out = it.value();
+    return true;
+}
+
+const char* pinElectricalTypeToken(PinElectricalType t) {
+    switch (t) {
+    case PinElectricalType::Passive: return "passive";
+    case PinElectricalType::Input: return "input";
+    case PinElectricalType::Output: return "output";
+    case PinElectricalType::PowerInput: return "power-input";
+    case PinElectricalType::PowerOutput: return "power-output";
+    case PinElectricalType::OpenCollector: return "open-collector";
+    case PinElectricalType::NoConnect: return "no-connect";
+    }
+    return "passive";
+}
+
+bool pinElectricalTypeFromToken(const QString& token, PinElectricalType& out) {
+    static const QHash<QString, PinElectricalType> map{
+        {QStringLiteral("passive"), PinElectricalType::Passive},
+        {QStringLiteral("input"), PinElectricalType::Input},
+        {QStringLiteral("output"), PinElectricalType::Output},
+        {QStringLiteral("power-input"), PinElectricalType::PowerInput},
+        {QStringLiteral("power-output"), PinElectricalType::PowerOutput},
+        {QStringLiteral("open-collector"), PinElectricalType::OpenCollector},
+        {QStringLiteral("no-connect"), PinElectricalType::NoConnect},
+    };
+    const auto it = map.constFind(token);
+    if (it == map.constEnd()) return false;
+    out = it.value();
+    return true;
+}
+
 QJsonObject variantToJson(const LibrarySymbolVariant& v) {
     QJsonObject o;
     o[QStringLiteral("id")] = v.id;
@@ -198,7 +399,10 @@ QJsonObject deviceToJson(const LibraryDevice& d) {
     if (!d.simulationModel.isEmpty()) o[QStringLiteral("simulationModel")] = d.simulationModel;
     if (!d.displayNameKey.isEmpty()) o[QStringLiteral("displayNameKey")] = d.displayNameKey;
     QJsonArray pins;
-    for (const auto& p : d.pins) pins.append(QJsonObject{{QStringLiteral("name"), p.name}, {QStringLiteral("number"), p.number}});
+    for (const auto& p : d.pins) {
+        pins.append(QJsonObject{{QStringLiteral("name"), p.name}, {QStringLiteral("number"), p.number},
+                                 {QStringLiteral("type"), QLatin1String(pinElectricalTypeToken(p.type))}});
+    }
     o[QStringLiteral("pins")] = pins;
     QJsonArray variants;
     for (const auto& v : d.variants) variants.append(variantToJson(v));
@@ -214,6 +418,13 @@ QJsonObject deviceToJson(const LibraryDevice& d) {
         footprints.append(fo);
     }
     o[QStringLiteral("footprints")] = footprints;
+    if (d.category == SymbolCategory::Component) {
+        o[QStringLiteral("catalogCategory")] = QLatin1String(catalogCategoryToken(d.catalogCategory));
+        if (!d.description.isEmpty()) o[QStringLiteral("description")] = d.description;
+        if (!d.keywords.isEmpty()) o[QStringLiteral("keywords")] = QJsonArray::fromStringList(d.keywords);
+        if (!d.manufacturer.isEmpty()) o[QStringLiteral("manufacturer")] = d.manufacturer;
+        if (!d.partNumber.isEmpty()) o[QStringLiteral("partNumber")] = d.partNumber;
+    }
     return o;
 }
 
@@ -232,7 +443,15 @@ bool deviceFromJson(const QJsonValue& value, LibraryDevice& out, QStringList& er
     out.displayNameKey = o.value(QStringLiteral("displayNameKey")).toString();
     for (const QJsonValue& pv : o.value(QStringLiteral("pins")).toArray()) {
         const QJsonObject po = pv.toObject();
-        out.pins.append({po.value(QStringLiteral("name")).toString(), po.value(QStringLiteral("number")).toInt()});
+        LibraryPin pin;
+        pin.name = po.value(QStringLiteral("name")).toString();
+        pin.number = po.value(QStringLiteral("number")).toInt();
+        if (po.contains(QStringLiteral("type")) &&
+            !pinElectricalTypeFromToken(po.value(QStringLiteral("type")).toString(), pin.type)) {
+            errors << QStringLiteral("%1: invalid pin type").arg(out.id);
+            return false;
+        }
+        out.pins.append(pin);
     }
     if (out.pins.isEmpty()) { errors << QStringLiteral("%1: no pins").arg(out.id); return false; }
     for (const QJsonValue& vv : o.value(QStringLiteral("variants")).toArray()) {
@@ -254,6 +473,15 @@ bool deviceFromJson(const QJsonValue& value, LibraryDevice& out, QStringList& er
         for (const QJsonValue& n : fo.value(QStringLiteral("pinPadMap")).toArray()) option.pinPadMap.append(n.toInt());
         out.footprints.append(option);
     }
+    if (o.contains(QStringLiteral("catalogCategory")) &&
+        !catalogCategoryFromToken(o.value(QStringLiteral("catalogCategory")).toString(), out.catalogCategory)) {
+        errors << QStringLiteral("%1: invalid catalogCategory").arg(out.id);
+        return false;
+    }
+    out.description = o.value(QStringLiteral("description")).toString();
+    for (const QJsonValue& kv : o.value(QStringLiteral("keywords")).toArray()) out.keywords << kv.toString();
+    out.manufacturer = o.value(QStringLiteral("manufacturer")).toString();
+    out.partNumber = o.value(QStringLiteral("partNumber")).toString();
     return true;
 }
 
@@ -382,26 +610,30 @@ SymbolDefinition footprintToSymbolDefinition(const LibraryFootprint& footprint) 
 
 namespace {
 
-BuiltInLibrary loadBuiltInLibrary() {
+LibraryData loadBuiltInLibraryData() {
     // The resource is compiled into the static hatt-ui-shell library; Qt does not auto-register a
     // static library's resources into whichever final executable links it, so every consumer
     // (hatteda.exe, every test binary) needs this explicit call once before the qrc path resolves.
     hattEdaInitLibraryResource();
-    BuiltInLibrary result;
     QFile file(QStringLiteral(":/library/builtin.json"));
     if (!file.open(QIODevice::ReadOnly)) {
         qWarning() << "hatteda: built-in library resource missing";
-        return result;
+        return {};
     }
     QJsonParseError parseError;
     const QJsonDocument doc = QJsonDocument::fromJson(file.readAll(), &parseError);
     if (parseError.error != QJsonParseError::NoError || !doc.isObject()) {
         qWarning() << "hatteda: built-in library resource is malformed:" << parseError.errorString();
-        return result;
+        return {};
     }
     QStringList errors;
-    const LibraryData data = libraryDataFromJson(doc.object(), errors);
+    LibraryData data = libraryDataFromJson(doc.object(), errors);
     for (const auto& message : errors) qWarning() << "hatteda: built-in library:" << message;
+    return data;
+}
+
+BuiltInLibrary toRuntimeRegistry(const LibraryData& data) {
+    BuiltInLibrary result;
     for (const auto& device : data.devices) {
         if (const auto* variant = device.variant(QStringLiteral("standard"))) {
             result.symbols.append(deviceVariantToSymbolDefinition(device, *variant));
@@ -418,8 +650,13 @@ BuiltInLibrary loadBuiltInLibrary() {
 
 } // namespace
 
+const LibraryData& builtInLibraryData() {
+    static const LibraryData data = loadBuiltInLibraryData();
+    return data;
+}
+
 const BuiltInLibrary& builtInLibrary() {
-    static const BuiltInLibrary library = loadBuiltInLibrary();
+    static const BuiltInLibrary library = toRuntimeRegistry(builtInLibraryData());
     return library;
 }
 

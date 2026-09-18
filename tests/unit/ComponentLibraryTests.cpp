@@ -52,65 +52,88 @@ class ComponentLibraryTests final : public QObject {
 
 private slots:
     void builtInCatalogIsConsistentAndSearchable() {
-        registerBuiltInCatalog();
         QSet<QString> componentIds;
         QVERIFY(componentCatalog().size() >= 50);
         for (const auto& entry : componentCatalog()) {
-            QVERIFY2(!componentIds.contains(entry.device.id), qPrintable(entry.device.id));
-            componentIds.insert(entry.device.id);
-            QVERIFY(entry.device.pinCount > 0);
-            QCOMPARE(entry.device.pinNames.size(), entry.device.pinCount);
-            QCOMPARE(entry.pinTypes.size(), entry.device.pinCount);
-            QVERIFY(findSimulationModel(entry.device.simulationModel) != nullptr);
-            const auto* symbol = findSymbol(entry.device.id);
+            QVERIFY2(!componentIds.contains(entry.id), qPrintable(entry.id));
+            componentIds.insert(entry.id);
+            QVERIFY(!entry.pins.isEmpty());
+            QVERIFY(findSimulationModel(entry.simulationModel) != nullptr);
+            const auto* symbol = findSymbol(entry.id);
             QVERIFY(symbol != nullptr);
-            QCOMPARE(symbol->pins.size(), entry.device.pinCount);
-            const auto* package = findSymbol(entry.device.footprint);
-            QVERIFY2(package != nullptr, qPrintable(entry.device.footprint));
-            QCOMPARE(package->pins.size(), entry.device.pinCount);
-            for (const QString& option : entry.footprintOptions) {
-                const auto* candidate = findSymbol(option);
-                QVERIFY2(candidate != nullptr, qPrintable(option));
-                QCOMPARE(candidate->pins.size(), entry.device.pinCount);
+            QCOMPARE(symbol->pins.size(), entry.pins.size());
+            QVERIFY2(!entry.footprints.isEmpty(), qPrintable(entry.id));
+            for (const auto& option : entry.footprints) {
+                const auto* candidate = findSymbol(option.footprintId);
+                QVERIFY2(candidate != nullptr, qPrintable(option.footprintId));
+                QCOMPARE(candidate->pins.size(), entry.pins.size());
+                QVERIFY(validatePinPadMap(option.pinPadMap, entry.pins.size()).isEmpty());
             }
-            QVERIFY(validatePinPadMap(entry.device.pinPadMap, entry.device.pinCount).isEmpty());
         }
         QSet<QString> footprintIds;
-        QVERIFY(footprintCatalog().size() >= 70);
-        for (const auto& footprint : footprintCatalog()) {
+        QVERIFY(builtInLibraryData().footprints.size() >= 70);
+        for (const auto& footprint : builtInLibraryData().footprints) {
             QVERIFY2(!footprintIds.contains(footprint.id), qPrintable(footprint.id));
             footprintIds.insert(footprint.id);
-            QVERIFY2(validateFootprintParams(footprint.params).isEmpty(),
-                     qPrintable(footprint.id + QStringLiteral(": ") + validateFootprintParams(footprint.params)));
-            const SymbolDefinition symbol = footprintSymbol(footprint);
-            QCOMPARE(symbol.pads.size(), footprint.params.padCount);
-            QCOMPARE(symbol.pins.size(), footprint.params.padCount);
+            const SymbolDefinition symbol = footprintToSymbolDefinition(footprint);
+            QCOMPARE(symbol.pads.size(), footprint.pins.size());
             for (int i = 0; i < symbol.pads.size(); ++i) QCOMPARE(symbol.pads[i].number, i + 1);
-            QVERIFY(symbol.shapes.size() >= 2); // body plus the structural pin-1 mark
+            // Shape count varies by provenance: PR (a)'s original 10 footprints are a single body
+            // outline (or none for via/test-point), while #61 PR (b)'s catalog-generated ones add
+            // a separate pin-1 mark -- no single minimum holds across both, only pad/pin parity.
         }
         for (const QString& term : {QStringLiteral("resistor"), QStringLiteral("direnç"),
                                     QStringLiteral("1n4148"), QStringLiteral("npn"),
                                     QStringLiteral("opamp")}) {
             QVERIFY2(!searchComponentCatalog(term).isEmpty(), qPrintable(term));
         }
-        QCOMPARE(findCatalogComponent(QStringLiteral("catalog.device.bc547"))->device.pinNames,
-                 QStringList({QStringLiteral("C"), QStringLiteral("B"), QStringLiteral("E")}));
-        QCOMPARE(findCatalogComponent(QStringLiteral("catalog.device.lm358"))->device.pinNames.size(), 8);
+        QStringList bc547Pins;
+        for (const auto& pin : findCatalogComponent(QStringLiteral("catalog.device.bc547"))->pins) bc547Pins << pin.name;
+        QCOMPARE(bc547Pins, QStringList({QStringLiteral("C"), QStringLiteral("B"), QStringLiteral("E")}));
+        QCOMPARE(findCatalogComponent(QStringLiteral("catalog.device.lm358"))->pins.size(), 8);
 
         QSet<QString> pickableIds;
         for (const auto* symbol : pickableDevices({})) {
             QVERIFY2(!pickableIds.contains(symbol->id), qPrintable(symbol->id));
             pickableIds.insert(symbol->id);
         }
-        QVERIFY(pickableIds.contains(QStringLiteral("catalog.device.1n4148")));
+        // catalog.device.1n4148 is a legacy alias (#61 PR (b)); pickableDevices() returns the
+        // canonical lib.* id it now resolves to.
+        const auto* legacy1n4148 = findSymbol(QStringLiteral("catalog.device.1n4148"));
+        QVERIFY(legacy1n4148 != nullptr);
+        QVERIFY(pickableIds.contains(legacy1n4148->id));
 
         const auto twoPadFootprints = footprintsWithPads({}, 2);
-        QVERIFY(twoPadFootprints.contains(findSymbol(QStringLiteral("catalog.footprint.passive.0603"))));
+        const auto* legacyPassive0603 = findSymbol(QStringLiteral("catalog.footprint.passive.0603"));
+        QVERIFY(legacyPassive0603 != nullptr);
+        QVERIFY(twoPadFootprints.contains(legacyPassive0603));
         QSet<QString> twoPadIds;
         for (const auto* symbol : twoPadFootprints) {
             QVERIFY2(!twoPadIds.contains(symbol->id), qPrintable(symbol->id));
             twoPadIds.insert(symbol->id);
         }
+    }
+
+    // #61 PR (b): every catalog.device.*/catalog.footprint.* id ComponentCatalog used to own
+    // directly must still resolve, now purely through the legacy alias table, to a real,
+    // registered symbol -- not just the two spot-checked above.
+    void everyLegacyCatalogIdResolvesThroughTheAliasTable() {
+        int deviceAliases = 0;
+        int footprintAliases = 0;
+        for (auto it = builtInLibrary().aliases.constBegin(); it != builtInLibrary().aliases.constEnd(); ++it) {
+            const QString& oldId = it.key();
+            if (!oldId.startsWith(QLatin1String("catalog.device.")) &&
+                !oldId.startsWith(QLatin1String("catalog.footprint."))) {
+                continue;
+            }
+            const auto* symbol = findSymbol(oldId);
+            QVERIFY2(symbol != nullptr, qPrintable(oldId));
+            QCOMPARE(symbol->id, it.value());
+            if (oldId.startsWith(QLatin1String("catalog.device."))) ++deviceAliases;
+            else ++footprintAliases;
+        }
+        QVERIFY(deviceAliases >= 50);
+        QVERIFY(footprintAliases >= 30);
     }
 
     void dualRowPadsAreNumberedCounterClockwise() {

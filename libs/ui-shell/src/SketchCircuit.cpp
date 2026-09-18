@@ -107,7 +107,6 @@ void collectSchematicInput(const SketchDocument& document, CircuitSnapshot& resu
 }
 
 CircuitSnapshot analyzeSchematic(const SketchDocument& document) {
-    registerBuiltInCatalog();
     CircuitSnapshot result;
     collectSchematicInput(document, result);
     result.connectivity = electrical::buildConnectivity(result.input);

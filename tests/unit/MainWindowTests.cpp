@@ -103,6 +103,7 @@ private slots:
     void contextPropertiesAcceptAndCancel();
     void contextMenuUsesObjectSpecificCommandsAndKeepsMultiSelection();
     void componentModeUsesProjectDevicesAndSchematicParts();
+    void catalogPickerShowsAllSuitablePackagesForADevice();
     void newDeviceCreatesFootprintAndPinMap();
     void designChecksReportAndRules();
     void fabricationExportAsksAboutRuleErrors();
@@ -203,6 +204,45 @@ void MainWindowTests::componentModeUsesProjectDevicesAndSchematicParts() {
     // Undoing the placement offers the part again.
     action(window, "hatteda.action.undo")->trigger();
     QTRY_COMPARE(selector->count(), 2);
+}
+
+// #61 PR (b): componentCatalog()'s footprint options (LibraryDevice::footprints) still all have to
+// reach the picker's details panel after ComponentCatalogEntry::footprintOptions was dropped as a
+// separate, redundant field.
+void MainWindowTests::catalogPickerShowsAllSuitablePackagesForADevice() {
+    hatt::ui::MainWindow window;
+    QVERIFY(showActive(window));
+    activateEditor(window);
+    action(window, "hatteda.tool.component")->trigger();
+
+    QString detailsText;
+    QTimer::singleShot(0, [&] {
+        auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+        QVERIFY(dialog);
+        auto* results = dialog->findChild<QListWidget*>(QStringLiteral("DeviceResults"));
+        auto* details = dialog->findChild<QLabel*>(QStringLiteral("DeviceDetails"));
+        for (int row = 0; row < results->count(); ++row) {
+            if (results->item(row)->data(Qt::UserRole + 1).toString() ==
+                QLatin1String("lib.passive.resistor")) {
+                results->setCurrentRow(row);
+                break;
+            }
+        }
+        detailsText = details->text();
+        dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Cancel)->click();
+    });
+    window.findChild<QPushButton*>(QStringLiteral("hatteda.devices.pick"))->click();
+
+    QVERIFY2(detailsText.contains(QStringLiteral("Suitable packages")), qPrintable(detailsText));
+    const QString packagesLine = detailsText.mid(detailsText.indexOf(QStringLiteral("Suitable packages")));
+    // lib.passive.resistor carries six footprint options (#61 PR (b) merge): its own default
+    // ("Resistor 0603") plus five catalog-derived ones. One of those display names ("Radial
+    // capacitor, 5 mm pitch") has its own embedded comma, so counting commas would overcount --
+    // check package-name substrings directly instead.
+    for (const QString& package : {QStringLiteral("0402"), QStringLiteral("0805"),
+                                   QStringLiteral("1206"), QStringLiteral("Radial")}) {
+        QVERIFY2(packagesLine.contains(package), qPrintable(packagesLine));
+    }
 }
 
 void MainWindowTests::newDeviceCreatesFootprintAndPinMap() {
