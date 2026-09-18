@@ -404,6 +404,139 @@ int main() {
         check(!floatingGate.success && floatingGate.error.find("loating") != std::string::npos,
               "MOSFET with an unbiased gate is reported as a floating net, not a crash");
     }
+    // #62 part 3: op-amp, logic gates, and a bistable circuit built from them (warm start).
+    {
+        // Non-inverting amplifier: Vin=1V -> op-amp non-inverting input; feedback divider
+        // (R2=9k from output to inverting input, R1=1k from inverting input to ground) sets
+        // gain = 1 + R2/R1 = 10, well within the +-15 V rails. Independent reference: the
+        // standard ideal-op-amp virtual-short formula, not derived from this solver.
+        const double vin = 1.0, r1 = 1000.0, r2 = 9000.0, gain = 1e5, gOut = 1000.0, vpos = 15.0, vneg = -15.0;
+        const double expectedVout = vin * (1.0 + r2 / r1);
+        const auto result = solveDc({4, 0,
+                                     {{"Vin", DcKind::VoltageSource, 1, 0, vin}, {"Rfb", DcKind::Resistor, 2, 3, r2},
+                                      {"Rg", DcKind::Resistor, 3, 0, r1}},
+                                     {{"U1", NonlinearKind::OpAmp, {1, 3, 2}, {gain, gOut, vpos, vneg}}}});
+        check(result.success, "op-amp non-inverting amplifier solves");
+        if (result.success) {
+            // Finite gain (1e5) leaves a small, expected error of about Vout/gain.
+            check(std::abs(result.voltages[2] - expectedVout) < 1e-2,
+                  "op-amp output matches the ideal gain formula (1 + R2/R1)");
+            check(std::abs(result.voltages[3] - vin) < 1e-2, "op-amp virtual short: Vminus tracks Vplus");
+        }
+    }
+    {
+        // Same amplifier, but Vin=5V would need Vout=50V: the output must saturate at +Vpos
+        // instead (supply-rail-limited output).
+        const double vin = 5.0, r1 = 1000.0, r2 = 9000.0, gain = 1e5, gOut = 1000.0, vpos = 15.0, vneg = -15.0;
+        const auto result = solveDc({4, 0,
+                                     {{"Vin", DcKind::VoltageSource, 1, 0, vin}, {"Rfb", DcKind::Resistor, 2, 3, r2},
+                                      {"Rg", DcKind::Resistor, 3, 0, r1}},
+                                     {{"U1", NonlinearKind::OpAmp, {1, 3, 2}, {gain, gOut, vpos, vneg}}}});
+        check(result.success, "op-amp saturated amplifier solves");
+        if (result.success)
+            // A small symmetry-breaking nudge (see the solver's comment near "gigaohm") can push
+            // a fully saturated output a hair past the rail; allow a generous margin for it.
+            check(result.voltages[2] > 14.0 && result.voltages[2] < vpos + 0.01,
+                  "op-amp output saturates near +Vpos");
+    }
+    {
+        // Parameter/topology validation for the op-amp.
+        const auto badParamCount = solveDc({3, 0, {}, {{"U1", NonlinearKind::OpAmp, {0, 1, 2}, {1e5, 1000}}}});
+        check(!badParamCount.success, "op-amp needs exactly 4 parameters");
+        const auto badGain = solveDc({3, 0, {}, {{"U1", NonlinearKind::OpAmp, {0, 1, 2}, {0, 1000, 15, -15}}}});
+        check(!badGain.success, "op-amp gain must be positive");
+        const auto badRails = solveDc({3, 0, {}, {{"U1", NonlinearKind::OpAmp, {0, 1, 2}, {1e5, 1000, -15, 15}}}});
+        check(!badRails.success, "op-amp Vpos must exceed Vneg");
+    }
+    // Shared logic gate parameters used by every gate test below: 0/5 V logic, threshold at
+    // mid-rail, a sharp (but smooth) transition, and a driver conductance that dominates any
+    // stray load with margin (the ideal inputs draw no current at all, so nothing else competes).
+    constexpr double Vth = 2.5, Steepness = 50.0, Vol = 0.0, Voh = 5.0, GOut = 0.1;
+    const auto gate = [&](const char* ref, int output, int inputA, int inputB, LogicFunction fn) {
+        return NonlinearElement{ref, NonlinearKind::LogicGate, {output, inputA, inputB},
+                                {static_cast<double>(fn), Vth, Steepness, Vol, Voh, GOut}};
+    };
+    {
+        // AND: both inputs high -> output high; otherwise low. Nets: 0=ground, 1=A, 2=B, 3=out.
+        for (const auto& combo : {std::pair{0.0, 0.0}, {0.0, Voh}, {Voh, 0.0}, {Voh, Voh}}) {
+            const auto result = solveDc({4, 0,
+                                         {{"VA", DcKind::VoltageSource, 1, 0, combo.first},
+                                          {"VB", DcKind::VoltageSource, 2, 0, combo.second}},
+                                         {gate("G1", 3, 1, 2, LogicFunction::And)}});
+            check(result.success, "AND gate solves");
+            if (result.success) {
+                const bool expectHigh = combo.first > Vth && combo.second > Vth;
+                check((result.voltages[3] > Voh / 2) == expectHigh, "AND gate output matches truth table");
+                check(result.nonlinearAux[0] >= 0.0 && result.nonlinearAux[0] <= 1.0,
+                      "AND gate digital level is normalized to [0, 1]");
+            }
+        }
+    }
+    {
+        // NOT: nets = {output, input, unused} - wire "unused" to the input itself.
+        for (double vin : {0.0, Voh}) {
+            const auto result = solveDc({3, 0, {{"VA", DcKind::VoltageSource, 1, 0, vin}},
+                                         {gate("G1", 2, 1, 1, LogicFunction::Not)}});
+            check(result.success, "NOT gate solves");
+            if (result.success) check((result.voltages[2] > Voh / 2) == (vin <= Vth), "NOT gate output matches truth table");
+        }
+    }
+    {
+        // XOR: high only when inputs differ.
+        for (const auto& combo : {std::pair{0.0, 0.0}, {0.0, Voh}, {Voh, 0.0}, {Voh, Voh}}) {
+            const auto result = solveDc({4, 0,
+                                         {{"VA", DcKind::VoltageSource, 1, 0, combo.first},
+                                          {"VB", DcKind::VoltageSource, 2, 0, combo.second}},
+                                         {gate("G1", 3, 1, 2, LogicFunction::Xor)}});
+            check(result.success, "XOR gate solves");
+            if (result.success) {
+                const bool expectHigh = (combo.first > Vth) != (combo.second > Vth);
+                check((result.voltages[3] > Voh / 2) == expectHigh, "XOR gate output matches truth table");
+            }
+        }
+    }
+    {
+        // Parameter/topology validation for logic gates.
+        const auto badParamCount = solveDc({4, 0, {}, {{"G1", NonlinearKind::LogicGate, {0, 1, 2}, {1, 2.5, 50, 0, 5}}}});
+        check(!badParamCount.success, "logic gate needs exactly 6 parameters");
+        const auto badFunction =
+            solveDc({4, 0, {}, {{"G1", NonlinearKind::LogicGate, {0, 1, 2}, {99, 2.5, 50, 0, 5, 0.1}}}});
+        check(!badFunction.success, "logic gate function id must be a valid LogicFunction");
+        const auto badSwing =
+            solveDc({4, 0, {}, {{"G1", NonlinearKind::LogicGate, {0, 1, 2}, {1, 2.5, 50, 5, 0, 0.1}}}});
+        check(!badSwing.success, "logic gate Voh must exceed Vol");
+    }
+    {
+        // SR latch from two cross-coupled NAND gates (active-low set/reset) - the classic
+        // "school" bistable circuit (#66). Nets: 0=ground, 1=Sbar, 2=Rbar, 3=Q1, 4=Q2.
+        const auto srLatch = [&](double sbar, double rbar, const std::vector<double>* seed) {
+            DcCircuit circuit{5, 0,
+                              {{"VS", DcKind::VoltageSource, 1, 0, sbar}, {"VR", DcKind::VoltageSource, 2, 0, rbar}},
+                              {gate("G1", 3, 1, 4, LogicFunction::Nand), gate("G2", 4, 2, 3, LogicFunction::Nand)}};
+            if (seed) circuit.initialVoltages = *seed;
+            return solveDc(circuit);
+        };
+        const auto set = srLatch(0.0, Voh, nullptr); // Sbar active (low) sets Q1 high
+        check(set.success && set.voltages[3] > Voh / 2 && set.voltages[4] < Voh / 2,
+              "SR latch: set drives Q1 high and Q2 low");
+        if (set.success) {
+            const auto hold = srLatch(Voh, Voh, &set.voltages); // both inactive: warm-started from "set"
+            check(hold.success && hold.voltages[3] > Voh / 2 && hold.voltages[4] < Voh / 2,
+                  "SR latch: warm-started hold preserves the set state");
+            const auto reset = srLatch(Voh, 0.0, &hold.voltages); // Rbar active (low) resets Q1 low
+            check(reset.success && reset.voltages[3] < Voh / 2 && reset.voltages[4] > Voh / 2,
+                  "SR latch: reset drives Q1 low and Q2 high");
+        }
+        // Never crashes without a warm start either. A perfectly symmetric hold condition with a
+        // 0 V guess is a textbook hard case for Newton-Raphson (finding one side of an unstable
+        // equilibrium's basin boundary): it may settle on either stable state, or - as it does
+        // here - fail to converge within the iteration budget instead. Either outcome is
+        // acceptable; a crash, hang, NaN or infinity is not. The warm-started path above is the
+        // one #66's latch template actually relies on, and it converges cleanly.
+        const auto holdNoSeed = srLatch(Voh, Voh, nullptr);
+        check(holdNoSeed.success ? std::isfinite(holdNoSeed.voltages[3]) : !holdNoSeed.error.empty(),
+              "SR latch hold without a warm start never crashes: succeeds or fails clearly");
+    }
     if (!failures) std::cout << "All DC solver tests passed.\n";
     return failures ? 1 : 0;
 }
