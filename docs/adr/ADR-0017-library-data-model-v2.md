@@ -1,10 +1,8 @@
 # ADR-0017: Library data model v2 — data-driven built-in library, symbol variants, legacy alias migration
 
-**Status:** Accepted (PR (a): model, loader, symbolVariant/v6, legacy alias. ComponentCatalog
-consolidation — folding `ComponentCatalogEntry` into `LibraryDevice` so `componentCatalog()`,
-`searchComponentCatalog()` and `PickDevicesDialog` read one model — is in scope for #61 too, per
-follow-up direction, as a separate PR (b), "Closes #61".)
-**Date:** 2026-09-17
+**Status:** Accepted (PR (a): model, loader, symbolVariant/v6, legacy alias. PR (b): folds
+`ComponentCatalogEntry` into `LibraryDevice`, "Closes #61".)
+**Date:** 2026-09-17 (PR (a)), 2026-09-18 (PR (b))
 **Issue:** #61 (epic #60)
 
 ## Context
@@ -106,12 +104,74 @@ ids (nothing re-canonicalizes an *existing* item's stored id on load — only ne
 ## Consequences
 
 - New header/source (`LibraryModel.hpp/.cpp`) plus the JSON resource and loader; `ComponentLibrary.hpp`
-  (ADR-0007 project devices) and `ComponentCatalog.hpp` are unchanged by this issue.
+  (ADR-0007 project devices) is unchanged by this issue.
 - `MainWindowTests`/`DesignCanvasTests` fixtures that hard-code `schematic.*`/`board.*` ids keep
   working unchanged (old ids resolve via the alias table); new tests cover loading, alias resolution
   and variant serialization directly.
 - Out of scope here (per the epic): real footprint dimensions (#63), variant-picker UI and
   simulation-driven animation (#64).
+
+### 6. PR (b): `ComponentCatalog` consolidation
+
+`ComponentCatalogEntry` (`DeviceDefinition device; CatalogCategory category; QString description;
+QStringList keywords; QVector<PinElectricalType> pinTypes; QStringList footprintOptions; QString
+symbolTemplate;`) is deleted. Its fields fold directly into `LibraryDevice`/`LibraryPin` instead of
+a second, parallel struct:
+
+- `CatalogCategory`, `PinElectricalType`, `AnalysisSupport` and `SimulationModelDefinition` move
+  from `ComponentCatalog.hpp` to `LibraryModel.hpp` (`ComponentCatalog.hpp` now includes it); the
+  `simulationModel`/`simulationModelCatalog()` id vocabulary itself is untouched, as agreed with
+  #62.
+- `LibraryDevice` gains `catalogCategory`, `description`, `keywords`, `manufacturer`, `partNumber`
+  (only meaningful for `category == SymbolCategory::Component`; terminals/probes leave them
+  default). `LibraryPin` gains a `type` (`PinElectricalType`), replacing the separate
+  `pinTypes` vector that could desync from `pins` — the same kind of fix PR (a) already made for
+  `symbolTemplate` (baked into `variants` instead of resolved at registration time). `symbolTemplate`
+  and `footprintOptions` are dropped outright: the former was only ever a *build-time* geometry
+  source (now folded into the generated `variants[0]`, see below), the latter duplicated
+  `footprints[i].footprintId`.
+- **`componentCatalog()` is now a filtered view**, not a second generated table: every
+  `builtInLibraryData().devices` entry with `category == SymbolCategory::Component`. This is the
+  single source `searchComponentCatalog()`, `findCatalogComponent()` and `MainWindow::pickDevices()`
+  all read.
+- **Merge vs. new id.** Of ComponentCatalog's ~63 devices, 8 are really the same part as one of PR
+  (a)'s 17 literal devices (resistor, capacitor, inductor, generic diode, LED, generic NPN, generic
+  ideal op-amp, DC voltage source) — identified by which catalog entry used that device's id as its
+  `symbolTemplate`. Those 8 got the catalog's metadata merged onto the *existing* `lib.*` device
+  (keeping its id and, critically, its existing default footprint first in `footprints`, so already-
+  placed items and tests referencing e.g. `lib.footprint.r0603` as the default keep working). The
+  other ~55 became new `lib.<family>.<part>` devices, `family` from `CatalogCategory`
+  (`passive`/`diode`/`transistor`/`analog`/`digital`/`source`/`electromech`/`connector`). Their
+  `variants[0]` geometry is whichever the old code would have registered: the symbol borrowed via
+  `symbolTemplate` when set (copied once, not referenced), otherwise the generic `deviceSymbol()`
+  box — baked in by a temporary, self-deleting conversion executable (same technique as PR (a)'s
+  throwaway QtTest) that ran the *old*, still-intact `ComponentCatalog.cpp` once to compute exact
+  geometry, merged it into PR (a)'s `builtin.json`, and wrote the result back before the old
+  generator code was deleted.
+- Similarly, ~90 `catalog.footprint.*` definitions merge into `builtin.json`. Three exactly collide
+  by package name with one of PR (a)'s original 10 (`sot23`, `soic8`, `dip8`): the *existing*
+  `lib.footprint.*` geometry wins (not reconciled against the catalog's own, possibly slightly
+  different, parametric version of the same package — deliberately out of scope, see below), and
+  `catalog.footprint.<name>` becomes a plain alias to it. All other catalog footprints become new
+  `lib.footprint.<package>` entries with geometry baked once via the existing `footprintSymbol()`
+  generator, same as PR (a) did for its 10.
+- `catalog.device.*` and `catalog.footprint.*` join the alias table exactly like `schematic.*`/
+  `board.*` did in PR (a) — read-direction only, resolved by `findSymbol()` itself.
+- **`registerBuiltInCatalog()` is deleted**, along with its four call sites
+  (`ComponentLibrary.cpp` ×2, `ProjectFile.cpp`, `SketchCircuit.cpp`) and the matching calls in
+  `ComponentLibraryTests`/`SketchCircuitTests`. It used to register `ComponentCatalog`'s
+  *separately generated* symbols into the runtime registry before any lookup; now every built-in
+  symbol (base and catalog alike) is already part of `symbolLibrary()`
+  (`builtInLibrary().symbols`), and `findSymbol()`/`symbolsFor()` read `symbolLibrary()`
+  unconditionally on every call — there is no registration step left to guarantee.
+  `pickableDevices()`/`footprintsWithPads()` in `ComponentLibrary.cpp` lose their now-redundant
+  second loop over the old `componentCatalog()`/`footprintCatalog()` for the same reason (it would
+  otherwise re-add the same symbols `symbolsFor()`/`symbolLibrary()` already returned, duplicating
+  every catalog entry in the picker).
+- **Geometry is still approximate.** The ~55 new devices and ~90 new footprints carry whatever
+  geometry `ComponentCatalog.cpp`'s old generic generators already produced (a plain box, or a
+  parametric IPC-agnostic footprint) — real IPC-7351B/JEDEC dimensions are #63's job, not this PR's.
+  Nothing here claims otherwise; `LibraryFootprint::source` stays empty until #63 fills it in.
 
 ## Validation
 
@@ -125,3 +185,20 @@ warning naming it, byte-identical re-save of the untouched item), `legacyIdResol
 `hatt-ui-shell-tests` exercise the migrated library through the existing suite; the handful of
 assertions that compared an exact *id string* the system returns (not merely supplied one) were
 updated to the new `lib.*` ids.
+
+PR (b) adds: `ComponentLibraryTests::builtInCatalogIsConsistentAndSearchable` (extended — every
+`componentCatalog()` entry has a unique id, ≥ 1 pin, a resolvable `simulationModel`, a resolvable
+symbol with matching pin count, and every one of its `footprints` resolves too, with a valid
+pin→pad map), `everyLegacyCatalogIdResolvesThroughTheAliasTable` (every `catalog.device.*`/
+`catalog.footprint.*` alias, not just the two spot-checked above, resolves via `findSymbol` to its
+stated `lib.*` id); `ProjectFileTests::catalogDeviceIdResolvesOnAColdProjectLoad` (a review
+follow-up: `parseProject()` with a `catalog.device.*` id, as the first thing this executable does
+with the library, to confirm removing `registerBuiltInCatalog()` left no hidden ordering dependency
+on the project-load path); `MainWindowTests::catalogPickerShowsAllSuitablePackagesForADevice` (a
+review follow-up: drives the real "Pick devices" dialog and checks the details panel's "Suitable
+packages" line still lists every one of a multi-footprint device's options, not just the default,
+after `ComponentCatalogEntry::footprintOptions` was dropped in favor of `footprints[i].footprintId`).
+`SketchCircuitTests::detectsCopperShortAndUnsupportedSimulation`'s expected message changed from the
+generic "no model" text to `nonlinear.diode`'s own "not implemented yet" limitation, now that
+`lib.diode.standard` carries its real model id instead of an unset one — forward-compatible with
+#62 giving that model real `DcOperatingPoint` support later.
