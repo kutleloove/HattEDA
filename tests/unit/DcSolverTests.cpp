@@ -245,6 +245,165 @@ int main() {
                                : !extreme.error.empty(),
               "extreme nonlinear circuit never crashes: succeeds with a finite answer or fails clearly");
     }
+    // #62 part 2: BJT (Ebers-Moll) and MOSFET (level-1).
+    {
+        // NPN common-emitter, fixed base bias: Vcc -[Rb]- Base, Vcc -[Rc]- Collector, Emitter =
+        // ground. Independent reference: bisect Vbe so Ib = (Is/BF)*(exp(Vbe/Vt)-1) matches
+        // (Vcc-Vbe)/Rb, ignoring the reverse (Vbc) term - valid whenever Vbc ends up clearly
+        // negative (deep active region), checked below rather than assumed.
+        const double vcc = 10.0, rb = 470000.0, rc = 1000.0, is = 1e-15, bf = 100.0, br = 1.0;
+        double lo = 0.0, hi = 0.85;
+        for (int iter = 0; iter < 200; ++iter) {
+            const double mid = (lo + hi) / 2;
+            const double ib = (is / bf) * (std::exp(mid / Vt) - 1.0);
+            if (ib < (vcc - mid) / rb) lo = mid; else hi = mid;
+        }
+        const double vbeRef = (lo + hi) / 2;
+        const double icRef = is * std::exp(vbeRef / Vt); // ignoring the negligible -is and Vbc terms
+        const double vcRef = vcc - icRef * rc;
+        check(vbeRef - vcRef < -3.0, "NPN reference circuit is deep in the active region (Vbc << 0)");
+        const auto result = solveDc({4, 0,
+                                     {{"V1", DcKind::VoltageSource, 1, 0, vcc}, {"Rb", DcKind::Resistor, 1, 2, rb},
+                                      {"Rc", DcKind::Resistor, 1, 3, rc}},
+                                     {{"Q1", NonlinearKind::BjtNpn, {3, 2, 0}, {is, bf, br}}}});
+        check(result.success, "NPN common-emitter solves");
+        if (result.success) {
+            check(std::abs(result.nonlinearCurrents[0] - icRef) < icRef * 0.02,
+                  "NPN collector current matches independent reference within 2%");
+            check(std::abs(result.voltages[3] - vcRef) < 0.05, "NPN collector voltage matches independent reference");
+            check(std::abs(result.voltages[2] - vbeRef) < 1e-6, "NPN base voltage (=Vbe) matches independent reference");
+        }
+    }
+    {
+        // PNP common-emitter mirror: Emitter tied to Vcc, base pulled toward ground through Rb
+        // (PNP sources Ib out of its base into Rb), collector pulled toward ground through Rc
+        // (PNP sources Ic out of its collector into Rc). Same bisection idea, mirrored.
+        const double vcc = 10.0, rb = 470000.0, rc = 1000.0, is = 1e-15, bf = 100.0, br = 1.0;
+        double lo = 0.0, hi = 0.85;
+        for (int iter = 0; iter < 200; ++iter) {
+            const double mid = (lo + hi) / 2; // mid = Veb candidate
+            const double ib = (is / bf) * (std::exp(mid / Vt) - 1.0);
+            const double vb = vcc - mid;
+            if (ib * rb < vb) lo = mid; else hi = mid;
+        }
+        const double vebRef = (lo + hi) / 2;
+        const double vbRef = vcc - vebRef;
+        const double icRef = is * std::exp(vebRef / Vt); // Isc analogue, ignoring the Vcb term
+        const double vcRef = icRef * rc; // collector sources current into Rc toward ground
+        check(vcRef - vbRef < -3.0, "PNP reference circuit is deep in the active region (Vcb << 0, i.e. Vc << Vb)");
+        const auto result = solveDc({4, 0,
+                                     {{"V1", DcKind::VoltageSource, 1, 0, vcc}, {"Rb", DcKind::Resistor, 2, 0, rb},
+                                      {"Rc", DcKind::Resistor, 3, 0, rc}},
+                                     {{"Q1", NonlinearKind::BjtPnp, {3, 2, 1}, {is, bf, br}}}});
+        check(result.success, "PNP common-emitter solves");
+        if (result.success) {
+            check(std::abs(result.nonlinearCurrents[0] + icRef) < icRef * 0.02,
+                  "PNP collector current (into collector, negative when sourcing) matches reference within 2%");
+            check(std::abs(result.voltages[3] - vcRef) < 0.05, "PNP collector voltage matches independent reference");
+            check(std::abs(result.voltages[2] - vbRef) < 1e-6, "PNP base voltage matches independent reference");
+        }
+    }
+    // Independent, region-aware reference for an NMOS/PMOS switch: bisects Id so that
+    // Vds = Vdd - Id*Rd is self-consistent with the level-1 square law in whichever region it
+    // lands in (mirrors solveDc's own model, but computed with plain bisection, not Newton).
+    const auto mosfetReferenceId = [](double vdd, double rd, double vgs, double vto, double k) {
+        const double vov = vgs - vto;
+        if (vov <= 0) return 0.0;
+        double lo = 0.0, hi = vdd / rd;
+        for (int iter = 0; iter < 200; ++iter) {
+            const double mid = (lo + hi) / 2;
+            const double vds = vdd - mid * rd;
+            const double idModel = vds < vov ? k * (2.0 * vov * vds - vds * vds) : k * vov * vov;
+            if (idModel > mid) lo = mid; else hi = mid;
+        }
+        return (lo + hi) / 2;
+    };
+    {
+        // NMOS switch, saturation: Vdd=10 V, Rd=1 kohm, gate driven directly to 5 V (Vgs=5V since
+        // source is grounded), Vto=2 V, K=0.5 mA/V^2 -> Id = K*(Vgs-Vto)^2 = 4.5 mA exactly (chosen
+        // so Vds stays above the overdrive voltage, confirmed below), no iteration needed for the
+        // reference at all.
+        const double vdd = 10.0, rd = 1000.0, vgs = 5.0, vto = 2.0, k = 0.0005;
+        const double idRef = k * (vgs - vto) * (vgs - vto);
+        const double vdRef = vdd - idRef * rd;
+        check(vdRef >= vgs - vto, "NMOS reference circuit is in saturation");
+        const auto result = solveDc({4, 0,
+                                     {{"Vdd", DcKind::VoltageSource, 1, 0, vdd}, {"Rd", DcKind::Resistor, 1, 2, rd},
+                                      {"Vg", DcKind::VoltageSource, 3, 0, vgs}},
+                                     {{"M1", NonlinearKind::NMosfet, {2, 3, 0}, {vto, k}}}});
+        check(result.success, "NMOS saturation switch solves");
+        if (result.success) {
+            check(std::abs(result.nonlinearCurrents[0] - idRef) < idRef * 0.02,
+                  "NMOS drain current matches independent reference within 2%");
+            check(std::abs(result.voltages[2] - vdRef) < 0.05, "NMOS drain voltage matches independent reference");
+        }
+    }
+    {
+        // NMOS switch, triode (logic-level, low Rds-on): Vdd=5V, gate tied straight to Vdd
+        // (Vgs=5V), Vto=1V, K=10 mA/V^2, Rd=100 ohm -> small Vds, needs the bisection reference
+        // since Id and Vds are mutually dependent in this region.
+        const double vdd = 5.0, rd = 100.0, vgs = 5.0, vto = 1.0, k = 0.01;
+        const double idRef = mosfetReferenceId(vdd, rd, vgs, vto, k);
+        const double vdRef = vdd - idRef * rd;
+        check(vdRef < vgs - vto, "NMOS reference circuit is in triode");
+        const auto result = solveDc({3, 0,
+                                     {{"Vdd", DcKind::VoltageSource, 1, 0, vdd}, {"Rd", DcKind::Resistor, 1, 2, rd}},
+                                     {{"M1", NonlinearKind::NMosfet, {2, 1, 0}, {vto, k}}}});
+        check(result.success, "NMOS triode switch solves");
+        if (result.success) {
+            check(std::abs(result.nonlinearCurrents[0] - idRef) < std::max(idRef * 0.02, 1e-6),
+                  "NMOS (triode) drain current matches independent reference within 2%");
+            check(std::abs(result.voltages[2] - vdRef) < 0.05, "NMOS (triode) drain voltage matches independent reference");
+        }
+    }
+    {
+        // PMOS high-side switch mirror: Vdd=10V at the source, gate driven to 5V (Vsg=5V), Vto=-2V
+        // (K's magnitude the same 0.5 mA/V^2 as the NMOS test), Rd from drain to ground - mirrors
+        // the NMOS saturation test exactly (same overdrive, same Id/Vd numbers).
+        const double vdd = 10.0, rd = 1000.0, vg = 5.0, vto = -2.0, k = 0.0005;
+        const double vov = (vdd - vg) - std::abs(vto); // Vsg - |Vto|
+        const double idRef = k * vov * vov;
+        const double vdRef = idRef * rd; // drain sources current into Rd toward ground
+        check(vdd - vdRef >= vov, "PMOS reference circuit is in saturation (Vsd >= overdrive)");
+        const auto result = solveDc({4, 0,
+                                     {{"Vdd", DcKind::VoltageSource, 1, 0, vdd}, {"Rd", DcKind::Resistor, 2, 0, rd},
+                                      {"Vg", DcKind::VoltageSource, 3, 0, vg}},
+                                     {{"M1", NonlinearKind::PMosfet, {2, 3, 1}, {vto, k}}}});
+        check(result.success, "PMOS saturation switch solves");
+        if (result.success) {
+            check(std::abs(result.nonlinearCurrents[0] + idRef) < idRef * 0.02,
+                  "PMOS drain current (into drain, negative when sourcing) matches reference within 2%");
+            check(std::abs(result.voltages[2] - vdRef) < 0.05, "PMOS drain voltage matches independent reference");
+        }
+    }
+    {
+        // Parameter/topology validation for BJT and MOSFET.
+        const auto bjtBadTerminals = solveDc({3, 0, {}, {{"Q1", NonlinearKind::BjtNpn, {0, 1}, {1e-15, 100, 1}}}});
+        check(!bjtBadTerminals.success, "BJT needs exactly 3 terminals");
+        const auto bjtBadParamCount =
+            solveDc({3, 0, {}, {{"Q1", NonlinearKind::BjtNpn, {0, 1, 2}, {1e-15, 100}}}});
+        check(!bjtBadParamCount.success, "BJT needs exactly 3 parameters");
+        const auto bjtZeroIs = solveDc({3, 0, {}, {{"Q1", NonlinearKind::BjtNpn, {0, 1, 2}, {0, 100, 1}}}});
+        check(!bjtZeroIs.success, "BJT saturation current must be positive");
+        const auto bjtZeroBf = solveDc({3, 0, {}, {{"Q1", NonlinearKind::BjtNpn, {0, 1, 2}, {1e-15, 0, 1}}}});
+        check(!bjtZeroBf.success, "BJT forward beta must be positive");
+        const auto bjtZeroBr = solveDc({3, 0, {}, {{"Q1", NonlinearKind::BjtNpn, {0, 1, 2}, {1e-15, 100, 0}}}});
+        check(!bjtZeroBr.success, "BJT reverse beta must be positive");
+        const auto mosBadTerminals = solveDc({3, 0, {}, {{"M1", NonlinearKind::NMosfet, {0, 1}, {2.0, 0.001}}}});
+        check(!mosBadTerminals.success, "MOSFET needs exactly 3 terminals");
+        const auto mosBadParamCount = solveDc({3, 0, {}, {{"M1", NonlinearKind::NMosfet, {0, 1, 2}, {2.0}}}});
+        check(!mosBadParamCount.success, "MOSFET needs exactly 2 parameters");
+        const auto mosZeroK = solveDc({3, 0, {}, {{"M1", NonlinearKind::NMosfet, {0, 1, 2}, {2.0, 0}}}});
+        check(!mosZeroK.success, "MOSFET K must be positive");
+    }
+    {
+        // Never crashes: an NMOS with its gate left unconnected to anything else is a floating
+        // net (no gate current is ever modelled), reported as a clear error, not a crash.
+        const auto floatingGate = solveDc({4, 0, {{"Vdd", DcKind::VoltageSource, 1, 0, 10.0}, {"Rd", DcKind::Resistor, 1, 2, 1000}},
+                                           {{"M1", NonlinearKind::NMosfet, {2, 3, 0}, {2.0, 0.0005}}}});
+        check(!floatingGate.success && floatingGate.error.find("loating") != std::string::npos,
+              "MOSFET with an unbiased gate is reported as a floating net, not a crash");
+    }
     if (!failures) std::cout << "All DC solver tests passed.\n";
     return failures ? 1 : 0;
 }

@@ -51,15 +51,21 @@ struct DcElement {
 // Nonlinear DC operating-point models (#62), solved by Newton-Raphson alongside the linear
 // elements above in the same MNA system. `nets` gives terminal net indices in the order documented
 // per kind; `parameters` gives SI values in the order documented per kind.
-enum class NonlinearKind { Diode, Zener, Led };
+enum class NonlinearKind { Diode, Zener, Led, BjtNpn, BjtPnp, NMosfet, PMosfet };
 struct NonlinearElement {
     std::string reference;
     NonlinearKind kind = NonlinearKind::Diode;
     // Diode/Zener/Led: nets = {anode, cathode}.
+    // BjtNpn/BjtPnp: nets = {collector, base, emitter}.
+    // NMosfet/PMosfet: nets = {drain, gate, source}. The gate carries no current (ideal, no
+    // leakage): it must reach ground through some other element, or it is reported floating.
     std::vector<int> nets;
     // Diode: {Is (A), n, Rs (ohm, may be 0)}.
     // Zener: {Is, n, Rs, Vz (breakdown voltage, positive), Rz (breakdown slope resistance, ohm)}.
     // Led: {Is, n, Rs, ratedCurrent (A, for the brightness output; 0 disables brightness)}.
+    // BjtNpn/BjtPnp: {Is (A), BetaF, BetaR} - Ebers-Moll transport model, junction ideality 1.
+    // NMosfet/PMosfet: {Vto (V; negative for PMOS), K (A/V^2, K = kp*(W/L)/2)} - level-1 square
+    // law, no channel-length modulation.
     std::vector<double> parameters;
 };
 
