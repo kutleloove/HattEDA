@@ -111,7 +111,13 @@ produce a genuinely singular Jacobian, not a solver bug. Both kinds' output row 
 element-index-alternating ±1 nanosiemens conductance to ground (~1 gigaohm) folded in. This is
 negligible next to any real load or either kind's own `outputConductance` (never measurably
 changes a non-degenerate circuit's answer, confirmed by the existing op-amp/gate tests' tight
-tolerances) while reliably breaking exact ties between identically-parameterized elements.
+tolerances) while reliably breaking exact ties between identically-parameterized elements. It is
+the same idea as the existing per-node floating-net `gmin` (1e-12 S, ADR-0003) — an intentionally
+tiny stabilizing conductance a real circuit never notices — just applied per nonlinear element
+instead of per node, since the degeneracy here is between two *elements*, not an undriven node.
+1 nS was chosen simply because it sits many orders of magnitude below any realistic
+`outputConductance` (≥ 1e-3 S in every model/test here) while staying comfortably above the
+solver's own floating-point noise floor; it is not calibrated to any physical quantity.
 
 ### Warm start (PR #73)
 
