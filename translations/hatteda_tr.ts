@@ -4,956 +4,847 @@
 <context>
     <name>hatt::ui</name>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="20"/>
         <source>Resistor</source>
-        <translation>Direnç</translation>
+        <translation type="vanished">Direnç</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="21"/>
         <source>General resistor</source>
-        <translation>Genel direnç</translation>
+        <translation type="vanished">Genel direnç</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="22"/>
         <source>Potentiometer</source>
-        <translation>Potansiyometre</translation>
+        <translation type="vanished">Potansiyometre</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="23"/>
         <source>Three-terminal variable resistor</source>
-        <translation>Üç uçlu ayarlı direnç</translation>
+        <translation type="vanished">Üç uçlu ayarlı direnç</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="24"/>
         <source>LDR / photoresistor</source>
-        <translation>LDR / fotodirenç</translation>
+        <translation type="vanished">LDR / fotodirenç</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="25"/>
         <source>Light-dependent resistor</source>
-        <translation>Işığa bağlı direnç</translation>
+        <translation type="vanished">Işığa bağlı direnç</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="26"/>
         <source>NTC thermistor</source>
-        <translation>NTC termistör</translation>
+        <translation type="vanished">NTC termistör</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="27"/>
         <source>Negative-temperature-coefficient thermistor</source>
-        <translation>Negatif sıcaklık katsayılı termistör</translation>
+        <translation type="vanished">Negatif sıcaklık katsayılı termistör</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="28"/>
         <source>PTC thermistor</source>
-        <translation>PTC termistör</translation>
+        <translation type="vanished">PTC termistör</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="29"/>
         <source>Positive-temperature-coefficient thermistor</source>
-        <translation>Pozitif sıcaklık katsayılı termistör</translation>
+        <translation type="vanished">Pozitif sıcaklık katsayılı termistör</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="30"/>
         <source>Capacitor, non-polarized</source>
-        <translation>Kondansatör, kutupsuz</translation>
+        <translation type="vanished">Kondansatör, kutupsuz</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="31"/>
         <source>General non-polarized capacitor</source>
-        <translation>Genel kutupsuz kondansatör</translation>
+        <translation type="vanished">Genel kutupsuz kondansatör</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="32"/>
         <source>Capacitor, polarized</source>
-        <translation>Kondansatör, kutuplu</translation>
+        <translation type="vanished">Kondansatör, kutuplu</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="33"/>
         <source>Polarized electrolytic capacitor</source>
-        <translation>Kutuplu elektrolitik kondansatör</translation>
+        <translation type="vanished">Kutuplu elektrolitik kondansatör</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="34"/>
         <source>Inductor</source>
-        <translation>Bobin</translation>
+        <translation type="vanished">Bobin</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="35"/>
         <source>General inductor</source>
-        <translation>Genel bobin</translation>
+        <translation type="vanished">Genel bobin</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="36"/>
         <source>Transformer</source>
-        <translation>Transformatör</translation>
+        <translation type="vanished">Transformatör</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="37"/>
         <source>Two-winding transformer</source>
-        <translation>İki sargılı transformatör</translation>
+        <translation type="vanished">İki sargılı transformatör</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="38"/>
         <source>Standard diode</source>
-        <translation>Standart diyot</translation>
+        <translation type="vanished">Standart diyot</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="39"/>
         <source>General silicon diode</source>
-        <translation>Genel silisyum diyot</translation>
+        <translation type="vanished">Genel silisyum diyot</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="40"/>
         <source>Schottky diode</source>
-        <translation>Schottky diyot</translation>
+        <translation type="vanished">Schottky diyot</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="41"/>
         <source>Low-forward-voltage Schottky diode</source>
-        <translation>Düşük ileri gerilimli Schottky diyot</translation>
+        <translation type="vanished">Düşük ileri gerilimli Schottky diyot</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="42"/>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="486"/>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="91"/>
         <source>Zener diode</source>
         <translation>Zener diyot</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="43"/>
         <source>Voltage-reference Zener diode</source>
-        <translation>Gerilim referanslı Zener diyot</translation>
+        <translation type="vanished">Gerilim referanslı Zener diyot</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="44"/>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="487"/>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="92"/>
         <source>LED</source>
         <translation>LED</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="45"/>
         <source>Light-emitting diode</source>
-        <translation>Işık yayan diyot</translation>
+        <translation type="vanished">Işık yayan diyot</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="46"/>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="488"/>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="93"/>
         <source>Photodiode</source>
         <translation>Fotodiyot</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="47"/>
         <source>Light-sensitive diode</source>
-        <translation>Işığa duyarlı diyot</translation>
+        <translation type="vanished">Işığa duyarlı diyot</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="48"/>
         <source>Bridge rectifier</source>
-        <translation>Köprü doğrultucu</translation>
+        <translation type="vanished">Köprü doğrultucu</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="49"/>
         <source>Full-wave diode bridge</source>
-        <translation>Tam dalga diyot köprüsü</translation>
+        <translation type="vanished">Tam dalga diyot köprüsü</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="50"/>
         <source>NPN transistor</source>
-        <translation>NPN transistör</translation>
+        <translation type="vanished">NPN transistör</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="51"/>
         <source>PNP transistor</source>
-        <translation>PNP transistör</translation>
+        <translation type="vanished">PNP transistör</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="52"/>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="491"/>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="96"/>
         <source>N-channel MOSFET</source>
         <translation>N-kanal MOSFET</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="53"/>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="492"/>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="97"/>
         <source>P-channel MOSFET</source>
         <translation>P-kanal MOSFET</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="54"/>
         <source>N-channel JFET</source>
-        <translation>N-kanal JFET</translation>
+        <translation type="vanished">N-kanal JFET</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="55"/>
         <source>Three-terminal transistor</source>
-        <translation>Üç uçlu transistör</translation>
+        <translation type="vanished">Üç uçlu transistör</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="56"/>
         <source>Ideal operational amplifier</source>
-        <translation>İdeal işlemsel yükselteç</translation>
+        <translation type="vanished">İdeal işlemsel yükselteç</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="57"/>
         <source>Ideal voltage operational amplifier</source>
-        <translation>İdeal gerilim işlemsel yükselteci</translation>
+        <translation type="vanished">İdeal gerilim işlemsel yükselteci</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="58"/>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="496"/>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="101"/>
         <source>Comparator</source>
         <translation>Karşılaştırıcı</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="59"/>
         <source>Voltage comparator</source>
-        <translation>Gerilim karşılaştırıcısı</translation>
+        <translation type="vanished">Gerilim karşılaştırıcısı</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="60"/>
         <source>555 timer</source>
-        <translation>555 zamanlayıcı</translation>
+        <translation type="vanished">555 zamanlayıcı</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="61"/>
         <source>General-purpose 555 timer</source>
-        <translation>Genel amaçlı 555 zamanlayıcı</translation>
+        <translation type="vanished">Genel amaçlı 555 zamanlayıcı</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="62"/>
         <source>Fixed linear regulator</source>
-        <translation>Sabit lineer regülatör</translation>
+        <translation type="vanished">Sabit lineer regülatör</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="63"/>
         <source>Three-terminal fixed regulator</source>
-        <translation>Üç uçlu sabit regülatör</translation>
+        <translation type="vanished">Üç uçlu sabit regülatör</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="64"/>
         <source>Adjustable linear regulator</source>
-        <translation>Ayarlanabilir lineer regülatör</translation>
+        <translation type="vanished">Ayarlanabilir lineer regülatör</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="65"/>
         <source>Three-terminal adjustable regulator</source>
-        <translation>Üç uçlu ayarlanabilir regülatör</translation>
+        <translation type="vanished">Üç uçlu ayarlanabilir regülatör</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="66"/>
         <source>AND gate</source>
-        <translation>VE kapısı</translation>
+        <translation type="vanished">VE kapısı</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="66"/>
         <source>OR gate</source>
-        <translation>VEYA kapısı</translation>
+        <translation type="vanished">VEYA kapısı</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="67"/>
         <source>NOT gate</source>
-        <translation>DEĞİL kapısı</translation>
+        <translation type="vanished">DEĞİL kapısı</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="67"/>
         <source>NAND gate</source>
-        <translation>VE DEĞİL kapısı</translation>
+        <translation type="vanished">VE DEĞİL kapısı</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="68"/>
         <source>NOR gate</source>
-        <translation>VEYA DEĞİL kapısı</translation>
+        <translation type="vanished">VEYA DEĞİL kapısı</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="68"/>
         <source>XOR gate</source>
-        <translation>ÖZEL VEYA kapısı</translation>
+        <translation type="vanished">ÖZEL VEYA kapısı</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="69"/>
         <source>Buffer</source>
-        <translation>Tampon</translation>
+        <translation type="vanished">Tampon</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="69"/>
         <source>Tri-state buffer</source>
-        <translation>Üç durumlu tampon</translation>
+        <translation type="vanished">Üç durumlu tampon</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="70"/>
         <source>Digital clock</source>
-        <translation>Dijital saat</translation>
+        <translation type="vanished">Dijital saat</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="70"/>
         <source>D flip-flop</source>
-        <translation>D flip-flop</translation>
+        <translation type="vanished">D flip-flop</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="71"/>
         <source>Generic digital logic function</source>
-        <translation>Genel dijital mantık işlevi</translation>
+        <translation type="vanished">Genel dijital mantık işlevi</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="72"/>
         <source>DC voltage source</source>
-        <translation>DC gerilim kaynağı</translation>
+        <translation type="vanished">DC gerilim kaynağı</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="73"/>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="481"/>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="86"/>
         <source>Independent DC voltage source</source>
         <translation>Bağımsız DC gerilim kaynağı</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="74"/>
         <source>DC current source</source>
-        <translation>DC akım kaynağı</translation>
+        <translation type="vanished">DC akım kaynağı</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="75"/>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="482"/>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="87"/>
         <source>Independent DC current source</source>
         <translation>Bağımsız DC akım kaynağı</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="76"/>
         <source>Sine voltage source</source>
-        <translation>Sinüs gerilim kaynağı</translation>
+        <translation type="vanished">Sinüs gerilim kaynağı</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="77"/>
         <source>Independent sine source (transient required)</source>
-        <translation>Bağımsız sinüs kaynağı (geçici rejim gerekir)</translation>
+        <translation type="vanished">Bağımsız sinüs kaynağı (geçici rejim gerekir)</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="78"/>
         <source>Pulse / clock source</source>
-        <translation>Darbe / saat kaynağı</translation>
+        <translation type="vanished">Darbe / saat kaynağı</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="79"/>
         <source>Independent pulse source (transient required)</source>
-        <translation>Bağımsız darbe kaynağı (geçici rejim gerekir)</translation>
+        <translation type="vanished">Bağımsız darbe kaynağı (geçici rejim gerekir)</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="80"/>
         <source>Push button</source>
-        <translation>Buton</translation>
+        <translation type="vanished">Buton</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="81"/>
         <source>Momentary normally-open push button</source>
-        <translation>Anlık normalde açık buton</translation>
+        <translation type="vanished">Anlık normalde açık buton</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="82"/>
         <source>SPST switch</source>
-        <translation>SPST anahtar</translation>
+        <translation type="vanished">SPST anahtar</translation>
+    </message>
+    <message>
+        <source>Single-pole switch</source>
+        <translation type="vanished">Tek kutuplu anahtar</translation>
+    </message>
+    <message>
+        <source>Relay</source>
+        <translation type="vanished">Röle</translation>
+    </message>
+    <message>
+        <source>Generic SPDT relay</source>
+        <translation type="vanished">Genel SPDT röle</translation>
+    </message>
+    <message>
+        <source>Fuse</source>
+        <translation type="vanished">Sigorta</translation>
+    </message>
+    <message>
+        <source>Replaceable over-current fuse</source>
+        <translation type="vanished">Değiştirilebilir aşırı akım sigortası</translation>
+    </message>
+    <message>
+        <source>Crystal</source>
+        <translation type="vanished">Kristal</translation>
+    </message>
+    <message>
+        <source>Quartz crystal</source>
+        <translation type="vanished">Kuvars kristal</translation>
+    </message>
+    <message>
+        <source>Buzzer</source>
+        <translation type="vanished">Buzzer</translation>
+    </message>
+    <message>
+        <source>Two-terminal buzzer</source>
+        <translation type="vanished">İki uçlu buzzer</translation>
+    </message>
+    <message>
+        <source>DC motor</source>
+        <translation type="vanished">DC motor</translation>
+    </message>
+    <message>
+        <source>Two-terminal DC motor</source>
+        <translation type="vanished">İki uçlu DC motor</translation>
+    </message>
+    <message>
+        <source>Battery</source>
+        <translation type="vanished">Batarya</translation>
+    </message>
+    <message>
+        <source>Battery represented by an ideal DC source</source>
+        <translation type="vanished">İdeal DC kaynakla modellenen batarya</translation>
+    </message>
+    <message>
+        <source>Pin header</source>
+        <translation type="vanished">Pin header</translation>
+    </message>
+    <message>
+        <source>Generic pin header</source>
+        <translation type="vanished">Genel pin header</translation>
+    </message>
+    <message>
+        <source>Terminal block</source>
+        <translation type="vanished">Klemens</translation>
+    </message>
+    <message>
+        <source>Screw terminal block</source>
+        <translation type="vanished">Vidalı klemens</translation>
+    </message>
+    <message>
+        <source>Common real component</source>
+        <translation type="vanished">Yaygın gerçek eleman</translation>
+    </message>
+    <message>
+        <source>SMD passive %1</source>
+        <translation type="vanished">SMD pasif %1</translation>
+    </message>
+    <message>
+        <source>Axial DO-35, 10.16 mm</source>
+        <translation type="vanished">Eksenel DO-35, 10,16 mm</translation>
+    </message>
+    <message>
+        <source>Axial DO-41, 12.70 mm</source>
+        <translation type="vanished">Eksenel DO-41, 12,70 mm</translation>
+    </message>
+    <message>
+        <source>SOT-23</source>
+        <translation type="vanished">SOT-23</translation>
+    </message>
+    <message>
+        <source>TO-92 inline</source>
+        <translation type="vanished">TO-92 sıralı</translation>
+    </message>
+    <message>
+        <source>TO-220-3 vertical</source>
+        <translation type="vanished">TO-220-3 dikey</translation>
+    </message>
+    <message>
+        <source>TO-252 / DPAK</source>
+        <translation type="vanished">TO-252 / DPAK</translation>
+    </message>
+    <message>
+        <source>SOIC-%1</source>
+        <translation type="vanished">SOIC-%1</translation>
+    </message>
+    <message>
+        <source>TSSOP-%1</source>
+        <translation type="vanished">TSSOP-%1</translation>
+    </message>
+    <message>
+        <source>SSOP-%1</source>
+        <translation type="vanished">SSOP-%1</translation>
+    </message>
+    <message>
+        <source>TQFP-%1</source>
+        <translation type="vanished">TQFP-%1</translation>
+    </message>
+    <message>
+        <source>QFN-%1 (perimeter pads)</source>
+        <translation type="vanished">QFN-%1 (çevre padleri)</translation>
+    </message>
+    <message>
+        <source>Pin header 1x%1, 2.54 mm</source>
+        <translation type="vanished">Pin header 1x%1, 2,54 mm</translation>
+    </message>
+    <message>
+        <source>Pin header 2x%1, 2.54 mm</source>
+        <translation type="vanished">Pin header 2x%1, 2,54 mm</translation>
+    </message>
+    <message>
+        <source>Terminal block %1 pin, 5.08 mm</source>
+        <translation type="vanished">Klemens %1 pin, 5,08 mm</translation>
+    </message>
+    <message>
+        <source>Radial capacitor, %1 mm pitch</source>
+        <translation type="vanished">Radyal kondansatör, %1 mm aralık</translation>
+    </message>
+    <message>
+        <source>LED %1 mm, 2.54 mm pitch</source>
+        <translation type="vanished">LED %1 mm, 2,54 mm aralık</translation>
+    </message>
+    <message>
+        <source>Trimmer potentiometer, 3 pin</source>
+        <translation type="vanished">Trimmer potansiyometre, 3 pin</translation>
+    </message>
+    <message>
+        <source>Relay, generic 5 pin</source>
+        <translation type="vanished">Röle, genel 5 pin</translation>
+    </message>
+    <message>
+        <source>Bridge rectifier, 4 pin</source>
+        <translation type="vanished">Köprü doğrultucu, 4 pin</translation>
+    </message>
+    <message>
+        <source>1</source>
+        <translation type="vanished">1</translation>
+    </message>
+    <message>
+        <source>2</source>
+        <translation type="vanished">2</translation>
+    </message>
+    <message>
+        <source>Wiper</source>
+        <translation type="vanished">Sürgü</translation>
+    </message>
+    <message>
+        <source>A</source>
+        <translation type="vanished">A</translation>
+    </message>
+    <message>
+        <source>B</source>
+        <translation type="vanished">B</translation>
+    </message>
+    <message>
+        <source>P1</source>
+        <translation type="vanished">P1</translation>
+    </message>
+    <message>
+        <source>P2</source>
+        <translation type="vanished">P2</translation>
+    </message>
+    <message>
+        <source>S1</source>
+        <translation type="vanished">S1</translation>
+    </message>
+    <message>
+        <source>S2</source>
+        <translation type="vanished">S2</translation>
+    </message>
+    <message>
+        <source>AC1</source>
+        <translation type="vanished">AC1</translation>
+    </message>
+    <message>
+        <source>AC2</source>
+        <translation type="vanished">AC2</translation>
+    </message>
+    <message>
+        <source>+</source>
+        <translation type="vanished">+</translation>
+    </message>
+    <message>
+        <source>-</source>
+        <translation type="vanished">-</translation>
     </message>
     <message>
         <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="82"/>
-        <source>Single-pole switch</source>
-        <translation>Tek kutuplu anahtar</translation>
-    </message>
-    <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="83"/>
-        <source>Relay</source>
-        <translation>Röle</translation>
-    </message>
-    <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="83"/>
-        <source>Generic SPDT relay</source>
-        <translation>Genel SPDT röle</translation>
-    </message>
-    <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="84"/>
-        <source>Fuse</source>
-        <translation>Sigorta</translation>
-    </message>
-    <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="84"/>
-        <source>Replaceable over-current fuse</source>
-        <translation>Değiştirilebilir aşırı akım sigortası</translation>
-    </message>
-    <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="85"/>
-        <source>Crystal</source>
-        <translation>Kristal</translation>
-    </message>
-    <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="85"/>
-        <source>Quartz crystal</source>
-        <translation>Kuvars kristal</translation>
-    </message>
-    <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="86"/>
-        <source>Buzzer</source>
-        <translation>Buzzer</translation>
-    </message>
-    <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="86"/>
-        <source>Two-terminal buzzer</source>
-        <translation>İki uçlu buzzer</translation>
-    </message>
-    <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="87"/>
-        <source>DC motor</source>
-        <translation>DC motor</translation>
-    </message>
-    <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="87"/>
-        <source>Two-terminal DC motor</source>
-        <translation>İki uçlu DC motor</translation>
-    </message>
-    <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="88"/>
-        <source>Battery</source>
-        <translation>Batarya</translation>
-    </message>
-    <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="89"/>
-        <source>Battery represented by an ideal DC source</source>
-        <translation>İdeal DC kaynakla modellenen batarya</translation>
-    </message>
-    <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="90"/>
-        <source>Pin header</source>
-        <translation>Pin header</translation>
-    </message>
-    <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="90"/>
-        <source>Generic pin header</source>
-        <translation>Genel pin header</translation>
-    </message>
-    <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="91"/>
-        <source>Terminal block</source>
-        <translation>Klemens</translation>
-    </message>
-    <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="91"/>
-        <source>Screw terminal block</source>
-        <translation>Vidalı klemens</translation>
-    </message>
-    <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="92"/>
-        <source>Common real component</source>
-        <translation>Yaygın gerçek eleman</translation>
-    </message>
-    <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="109"/>
-        <source>SMD passive %1</source>
-        <translation>SMD pasif %1</translation>
-    </message>
-    <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="128"/>
-        <source>Axial DO-35, 10.16 mm</source>
-        <translation>Eksenel DO-35, 10,16 mm</translation>
-    </message>
-    <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="131"/>
-        <source>Axial DO-41, 12.70 mm</source>
-        <translation>Eksenel DO-41, 12,70 mm</translation>
-    </message>
-    <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="144"/>
-        <source>SOT-23</source>
-        <translation>SOT-23</translation>
-    </message>
-    <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="147"/>
-        <source>TO-92 inline</source>
-        <translation>TO-92 sıralı</translation>
-    </message>
-    <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="149"/>
-        <source>TO-220-3 vertical</source>
-        <translation>TO-220-3 dikey</translation>
-    </message>
-    <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="151"/>
-        <source>TO-252 / DPAK</source>
-        <translation>TO-252 / DPAK</translation>
-    </message>
-    <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="159"/>
-        <source>SOIC-%1</source>
-        <translation>SOIC-%1</translation>
-    </message>
-    <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="164"/>
-        <source>TSSOP-%1</source>
-        <translation>TSSOP-%1</translation>
-    </message>
-    <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="167"/>
-        <source>SSOP-%1</source>
-        <translation>SSOP-%1</translation>
-    </message>
-    <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="172"/>
-        <source>TQFP-%1</source>
-        <translation>TQFP-%1</translation>
-    </message>
-    <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="178"/>
-        <source>QFN-%1 (perimeter pads)</source>
-        <translation>QFN-%1 (çevre padleri)</translation>
-    </message>
-    <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="185"/>
-        <source>Pin header 1x%1, 2.54 mm</source>
-        <translation>Pin header 1x%1, 2,54 mm</translation>
-    </message>
-    <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="190"/>
-        <source>Pin header 2x%1, 2.54 mm</source>
-        <translation>Pin header 2x%1, 2,54 mm</translation>
-    </message>
-    <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="196"/>
-        <source>Terminal block %1 pin, 5.08 mm</source>
-        <translation>Klemens %1 pin, 5,08 mm</translation>
-    </message>
-    <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="202"/>
-        <source>Radial capacitor, %1 mm pitch</source>
-        <translation>Radyal kondansatör, %1 mm aralık</translation>
-    </message>
-    <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="207"/>
-        <source>LED %1 mm, 2.54 mm pitch</source>
-        <translation>LED %1 mm, 2,54 mm aralık</translation>
-    </message>
-    <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="211"/>
-        <source>Trimmer potentiometer, 3 pin</source>
-        <translation>Trimmer potansiyometre, 3 pin</translation>
-    </message>
-    <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="214"/>
-        <source>Relay, generic 5 pin</source>
-        <translation>Röle, genel 5 pin</translation>
-    </message>
-    <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="217"/>
-        <source>Bridge rectifier, 4 pin</source>
-        <translation>Köprü doğrultucu, 4 pin</translation>
-    </message>
-    <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="253"/>
-        <source>1</source>
-        <translation>1</translation>
-    </message>
-    <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="253"/>
-        <source>2</source>
-        <translation>2</translation>
-    </message>
-    <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="259"/>
-        <source>Wiper</source>
-        <translation>Sürgü</translation>
-    </message>
-    <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="259"/>
-        <source>A</source>
-        <translation>A</translation>
-    </message>
-    <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="259"/>
-        <source>B</source>
-        <translation>B</translation>
-    </message>
-    <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="277"/>
-        <source>P1</source>
-        <translation>P1</translation>
-    </message>
-    <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="277"/>
-        <source>P2</source>
-        <translation>P2</translation>
-    </message>
-    <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="277"/>
-        <source>S1</source>
-        <translation>S1</translation>
-    </message>
-    <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="277"/>
-        <source>S2</source>
-        <translation>S2</translation>
-    </message>
-    <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="293"/>
-        <source>AC1</source>
-        <translation>AC1</translation>
-    </message>
-    <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="293"/>
-        <source>AC2</source>
-        <translation>AC2</translation>
-    </message>
-    <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="293"/>
-        <source>+</source>
-        <translation>+</translation>
-    </message>
-    <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="293"/>
-        <source>-</source>
-        <translation>-</translation>
-    </message>
-    <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="477"/>
         <source>No simulation model</source>
         <translation>Simülasyon modeli yok</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="477"/>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="82"/>
         <source>DC simulation does not support this component because it has no model.</source>
         <translation>Bu elemanın modeli olmadığından DC simülasyonu desteklenmiyor.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="478"/>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="83"/>
         <source>Linear resistor</source>
         <translation>Lineer direnç</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="479"/>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="84"/>
         <source>Capacitor (open at DC)</source>
         <translation>Kondansatör (DC&apos;de açık devre)</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="480"/>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="85"/>
         <source>Inductor (short at DC)</source>
         <translation>Bobin (DC&apos;de kısa devre)</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="483"/>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="88"/>
         <source>Open switch (DC)</source>
         <translation>Açık anahtar (DC)</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="484"/>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="89"/>
         <source>Closed switch (DC)</source>
         <translation>Kapalı anahtar (DC)</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="485"/>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="90"/>
         <source>Diode</source>
         <translation>Diyot</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="485"/>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="486"/>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="487"/>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="488"/>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="90"/>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="91"/>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="92"/>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="93"/>
         <source>Nonlinear DC analysis is not implemented yet.</source>
         <translation>Doğrusal olmayan DC analiz henüz uygulanmadı.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="489"/>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="490"/>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="94"/>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="95"/>
         <source>BJT operating-point analysis is not implemented yet.</source>
         <translation>BJT çalışma noktası analizi henüz uygulanmadı.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="489"/>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="94"/>
         <source>NPN BJT</source>
         <translation>NPN BJT</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="490"/>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="95"/>
         <source>PNP BJT</source>
         <translation>PNP BJT</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="491"/>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="492"/>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="96"/>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="97"/>
         <source>MOSFET operating-point analysis is not implemented yet.</source>
         <translation>MOSFET çalışma noktası analizi henüz uygulanmadı.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="493"/>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="98"/>
         <source>JFET operating-point analysis is not implemented yet.</source>
         <translation>JFET çalışma noktası analizi henüz uygulanmadı.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="493"/>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="98"/>
         <source>JFET</source>
         <translation>JFET</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="494"/>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="99"/>
         <source>Ideal op-amp</source>
         <translation>İdeal op-amp</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="494"/>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="99"/>
         <source>Controlled sources are not implemented yet.</source>
         <translation>Kontrollü kaynaklar henüz uygulanmadı.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="495"/>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="100"/>
         <source>General op-amp</source>
         <translation>Genel op-amp</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="495"/>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="100"/>
         <source>Macromodel simulation is not implemented yet.</source>
         <translation>Makromodel simülasyonu henüz uygulanmadı.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="496"/>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="101"/>
         <source>Comparator simulation is not implemented yet.</source>
         <translation>Karşılaştırıcı simülasyonu henüz uygulanmadı.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="497"/>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="102"/>
         <source>Sine source</source>
         <translation>Sinüs kaynağı</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="498"/>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="103"/>
         <source>Pulse source</source>
         <translation>Darbe kaynağı</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="497"/>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="498"/>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="102"/>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="103"/>
         <source>Transient analysis is not implemented yet.</source>
         <translation>Geçici rejim analizi henüz uygulanmadı.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="534"/>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="141"/>
         <source>Passives</source>
         <translation>Pasifler</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="535"/>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="142"/>
         <source>Diodes</source>
         <translation>Diyotlar</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="536"/>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="143"/>
         <source>Transistors</source>
         <translation>Transistörler</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="537"/>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="144"/>
         <source>Analog</source>
         <translation>Analog</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="538"/>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="145"/>
         <source>Digital</source>
         <translation>Dijital</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="539"/>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="146"/>
         <source>Sources and simulation</source>
         <translation>Kaynaklar ve simülasyon</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="540"/>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="147"/>
         <source>Electromechanical</source>
         <translation>Elektromekanik</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="541"/>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="148"/>
         <source>Connectors</source>
         <translation>Bağlantı elemanları</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="548"/>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="155"/>
         <source>Passive</source>
         <translation>Pasif</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="549"/>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="156"/>
         <source>Input</source>
         <translation>Giriş</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="550"/>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="157"/>
         <source>Output</source>
         <translation>Çıkış</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="551"/>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="158"/>
         <source>Power input</source>
         <translation>Güç girişi</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="552"/>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="159"/>
         <source>Power output</source>
         <translation>Güç çıkışı</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="553"/>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="160"/>
         <source>Open collector</source>
         <translation>Açık kolektör</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="554"/>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="161"/>
         <source>Not connected</source>
         <translation>Bağlı değil</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="179"/>
+        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="198"/>
         <source>The %1 section is missing or invalid.</source>
         <translation>%1 bölümü eksik veya geçersiz.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="184"/>
+        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="203"/>
         <source>%1 item %2</source>
         <translation>%1 öğe %2</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="185"/>
+        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="204"/>
         <source>%1 is not an object.</source>
         <translation>%1 bir nesne değil.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="190"/>
+        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="209"/>
         <source>%1 has no valid id.</source>
         <translation>%1 geçerli bir kimliğe sahip değil.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="191"/>
+        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="210"/>
         <source>%1 repeats the id %2.</source>
         <translation>%1, %2 kimliğini tekrar kullanıyor.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="196"/>
+        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="215"/>
         <source>%1 has an unknown kind.</source>
         <translation>%1 bilinmeyen bir türde.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="200"/>
+        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="219"/>
         <source>%1 has no point list.</source>
         <translation>%1 nokta listesi içermiyor.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="205"/>
+        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="224"/>
         <source>%1 has an invalid point.</source>
         <translation>%1 geçersiz bir nokta içeriyor.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="209"/>
+        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="228"/>
         <source>%1 has too few points.</source>
         <translation>%1 çok az nokta içeriyor.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="217"/>
+        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="236"/>
         <source>%1 has a text field of the wrong type.</source>
         <translation>%1 yanlış türde bir metin alanı içeriyor.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="222"/>
+        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="241"/>
         <source>%1 has an invalid rotation.</source>
         <translation>%1 geçersiz bir dönüş içeriyor.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="228"/>
+        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="247"/>
         <source>%1 has an invalid closed flag.</source>
         <translation>%1 geçersiz bir kapalı işareti içeriyor.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="233"/>
-        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="236"/>
+        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="252"/>
+        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="255"/>
         <source>%1 has an invalid pin to pad map.</source>
         <translation>%1 geçersiz bir pin → pad eşlemesi içeriyor.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="262"/>
+        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="274"/>
+        <source>%1 has an invalid symbol variant.</source>
+        <translation>%1 geçersiz bir sembol varyantı içeriyor.</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="286"/>
         <source>%1 has an invalid width.</source>
         <translation>%1 geçersiz genişliğe sahip.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="269"/>
+        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="293"/>
         <source>%1 has an invalid net.</source>
         <translation>%1 geçersiz bir net içeriyor.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="276"/>
+        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="300"/>
         <source>%1 has an invalid zone fill.</source>
         <translation>%1 geçersiz bir alan dolgusu içeriyor.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="282"/>
+        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="306"/>
         <source>%1 uses the unknown symbol &apos;%2&apos;.</source>
         <translation>%1 bilinmeyen &apos;%2&apos; sembolünü kullanıyor.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="396"/>
-        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="402"/>
+        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="315"/>
+        <source>%1 uses the unknown symbol &apos;%2&apos;; kept as a placeholder.</source>
+        <translation>%1 bilinmeyen &apos;%2&apos; sembolünü kullanıyor; yer tutucu olarak korundu.</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="428"/>
+        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="434"/>
         <source>The library section is invalid.</source>
         <translation>Kütüphane bölümü geçersiz.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="441"/>
-        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="457"/>
+        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="473"/>
+        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="489"/>
         <source>The library has an invalid footprint &apos;%1&apos;.</source>
         <translation>Kütüphanede geçersiz bir kılıf var: &apos;%1&apos;.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="443"/>
-        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="461"/>
+        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="475"/>
+        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="493"/>
         <source>The footprint &apos;%1&apos; is invalid: %2</source>
         <translation>&apos;%1&apos; kılıfı geçersiz: %2</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="511"/>
+        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="543"/>
         <source>The library has an invalid device &apos;%1&apos;.</source>
         <translation>Kütüphanede geçersiz bir eleman var: &apos;%1&apos;.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="518"/>
+        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="550"/>
         <source>The library lists the unknown device &apos;%1&apos;.</source>
         <translation>Kütüphane bilinmeyen &apos;%1&apos; elemanını içeriyor.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="571"/>
+        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="612"/>
         <source>The file is not a HattEDA project (invalid JSON).</source>
         <translation>Dosya bir HattEDA projesi değil (geçersiz JSON).</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="576"/>
+        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="617"/>
         <source>The file is not a HattEDA project.</source>
         <translation>Dosya bir HattEDA projesi değil.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="582"/>
+        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="623"/>
         <source>The project format version is missing or invalid.</source>
         <translation>Proje biçim sürümü eksik veya geçersiz.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="586"/>
+        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="627"/>
         <source>The project was saved by a newer HattEDA (format %1; this version reads up to %2). Update HattEDA to open it.</source>
         <translation>Proje daha yeni bir HattEDA ile kaydedilmiş (biçim %1; bu sürüm en fazla %2 okuyabilir). Açmak için HattEDA&apos;yı güncelleyin.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="598"/>
+        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="639"/>
         <source>schematic</source>
         <translation>şema</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="601"/>
+        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="642"/>
         <source>board</source>
         <translation>PCB</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="614"/>
-        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="618"/>
+        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="656"/>
+        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="660"/>
         <source>Cannot write %1: %2</source>
         <translation>%1 yazılamıyor: %2</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="627"/>
+        <location filename="../libs/ui-shell/src/ProjectFile.cpp" line="669"/>
         <source>Cannot open %1: %2</source>
         <translation>%1 açılamıyor: %2</translation>
     </message>
@@ -988,192 +879,192 @@
         <translation>Port veya güç netine ad verilmelidir.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchCircuit.cpp" line="137"/>
+        <location filename="../libs/ui-shell/src/SketchCircuit.cpp" line="136"/>
         <source>unknown simulation model &apos;%1&apos;</source>
         <translation>bilinmeyen simülasyon modeli &apos;%1&apos;</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchCircuit.cpp" line="139"/>
+        <location filename="../libs/ui-shell/src/SketchCircuit.cpp" line="138"/>
         <source>%1: %2</source>
         <translation>%1: %2</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchCircuit.cpp" line="143"/>
+        <location filename="../libs/ui-shell/src/SketchCircuit.cpp" line="142"/>
         <source>%1: the DC model requires exactly two pins.</source>
         <translation>%1: DC modeli tam olarak iki pin gerektiriyor.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchCircuit.cpp" line="161"/>
+        <location filename="../libs/ui-shell/src/SketchCircuit.cpp" line="160"/>
         <source>%1: invalid value &apos;%2&apos;.</source>
         <translation>%1: geçersiz değer &apos;%2&apos;.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchCircuit.cpp" line="203"/>
+        <location filename="../libs/ui-shell/src/SketchCircuit.cpp" line="202"/>
         <source>The DC section at %1 pin %2 has no path to Ground.</source>
         <translation>%1 pin %2 üzerindeki DC bölümünün Ground&apos;a bağlantı yolu yok.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchCircuit.cpp" line="208"/>
+        <location filename="../libs/ui-shell/src/SketchCircuit.cpp" line="207"/>
         <source>%1 pin %2 is not connected to another component or terminal.</source>
         <translation>%1 pin %2 başka bir elemana veya terminale bağlı değil.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchCircuit.cpp" line="267"/>
+        <location filename="../libs/ui-shell/src/SketchCircuit.cpp" line="266"/>
         <source>Place schematic components before updating the PCB.</source>
         <translation>PCB’yi güncellemeden önce şemaya bileşen yerleştirin.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchCircuit.cpp" line="271"/>
+        <location filename="../libs/ui-shell/src/SketchCircuit.cpp" line="270"/>
         <source>Duplicate board item identity.</source>
         <translation>PCB nesne kimliği yinelenmiş.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchCircuit.cpp" line="274"/>
+        <location filename="../libs/ui-shell/src/SketchCircuit.cpp" line="273"/>
         <source>%1: linked schematic component was removed; review this footprint.</source>
         <translation>%1: bağlı şema bileşeni silinmiş; bu kılıfı inceleyin.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchCircuit.cpp" line="275"/>
+        <location filename="../libs/ui-shell/src/SketchCircuit.cpp" line="274"/>
         <source>Duplicate PCB component link: %1</source>
         <translation>Yinelenen PCB bileşen bağlantısı: %1</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchCircuit.cpp" line="284"/>
+        <location filename="../libs/ui-shell/src/SketchCircuit.cpp" line="283"/>
         <source>%1: footprint or pin mapping changed; review existing routing before replacing it.</source>
         <translation>%1: kılıf veya pin eşlemesi değişmiş; değiştirmeden önce mevcut yolları inceleyin.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchCircuit.cpp" line="460"/>
+        <location filename="../libs/ui-shell/src/SketchCircuit.cpp" line="459"/>
         <source>Missing or duplicate PCB source link: %1</source>
         <translation>PCB kaynak bağlantısı eksik veya yinelenmiş: %1</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchCircuit.cpp" line="465"/>
+        <location filename="../libs/ui-shell/src/SketchCircuit.cpp" line="464"/>
         <source>%1: PCB mapping is out of date; update the PCB.</source>
         <translation>%1: PCB eşlemesi güncel değil; PCB’yi güncelleyin.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchCircuit.cpp" line="485"/>
+        <location filename="../libs/ui-shell/src/SketchCircuit.cpp" line="484"/>
         <source>%1: not yet transferred to PCB.</source>
         <translation>%1: henüz PCB’ye aktarılmadı.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchCircuit.cpp" line="502"/>
+        <location filename="../libs/ui-shell/src/SketchCircuit.cpp" line="501"/>
         <source>PCB short: copper joins different schematic nets.</source>
         <translation>PCB kısa devresi: bakır, farklı şema netlerini birleştiriyor.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentLibrary.cpp" line="147"/>
-        <location filename="../libs/ui-shell/src/ComponentLibrary.cpp" line="189"/>
+        <location filename="../libs/ui-shell/src/ComponentLibrary.cpp" line="146"/>
+        <location filename="../libs/ui-shell/src/ComponentLibrary.cpp" line="188"/>
         <source>The pad count must be between 1 and %1.</source>
         <translation>Pad sayısı 1 ile %1 arasında olmalı.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentLibrary.cpp" line="150"/>
+        <location filename="../libs/ui-shell/src/ComponentLibrary.cpp" line="149"/>
         <source>Choose a pad arrangement.</source>
         <translation>Bir pad dizilimi seçin.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentLibrary.cpp" line="152"/>
+        <location filename="../libs/ui-shell/src/ComponentLibrary.cpp" line="151"/>
         <source>A two-terminal footprint has exactly 2 pads.</source>
         <translation>İki uçlu kılıfın tam 2 padi olur.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentLibrary.cpp" line="157"/>
+        <location filename="../libs/ui-shell/src/ComponentLibrary.cpp" line="156"/>
         <source>A dual-row footprint needs an even number of pads.</source>
         <translation>Çift sıralı kılıf çift sayıda pad gerektirir.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentLibrary.cpp" line="160"/>
+        <location filename="../libs/ui-shell/src/ComponentLibrary.cpp" line="159"/>
         <source>A quad footprint needs a pad count divisible by 4.</source>
         <translation>Dört kenarlı kılıfın pad sayısı 4&apos;e bölünebilmeli.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentLibrary.cpp" line="165"/>
+        <location filename="../libs/ui-shell/src/ComponentLibrary.cpp" line="164"/>
         <source>The pitch must be greater than zero.</source>
         <translation>Pin aralığı sıfırdan büyük olmalı.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentLibrary.cpp" line="167"/>
+        <location filename="../libs/ui-shell/src/ComponentLibrary.cpp" line="166"/>
         <source>The row spacing must be greater than zero.</source>
         <translation>Sıra aralığı sıfırdan büyük olmalı.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentLibrary.cpp" line="169"/>
-        <location filename="../libs/ui-shell/src/ComponentLibrary.cpp" line="200"/>
+        <location filename="../libs/ui-shell/src/ComponentLibrary.cpp" line="168"/>
+        <location filename="../libs/ui-shell/src/ComponentLibrary.cpp" line="199"/>
         <source>Pad sizes must be greater than zero.</source>
         <translation>Pad boyutları sıfırdan büyük olmalı.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentLibrary.cpp" line="170"/>
-        <location filename="../libs/ui-shell/src/ComponentLibrary.cpp" line="201"/>
+        <location filename="../libs/ui-shell/src/ComponentLibrary.cpp" line="169"/>
+        <location filename="../libs/ui-shell/src/ComponentLibrary.cpp" line="200"/>
         <source>Sizes cannot be negative.</source>
         <translation>Boyutlar negatif olamaz.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentLibrary.cpp" line="172"/>
-        <location filename="../libs/ui-shell/src/ComponentLibrary.cpp" line="203"/>
+        <location filename="../libs/ui-shell/src/ComponentLibrary.cpp" line="171"/>
+        <location filename="../libs/ui-shell/src/ComponentLibrary.cpp" line="202"/>
         <location filename="../libs/ui-shell/src/PadStyles.cpp" line="116"/>
         <source>The drill must be smaller than the pad.</source>
         <translation>Delik pad&apos;den küçük olmalıdır.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentLibrary.cpp" line="178"/>
+        <location filename="../libs/ui-shell/src/ComponentLibrary.cpp" line="177"/>
         <source>Pads %1 and %2 overlap; increase the pitch or row spacing, or make the pads smaller.</source>
         <translation>%1 ve %2 numaralı padler çakışıyor; pin veya sıra aralığını artırın ya da padleri küçültün.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentLibrary.cpp" line="190"/>
+        <location filename="../libs/ui-shell/src/ComponentLibrary.cpp" line="189"/>
         <source>Every pad needs a position.</source>
         <translation>Her padin bir konumu olmalı.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentLibrary.cpp" line="195"/>
+        <location filename="../libs/ui-shell/src/ComponentLibrary.cpp" line="194"/>
         <source>Pad %1 has an invalid position.</source>
         <translation>%1 numaralı padin konumu geçersiz.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentLibrary.cpp" line="197"/>
+        <location filename="../libs/ui-shell/src/ComponentLibrary.cpp" line="196"/>
         <source>Pad numbers must run from 1 to %1 without repeats.</source>
         <translation>Pad numaraları tekrar etmeden 1&apos;den %1&apos;e kadar gitmeli.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentLibrary.cpp" line="204"/>
+        <location filename="../libs/ui-shell/src/ComponentLibrary.cpp" line="203"/>
         <source>Pad %1 is on no copper layer.</source>
         <translation>%1 numaralı pad hiçbir bakır katmanda değil.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentLibrary.cpp" line="209"/>
+        <location filename="../libs/ui-shell/src/ComponentLibrary.cpp" line="208"/>
         <source>The silkscreen has an invalid point.</source>
         <translation>Serigrafide geçersiz bir nokta var.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentLibrary.cpp" line="217"/>
+        <location filename="../libs/ui-shell/src/ComponentLibrary.cpp" line="216"/>
         <source>Every pin needs a pad.</source>
         <translation>Her pine bir pad atanmalı.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentLibrary.cpp" line="221"/>
+        <location filename="../libs/ui-shell/src/ComponentLibrary.cpp" line="220"/>
         <source>Pin %1 is mapped to a pad that does not exist.</source>
         <translation>%1 numaralı pin var olmayan bir pade eşlenmiş.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentLibrary.cpp" line="222"/>
+        <location filename="../libs/ui-shell/src/ComponentLibrary.cpp" line="221"/>
         <source>Pad %1 is used by more than one pin.</source>
         <translation>%1 numaralı pad birden fazla pinde kullanılıyor.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentLibrary.cpp" line="342"/>
+        <location filename="../libs/ui-shell/src/ComponentLibrary.cpp" line="341"/>
         <source>The datasheet package does not fit %1 pins; a single row is used.</source>
         <translation>Datasheet&apos;teki kılıf tipi %1 pine uymuyor; tek sıra kullanıldı.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentLibrary.cpp" line="382"/>
+        <location filename="../libs/ui-shell/src/ComponentLibrary.cpp" line="381"/>
         <source>%1 A per pin needs copper at least %2 mm wide (IPC-2221, 1 oz, 10 °C rise); use traces at least this wide.</source>
         <translation>Pin başına %1 A için bakır en az %2 mm genişliğinde olmalı (IPC-2221, 1 oz, 10 °C artış); yolları da en az bu genişlikte çizin.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/ComponentLibrary.cpp" line="389"/>
+        <location filename="../libs/ui-shell/src/ComponentLibrary.cpp" line="388"/>
         <source>The %1 mm pitch limits pads to %2 mm; widen the copper outside the pad row.</source>
         <translation>%1 mm pin aralığı padleri %2 mm ile sınırlıyor; bakırı pad sırasının dışında genişletin.</translation>
     </message>
@@ -1737,47 +1628,47 @@
 <context>
     <name>hatt::ui::BoardLayer</name>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="494"/>
+        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="208"/>
         <source>Top copper</source>
         <translation>Üst bakır</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="495"/>
+        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="209"/>
         <source>Bottom copper</source>
         <translation>Alt bakır</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="496"/>
+        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="210"/>
         <source>Top silk</source>
         <translation>Üst serigrafi</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="497"/>
+        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="211"/>
         <source>Bottom silk</source>
         <translation>Alt serigrafi</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="498"/>
+        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="212"/>
         <source>Top resist</source>
         <translation>Üst lehim maskesi</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="499"/>
+        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="213"/>
         <source>Bottom resist</source>
         <translation>Alt lehim maskesi</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="500"/>
+        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="214"/>
         <source>Top paste</source>
         <translation>Üst pasta</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="501"/>
+        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="215"/>
         <source>Bottom paste</source>
         <translation>Alt pasta</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="502"/>
+        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="216"/>
         <source>Board edge</source>
         <translation>Kart kenarı</translation>
     </message>
@@ -3473,16 +3364,17 @@
     <name>hatt::ui::MainWindow</name>
     <message>
         <location filename="../libs/ui-shell/src/MainWindow.cpp" line="1658"/>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2756"/>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2801"/>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2826"/>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2837"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2758"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2803"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2828"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2839"/>
         <source>New project</source>
         <translation>Yeni proje</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2761"/>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2862"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2763"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2864"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2878"/>
         <source>Open project</source>
         <translation>Proje aç</translation>
     </message>
@@ -3498,7 +3390,7 @@
     </message>
     <message>
         <location filename="../libs/ui-shell/src/MainWindow.cpp" line="1249"/>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3040"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3051"/>
         <source>Save</source>
         <translation>Kaydet</translation>
     </message>
@@ -3627,8 +3519,8 @@
         <translation>Yerleştirirken, taşırken ve çizerken diğer pinlere, köşelere ve sembol merkezlerine hizalama kılavuzları göster</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2621"/>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2635"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2623"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2637"/>
         <source>Snap grid %1</source>
         <translation>Snap ızgarası %1</translation>
     </message>
@@ -3683,7 +3575,7 @@
         <translation>Satır adımı (Y, aşağı doğru pozitif)</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2644"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2646"/>
         <source>Snap grid step (Ctrl+F1, F2, F3, F4)</source>
         <translation>Snap ızgara adımı (Ctrl+F1, F2, F3, F4)</translation>
     </message>
@@ -3694,7 +3586,7 @@
     </message>
     <message>
         <location filename="../libs/ui-shell/src/MainWindow.cpp" line="500"/>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2570"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2572"/>
         <source>Zoom %1%</source>
         <translation>Yakınlaştırma %1%</translation>
     </message>
@@ -4065,87 +3957,87 @@ Schematic, simulation, PCB and CAM design suite.</source>
         <translation>Mesafe ölç</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2558"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2560"/>
         <source>Probes are only available in Mergen</source>
         <translation>Problar yalnızca Mergen&apos;de kullanılabilir</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2734"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2736"/>
         <source>&lt;h3&gt;Simulation diagnostics&lt;/h3&gt;&lt;p&gt;No simulation has been run for this project.&lt;/p&gt;</source>
         <translation>&lt;h3&gt;Simülasyon tanılama&lt;/h3&gt;&lt;p&gt;Bu proje için henüz simülasyon çalıştırılmadı.&lt;/p&gt;</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2736"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2738"/>
         <source>Simulation Diagnostics</source>
         <translation>Simülasyon Tanılama</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2747"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2749"/>
         <source>Start your next hardware project</source>
         <translation>Bir sonraki donanım projenize başlayın</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2748"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2750"/>
         <source>Create a new HattEDA project or continue from an existing design.</source>
         <translation>Yeni bir HattEDA projesi oluşturun veya var olan bir tasarıma devam edin.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2770"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2772"/>
         <source>RECENT PROJECTS</source>
         <translation>SON PROJELER</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2793"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2795"/>
         <source>My Project</source>
         <translation>Projem</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2796"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2798"/>
         <source>My Project %1</source>
         <translation>Projem %1</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2804"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2806"/>
         <source>Create a HattEDA project</source>
         <translation>HattEDA projesi oluştur</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2811"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2813"/>
         <source>Project name</source>
         <translation>Proje adı</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2812"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2814"/>
         <source>Location</source>
         <translation>Konum</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2815"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2817"/>
         <source>Create project</source>
         <translation>Proje oluştur</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2827"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2829"/>
         <source>%1 already exists. Replace it with an empty project?</source>
         <translation>%1 zaten var. Boş bir projeyle değiştirilsin mi?</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2835"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2837"/>
         <source>Cannot create the folder %1.</source>
         <translation>%1 klasörü oluşturulamıyor.</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2849"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2851"/>
         <source>Open HattEDA project</source>
         <translation>HattEDA projesi aç</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2850"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2852"/>
         <source>HattEDA projects (*.hatt);;All files (*.*)</source>
         <translation>HattEDA projeleri (*.hatt);;Tüm dosyalar (*.*)</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2863"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2865"/>
         <source>%1 could not be opened.
 
 %2</source>
@@ -4153,34 +4045,45 @@ Schematic, simulation, PCB and CAM design suite.</source>
 
 %2</translation>
     </message>
+    <message numerus="yes">
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2879"/>
+        <source>%1 opened, but %n item(s) use a symbol this version of HattEDA does not recognize and were kept as placeholders:
+
+%2</source>
+        <translation>
+            <numerusform>%1 açıldı, ancak %n öğe bu HattEDA sürümünün tanımadığı bir sembol kullanıyor ve yer tutucu olarak korundu:
+
+%2</numerusform>
+        </translation>
+    </message>
     <message>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2946"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2957"/>
         <source>Save HattEDA project as</source>
         <translation>HattEDA projesini farklı kaydet</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2947"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2958"/>
         <source>HattEDA projects (*.hatt)</source>
         <translation>HattEDA projeleri (*.hatt)</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2990"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3001"/>
         <source>Save project</source>
         <translation>Projeyi kaydet</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2999"/>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3331"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3010"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3342"/>
         <source>Saved %1</source>
         <translation>%1 kaydedildi</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3016"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3027"/>
         <source>Unsaved changes</source>
         <translation>Kaydedilmemiş değişiklikler</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3017"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3028"/>
         <source>%1 has unsaved changes. Save them before continuing?</source>
         <translation>%1 projesinde kaydedilmemiş değişiklikler var. Devam etmeden önce kaydedilsin mi?</translation>
     </message>
@@ -4190,12 +4093,12 @@ Schematic, simulation, PCB and CAM design suite.</source>
         <translation>Çıkış</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2887"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2898"/>
         <source>Project not found</source>
         <translation>Proje bulunamadı</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2888"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2899"/>
         <source>%1 no longer exists. It may have been moved, renamed or deleted.
 
 Remove it from the recent projects list?</source>
@@ -4275,22 +4178,22 @@ Son projeler listesinden kaldırılsın mı?</translation>
         <translation>%1 (projede)</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2491"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2492"/>
         <source>Prefix %1  ·  %2 pins  ·  value %3  ·  footprint %4</source>
         <translation>Önek %1  ·  %2 pin  ·  değer %3  ·  kılıf %4</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2494"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2495"/>
         <source>none</source>
         <translation>yok</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2495"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2496"/>
         <source>unassigned</source>
         <translation>atanmamış</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2523"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2525"/>
         <source>Add to project</source>
         <translation>Projeye ekle</translation>
     </message>
@@ -4356,7 +4259,7 @@ Son projeler listesinden kaldırılsın mı?</translation>
         <translation>Pad modu</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2564"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2566"/>
         <source>Only available in Kayra</source>
         <translation>Yalnızca Kayra&apos;da kullanılabilir</translation>
     </message>
@@ -4676,24 +4579,24 @@ Son projeler listesinden kaldırılsın mı?</translation>
         <translation>Gerber X2 katmanları ve Excellon kaplamalı delik dosyası üret</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3074"/>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3096"/>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3111"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3085"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3107"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3122"/>
         <source>Export fabrication files</source>
         <translation>Üretim dosyalarını dışa aktar</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3195"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3206"/>
         <source>Gerber output</source>
         <translation>Gerber çıktısı</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3197"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3208"/>
         <source>Exported %1 fabrication files to %2</source>
         <translation>%1 üretim dosyası %2 konumuna aktarıldı</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3201"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3212"/>
         <source>; skipped %1 text items</source>
         <translation>; %1 metin öğesi atlandı</translation>
     </message>
@@ -4708,12 +4611,12 @@ Son projeler listesinden kaldırılsın mı?</translation>
         <translation>Tasarım kuralları...</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3292"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3303"/>
         <source>Design checks</source>
         <translation>Tasarım denetimi</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3295"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3306"/>
         <source>Design checks: %1 error(s), %2 warning(s)</source>
         <translation>Tasarım denetimi: %1 hata, %2 uyarı</translation>
     </message>
@@ -4738,49 +4641,49 @@ Son projeler listesinden kaldırılsın mı?</translation>
         <translation>Montaj için kılıf merkezlerini, dönüşlerini ve yüzlerini CSV olarak yaz</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3246"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3257"/>
         <source>No recent projects yet</source>
         <translation>Henüz son proje yok</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3323"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3334"/>
         <source>CSV files (*.csv);;All files (*.*)</source>
         <translation>CSV dosyaları (*.csv);;Tüm dosyalar (*.*)</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3338"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3349"/>
         <source>Export bill of materials</source>
         <translation>Malzeme listesini dışa aktar</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3344"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3355"/>
         <source>Export pick and place</source>
         <translation>Dizgi dosyasını dışa aktar</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3328"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3339"/>
         <source>Cannot write %1: %2</source>
         <translation>%1 yazılamıyor: %2</translation>
     </message>
     <message numerus="yes">
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3075"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3086"/>
         <source>The board has %n design rule error(s). Boards made from these files may not work.</source>
         <translation>
             <numerusform>Kartta %n tasarım kuralı hatası var. Bu dosyalarla üretilen kart çalışmayabilir.</numerusform>
         </translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3080"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3091"/>
         <source>Export anyway</source>
         <translation>Yine de dışa aktar</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3082"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3093"/>
         <source>Open report</source>
         <translation>Raporu aç</translation>
     </message>
     <message numerus="yes">
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3119"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3130"/>
         <source>%n copper zone(s) without a net were NOT exported: an unpoured zone would short every net it covers. Choose the zone&apos;s net in its properties to pour it with clearance.</source>
         <translation>
             <numerusform>Netsiz %n bakır alan dışa AKTARILMADI: dökülmemiş bir alan kapsadığı bütün netleri kısa devre ederdi. Clearance ile dökülmesi için alanın özelliklerinden netini seçin.</numerusform>
@@ -4802,43 +4705,43 @@ Son projeler listesinden kaldırılsın mı?</translation>
         <translation>Net</translation>
     </message>
     <message numerus="yes">
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3204"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3215"/>
         <source>; %n copper zone(s) not exported</source>
         <translation>
             <numerusform>; %n bakır alan dışa aktarılmadı</numerusform>
         </translation>
     </message>
     <message numerus="yes">
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3207"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3218"/>
         <source>; %n design rule error(s)</source>
         <translation>
             <numerusform>; %n tasarım kuralı hatası</numerusform>
         </translation>
     </message>
     <message numerus="yes">
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3211"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3222"/>
         <source>; %n design rule warning(s)</source>
         <translation>
             <numerusform>; %n tasarım kuralı uyarısı</numerusform>
         </translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3139"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3150"/>
         <source>%1  (%2)</source>
         <translation>%1  (%2)</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3144"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3155"/>
         <source>Drill holes  (%1)</source>
         <translation>Delikler  (%1)</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3168"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3179"/>
         <source>Preview</source>
         <translation>Önizleme</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3173"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="3184"/>
         <source>File text</source>
         <translation>Dosya metni</translation>
     </message>
@@ -4874,27 +4777,27 @@ Son projeler listesinden kaldırılsın mı?</translation>
         <translation>Elemanları Türkçe veya İngilizce ara</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2504"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2506"/>
         <source>Pins: %1</source>
         <translation>Pinler: %1</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2506"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2508"/>
         <source>Part number: %1</source>
         <translation>Parça numarası: %1</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2508"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2510"/>
         <source>Manufacturer: %1</source>
         <translation>Üretici: %1</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2510"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2512"/>
         <source>Simulation: %1</source>
         <translation>Simülasyon: %1</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2517"/>
+        <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2519"/>
         <source>Suitable packages: %1</source>
         <translation>Uygun kılıflar: %1</translation>
     </message>
@@ -5068,32 +4971,32 @@ Son projeler listesinden kaldırılsın mı?</translation>
 <context>
     <name>hatt::ui::PadStyle</name>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="526"/>
+        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="240"/>
         <source>Round through-hole pad</source>
         <translation>Yuvarlak delikli pad</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="528"/>
+        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="242"/>
         <source>Square through-hole pad</source>
         <translation>Kare delikli pad</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="533"/>
+        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="247"/>
         <source>Oval (DIL) pad</source>
         <translation>Oval (DIL) pad</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="534"/>
+        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="248"/>
         <source>SMD rectangular pad</source>
         <translation>Dikdörtgen SMD pad</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="536"/>
+        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="250"/>
         <source>SMD round pad</source>
         <translation>Yuvarlak SMD pad</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="539"/>
+        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="253"/>
         <source>Edge connector pad</source>
         <translation>Kenar konnektörü pad&apos;i</translation>
     </message>
@@ -5421,155 +5324,1040 @@ Son projeler listesinden kaldırılsın mı?</translation>
 <context>
     <name>hatt::ui::SymbolLibrary</name>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="124"/>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="22"/>
         <source>Resistor</source>
         <translation>Direnç</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="133"/>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="23"/>
         <source>DC voltage source</source>
         <translation>DC gerilim kaynağı</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="143"/>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="24"/>
         <source>Capacitor</source>
         <translation>Kondansatör</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="152"/>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="25"/>
         <source>Inductor</source>
         <translation>Bobin</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="163"/>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="26"/>
         <source>Diode</source>
         <translation>Diyot</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="174"/>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="27"/>
         <source>LED</source>
         <translation>LED</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="181"/>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="28"/>
         <source>NPN transistor</source>
         <translation>NPN transistör</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="192"/>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="29"/>
         <source>Operational amplifier</source>
         <translation>İşlemsel yükselteç</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="202"/>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="30"/>
         <source>Integrated circuit (8 pins)</source>
         <translation>Tümleşik devre (8 pin)</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="216"/>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="31"/>
         <source>Input port</source>
         <translation>Giriş portu</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="223"/>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="32"/>
         <source>Output port</source>
         <translation>Çıkış portu</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="231"/>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="33"/>
         <source>Bidirectional port</source>
         <translation>Çift yönlü port</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="239"/>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="34"/>
         <source>Power rail</source>
         <translation>Güç hattı</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="245"/>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="35"/>
         <source>Ground</source>
         <translation>Ground</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="252"/>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="36"/>
         <source>Junction</source>
         <translation>Kavşak</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="259"/>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="37"/>
         <source>Voltage probe</source>
         <translation>Gerilim probu</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="267"/>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="38"/>
         <source>Current probe</source>
         <translation>Akım probu</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="277"/>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="39"/>
         <source>Pin header 1x2</source>
         <translation>Pin başlığı 1x2</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="284"/>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="40"/>
         <source>Resistor 0603</source>
         <translation>Direnç 0603</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="291"/>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="41"/>
         <source>Capacitor 0805</source>
         <translation>Kondansatör 0805</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="298"/>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="42"/>
         <source>SOT-23</source>
         <translation>SOT-23</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="305"/>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="43"/>
         <source>SOIC-8</source>
         <translation>SOIC-8</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="319"/>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="44"/>
         <source>DIP-8</source>
         <translation>DIP-8</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="334"/>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="45"/>
         <source>Pin header 1x4</source>
         <translation>Pin header 1x4</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="346"/>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="46"/>
         <source>Via</source>
         <translation>Via</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="352"/>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="47"/>
         <source>Test point</source>
         <translation>Test noktası</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="359"/>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="48"/>
         <source>Mounting hole</source>
         <translation>Montaj deliği</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="50"/>
+        <source>1N4007</source>
+        <translation>1N4007</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="51"/>
+        <source>1N4148</source>
+        <translation>1N4148</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="52"/>
+        <source>2N2222 / PN2222A</source>
+        <translation>2N2222 / PN2222A</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="53"/>
+        <source>2N7000</source>
+        <translation>2N7000</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="54"/>
+        <source>555 timer</source>
+        <translation>555 zamanlayıcı</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="55"/>
+        <source>5V1 Zener</source>
+        <translation>5V1 Zener</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="56"/>
+        <source>7805</source>
+        <translation>7805</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="57"/>
+        <source>AND gate</source>
+        <translation>VE kapısı</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="58"/>
+        <source>Adjustable linear regulator</source>
+        <translation>Ayarlanabilir lineer regülatör</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="59"/>
+        <source>Axial DO-35, 10.16 mm</source>
+        <translation>Eksenel DO-35, 10,16 mm</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="60"/>
+        <source>Axial DO-41, 12.70 mm</source>
+        <translation>Eksenel DO-41, 12,70 mm</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="61"/>
+        <source>BAT54</source>
+        <translation>BAT54</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="62"/>
+        <source>BC547</source>
+        <translation>BC547</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="63"/>
+        <source>BC557</source>
+        <translation>BC557</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="64"/>
+        <source>Battery</source>
+        <translation>Batarya</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="65"/>
+        <source>Bridge rectifier</source>
+        <translation>Köprü doğrultucu</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="66"/>
+        <source>Bridge rectifier, 4 pin</source>
+        <translation>Köprü doğrultucu, 4 pin</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="67"/>
+        <source>Buffer</source>
+        <translation>Tampon</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="68"/>
+        <source>Buzzer</source>
+        <translation>Buzzer</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="69"/>
+        <source>Capacitor, polarized</source>
+        <translation>Kondansatör, kutuplu</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="70"/>
+        <source>Comparator</source>
+        <translation>Karşılaştırıcı</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="71"/>
+        <source>Crystal</source>
+        <translation>Kristal</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="72"/>
+        <source>D flip-flop</source>
+        <translation>D flip-flop</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="73"/>
+        <source>DC current source</source>
+        <translation>DC akım kaynağı</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="74"/>
+        <source>DC motor</source>
+        <translation>DC motor</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="75"/>
+        <source>DIP</source>
+        <translation>DIP</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="76"/>
+        <source>Digital clock</source>
+        <translation>Dijital saat</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="77"/>
+        <source>Fixed linear regulator</source>
+        <translation>Sabit lineer regülatör</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="78"/>
+        <source>Fuse</source>
+        <translation>Sigorta</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="79"/>
+        <source>IRLZ44N</source>
+        <translation>IRLZ44N</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="80"/>
+        <source>LDR / photoresistor</source>
+        <translation>LDR / fotodirenç</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="81"/>
+        <source>LED 3 mm, 2.54 mm pitch</source>
+        <translation>LED 3 mm, 2.54 mm aralık</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="82"/>
+        <source>LED 5 mm, 2.54 mm pitch</source>
+        <translation>LED 5 mm, 2.54 mm aralık</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="83"/>
+        <source>LM317</source>
+        <translation>LM317</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="84"/>
+        <source>LM358</source>
+        <translation>LM358</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="85"/>
+        <source>LM393</source>
+        <translation>LM393</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="86"/>
+        <source>N-channel JFET</source>
+        <translation>N-kanal JFET</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="87"/>
+        <source>N-channel MOSFET</source>
+        <translation>N-kanal MOSFET</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="88"/>
+        <source>NAND gate</source>
+        <translation>VE DEĞİL kapısı</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="89"/>
+        <source>NE555</source>
+        <translation>NE555</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="90"/>
+        <source>NOR gate</source>
+        <translation>VEYA DEĞİL kapısı</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="91"/>
+        <source>NOT gate</source>
+        <translation>DEĞİL kapısı</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="92"/>
+        <source>NTC thermistor</source>
+        <translation>NTC termistör</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="93"/>
+        <source>OR gate</source>
+        <translation>VEYA kapısı</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="94"/>
+        <source>P-channel MOSFET</source>
+        <translation>P-kanal MOSFET</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="95"/>
+        <source>PNP transistor</source>
+        <translation>PNP transistör</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="96"/>
+        <source>PTC thermistor</source>
+        <translation>PTC termistör</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="97"/>
+        <source>Photodiode</source>
+        <translation>Fotodiyot</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="98"/>
+        <source>Pin header</source>
+        <translation>Pin header</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="99"/>
+        <source>Pin header 1x1, 2.54 mm</source>
+        <translation>Pin header 1x1, 2.54 mm</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="100"/>
+        <source>Pin header 1x10, 2.54 mm</source>
+        <translation>Pin header 1x10, 2.54 mm</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="101"/>
+        <source>Pin header 1x11, 2.54 mm</source>
+        <translation>Pin header 1x11, 2.54 mm</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="102"/>
+        <source>Pin header 1x12, 2.54 mm</source>
+        <translation>Pin header 1x12, 2.54 mm</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="103"/>
+        <source>Pin header 1x13, 2.54 mm</source>
+        <translation>Pin header 1x13, 2.54 mm</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="104"/>
+        <source>Pin header 1x14, 2.54 mm</source>
+        <translation>Pin header 1x14, 2.54 mm</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="105"/>
+        <source>Pin header 1x15, 2.54 mm</source>
+        <translation>Pin header 1x15, 2.54 mm</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="106"/>
+        <source>Pin header 1x16, 2.54 mm</source>
+        <translation>Pin header 1x16, 2.54 mm</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="107"/>
+        <source>Pin header 1x17, 2.54 mm</source>
+        <translation>Pin header 1x17, 2.54 mm</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="108"/>
+        <source>Pin header 1x18, 2.54 mm</source>
+        <translation>Pin header 1x18, 2.54 mm</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="109"/>
+        <source>Pin header 1x19, 2.54 mm</source>
+        <translation>Pin header 1x19, 2.54 mm</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="110"/>
+        <source>Pin header 1x2, 2.54 mm</source>
+        <translation>Pin header 1x2, 2.54 mm</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="111"/>
+        <source>Pin header 1x20, 2.54 mm</source>
+        <translation>Pin header 1x20, 2.54 mm</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="112"/>
+        <source>Pin header 1x3, 2.54 mm</source>
+        <translation>Pin header 1x3, 2.54 mm</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="113"/>
+        <source>Pin header 1x4, 2.54 mm</source>
+        <translation>Pin header 1x4, 2.54 mm</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="114"/>
+        <source>Pin header 1x5, 2.54 mm</source>
+        <translation>Pin header 1x5, 2.54 mm</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="115"/>
+        <source>Pin header 1x6, 2.54 mm</source>
+        <translation>Pin header 1x6, 2.54 mm</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="116"/>
+        <source>Pin header 1x7, 2.54 mm</source>
+        <translation>Pin header 1x7, 2.54 mm</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="117"/>
+        <source>Pin header 1x8, 2.54 mm</source>
+        <translation>Pin header 1x8, 2.54 mm</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="118"/>
+        <source>Pin header 1x9, 2.54 mm</source>
+        <translation>Pin header 1x9, 2.54 mm</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="119"/>
+        <source>Pin header 2x1, 2.54 mm</source>
+        <translation>Pin header 2x1, 2.54 mm</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="120"/>
+        <source>Pin header 2x10, 2.54 mm</source>
+        <translation>Pin header 2x10, 2.54 mm</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="121"/>
+        <source>Pin header 2x2, 2.54 mm</source>
+        <translation>Pin header 2x2, 2.54 mm</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="122"/>
+        <source>Pin header 2x3, 2.54 mm</source>
+        <translation>Pin header 2x3, 2.54 mm</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="123"/>
+        <source>Pin header 2x4, 2.54 mm</source>
+        <translation>Pin header 2x4, 2.54 mm</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="124"/>
+        <source>Pin header 2x5, 2.54 mm</source>
+        <translation>Pin header 2x5, 2.54 mm</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="125"/>
+        <source>Pin header 2x6, 2.54 mm</source>
+        <translation>Pin header 2x6, 2.54 mm</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="126"/>
+        <source>Pin header 2x7, 2.54 mm</source>
+        <translation>Pin header 2x7, 2.54 mm</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="127"/>
+        <source>Pin header 2x8, 2.54 mm</source>
+        <translation>Pin header 2x8, 2.54 mm</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="128"/>
+        <source>Pin header 2x9, 2.54 mm</source>
+        <translation>Pin header 2x9, 2.54 mm</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="129"/>
+        <source>Potentiometer</source>
+        <translation>Potansiyometre</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="130"/>
+        <source>Pulse / clock source</source>
+        <translation>Darbe / saat kaynağı</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="131"/>
+        <source>Push button</source>
+        <translation>Buton</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="132"/>
+        <source>QFN-16 (perimeter pads)</source>
+        <translation>QFN-16 (perimeter pads)</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="133"/>
+        <source>QFN-20 (perimeter pads)</source>
+        <translation>QFN-20 (perimeter pads)</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="134"/>
+        <source>QFN-24 (perimeter pads)</source>
+        <translation>QFN-24 (perimeter pads)</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="135"/>
+        <source>QFN-32 (perimeter pads)</source>
+        <translation>QFN-32 (perimeter pads)</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="136"/>
+        <source>QFN-48 (perimeter pads)</source>
+        <translation>QFN-48 (perimeter pads)</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="137"/>
+        <source>Radial capacitor, 2 mm pitch</source>
+        <translation>Radyal kondansatör, 2 mm aralık</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="138"/>
+        <source>Radial capacitor, 2.5 mm pitch</source>
+        <translation>Radyal kondansatör, 2.5 mm aralık</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="139"/>
+        <source>Radial capacitor, 5 mm pitch</source>
+        <translation>Radyal kondansatör, 5 mm aralık</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="140"/>
+        <source>Radial capacitor, 7.5 mm pitch</source>
+        <translation>Radyal kondansatör, 7.5 mm aralık</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="141"/>
+        <source>Relay</source>
+        <translation>Röle</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="142"/>
+        <source>Relay, generic 5 pin</source>
+        <translation>Röle, genel 5 pin</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="143"/>
+        <source>SMA / DO-214AC</source>
+        <translation>SMA / DO-214AC</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="144"/>
+        <source>SMB / DO-214AA</source>
+        <translation>SMB / DO-214AA</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="145"/>
+        <source>SMD passive 0201</source>
+        <translation>SMD pasif 0201</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="146"/>
+        <source>SMD passive 0402</source>
+        <translation>SMD pasif 0402</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="147"/>
+        <source>SMD passive 0603</source>
+        <translation>SMD pasif 0603</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="148"/>
+        <source>SMD passive 0805</source>
+        <translation>SMD pasif 0805</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="149"/>
+        <source>SMD passive 1206</source>
+        <translation>SMD pasif 1206</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="150"/>
+        <source>SMD passive 1210</source>
+        <translation>SMD pasif 1210</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="151"/>
+        <source>SOD-123</source>
+        <translation>SOD-123</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="152"/>
+        <source>SOD-323</source>
+        <translation>SOD-323</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="153"/>
+        <source>SOIC-14</source>
+        <translation>SOIC-14</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="154"/>
+        <source>SOIC-16</source>
+        <translation>SOIC-16</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="155"/>
+        <source>SOIC-20</source>
+        <translation>SOIC-20</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="156"/>
+        <source>SOIC-28</source>
+        <translation>SOIC-28</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="157"/>
+        <source>SOT-223</source>
+        <translation>SOT-223</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="158"/>
+        <source>SPST switch</source>
+        <translation>SPST anahtar</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="159"/>
+        <source>SSOP-14</source>
+        <translation>SSOP-14</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="160"/>
+        <source>SSOP-16</source>
+        <translation>SSOP-16</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="161"/>
+        <source>SSOP-20</source>
+        <translation>SSOP-20</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="162"/>
+        <source>SSOP-24</source>
+        <translation>SSOP-24</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="163"/>
+        <source>SSOP-28</source>
+        <translation>SSOP-28</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="164"/>
+        <source>SSOP-8</source>
+        <translation>SSOP-8</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="165"/>
+        <source>Schottky diode</source>
+        <translation>Schottky diyot</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="166"/>
+        <source>Sine voltage source</source>
+        <translation>Sinüs gerilim kaynağı</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="167"/>
+        <source>TO-220-3 vertical</source>
+        <translation>TO-220-3 dikey</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="168"/>
+        <source>TO-252 / DPAK</source>
+        <translation>TO-252 / DPAK</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="169"/>
+        <source>TO-92 inline</source>
+        <translation>TO-92 sıralı</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="170"/>
+        <source>TQFP-100</source>
+        <translation>TQFP-100</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="171"/>
+        <source>TQFP-32</source>
+        <translation>TQFP-32</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="172"/>
+        <source>TQFP-44</source>
+        <translation>TQFP-44</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="173"/>
+        <source>TQFP-48</source>
+        <translation>TQFP-48</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="174"/>
+        <source>TQFP-64</source>
+        <translation>TQFP-64</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="175"/>
+        <source>TSSOP-14</source>
+        <translation>TSSOP-14</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="176"/>
+        <source>TSSOP-16</source>
+        <translation>TSSOP-16</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="177"/>
+        <source>TSSOP-20</source>
+        <translation>TSSOP-20</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="178"/>
+        <source>TSSOP-24</source>
+        <translation>TSSOP-24</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="179"/>
+        <source>TSSOP-28</source>
+        <translation>TSSOP-28</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="180"/>
+        <source>TSSOP-8</source>
+        <translation>TSSOP-8</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="181"/>
+        <source>Terminal block</source>
+        <translation>Klemens</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="182"/>
+        <source>Terminal block 2 pin, 5.08 mm</source>
+        <translation>Terminal blok 2 pin, 5.08 mm</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="183"/>
+        <source>Terminal block 3 pin, 5.08 mm</source>
+        <translation>Terminal blok 3 pin, 5.08 mm</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="184"/>
+        <source>Terminal block 4 pin, 5.08 mm</source>
+        <translation>Terminal blok 4 pin, 5.08 mm</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="185"/>
+        <source>Transformer</source>
+        <translation>Transformatör</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="186"/>
+        <source>Tri-state buffer</source>
+        <translation>Üç durumlu tampon</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="187"/>
+        <source>Trimmer potentiometer, 3 pin</source>
+        <translation>Trimmer potansiyometre, 3 pin</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="188"/>
+        <source>XOR gate</source>
+        <translation>ÖZEL VEYA kapısı</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/LibraryModel.cpp" line="189"/>
+        <source>Zener diode</source>
+        <translation>Zener diyot</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="17"/>
+        <source>Battery represented by an ideal DC source</source>
+        <translation>İdeal DC kaynakla modellenen batarya</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="18"/>
+        <source>Common real component</source>
+        <translation>Yaygın gerçek eleman</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="19"/>
+        <source>Full-wave diode bridge</source>
+        <translation>Tam dalga diyot köprüsü</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="20"/>
+        <source>General inductor</source>
+        <translation>Genel bobin</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="21"/>
+        <source>General non-polarized capacitor</source>
+        <translation>Genel kutupsuz kondansatör</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="22"/>
+        <source>General resistor</source>
+        <translation>Genel direnç</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="23"/>
+        <source>General silicon diode</source>
+        <translation>Genel silisyum diyot</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="24"/>
+        <source>General-purpose 555 timer</source>
+        <translation>Genel amaçlı 555 zamanlayıcı</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="25"/>
+        <source>Generic SPDT relay</source>
+        <translation>Genel SPDT röle</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="26"/>
+        <source>Generic digital logic function</source>
+        <translation>Genel dijital mantık işlevi</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="27"/>
+        <source>Generic pin header</source>
+        <translation>Genel pin header</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="28"/>
+        <source>Ideal voltage operational amplifier</source>
+        <translation>İdeal gerilim işlemsel yükselteci</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="29"/>
+        <source>Independent DC current source</source>
+        <translation>Bağımsız DC akım kaynağı</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="30"/>
+        <source>Independent DC voltage source</source>
+        <translation>Bağımsız DC gerilim kaynağı</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="31"/>
+        <source>Independent pulse source (transient required)</source>
+        <translation>Bağımsız darbe kaynağı (geçici rejim gerekir)</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="32"/>
+        <source>Independent sine source (transient required)</source>
+        <translation>Bağımsız sinüs kaynağı (geçici rejim gerekir)</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="33"/>
+        <source>Light-dependent resistor</source>
+        <translation>Işığa bağlı direnç</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="34"/>
+        <source>Light-emitting diode</source>
+        <translation>Işık yayan diyot</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="35"/>
+        <source>Light-sensitive diode</source>
+        <translation>Işığa duyarlı diyot</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="36"/>
+        <source>Low-forward-voltage Schottky diode</source>
+        <translation>Düşük ileri gerilimli Schottky diyot</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="37"/>
+        <source>Momentary normally-open push button</source>
+        <translation>Anlık normalde açık buton</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="38"/>
+        <source>Negative-temperature-coefficient thermistor</source>
+        <translation>Negatif sıcaklık katsayılı termistör</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="39"/>
+        <source>Polarized electrolytic capacitor</source>
+        <translation>Kutuplu elektrolitik kondansatör</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="40"/>
+        <source>Positive-temperature-coefficient thermistor</source>
+        <translation>Pozitif sıcaklık katsayılı termistör</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="41"/>
+        <source>Quartz crystal</source>
+        <translation>Kuvars kristal</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="42"/>
+        <source>Replaceable over-current fuse</source>
+        <translation>Değiştirilebilir aşırı akım sigortası</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="43"/>
+        <source>Screw terminal block</source>
+        <translation>Vidalı klemens</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="44"/>
+        <source>Single-pole switch</source>
+        <translation>Tek kutuplu anahtar</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="45"/>
+        <source>Three-terminal adjustable regulator</source>
+        <translation>Üç uçlu ayarlanabilir regülatör</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="46"/>
+        <source>Three-terminal fixed regulator</source>
+        <translation>Üç uçlu sabit regülatör</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="47"/>
+        <source>Three-terminal transistor</source>
+        <translation>Üç uçlu transistör</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="48"/>
+        <source>Three-terminal variable resistor</source>
+        <translation>Üç uçlu ayarlı direnç</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="49"/>
+        <source>Two-terminal DC motor</source>
+        <translation>İki uçlu DC motor</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="50"/>
+        <source>Two-terminal buzzer</source>
+        <translation>İki uçlu buzzer</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="51"/>
+        <source>Two-winding transformer</source>
+        <translation>İki sargılı transformatör</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="52"/>
+        <source>Voltage comparator</source>
+        <translation>Gerilim karşılaştırıcısı</translation>
+    </message>
+    <message>
+        <location filename="../libs/ui-shell/src/ComponentCatalog.cpp" line="53"/>
+        <source>Voltage-reference Zener diode</source>
+        <translation>Gerilim referanslı Zener diyot</translation>
     </message>
 </context>
 <context>
     <name>hatt::ui::ZoneFill</name>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="693"/>
+        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="407"/>
         <source>Solid</source>
         <translation>Dolu</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="694"/>
+        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="408"/>
         <source>Hatched</source>
         <translation>Taralı</translation>
     </message>
     <message>
-        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="695"/>
+        <location filename="../libs/ui-shell/src/SketchModel.cpp" line="409"/>
         <source>Empty</source>
         <translation>Boş</translation>
     </message>

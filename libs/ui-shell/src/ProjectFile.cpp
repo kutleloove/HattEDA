@@ -155,6 +155,8 @@ QJsonObject itemToJson(const SketchItem& item) {
     if (!item.fontFamily.isEmpty()) object[QStringLiteral("fontFamily")] = item.fontFamily;
     // Format 4 (ADR-0012)
     if (item.zoneFill != ZoneFillStyle::Solid) object[QStringLiteral("zoneFill")] = zoneFillStyleToken(item.zoneFill);
+    // Format 6 (#61/ADR-0017)
+    if (item.symbolVariant != QLatin1String("standard")) object[QStringLiteral("symbolVariant")] = item.symbolVariant;
     return object;
 }
 
@@ -173,8 +175,25 @@ bool optionalString(const QJsonObject& object, const char* key, QString& target)
 }
 
 // Reads one workspace; `where` names it in error messages.
+// #61/ADR-0017: a minimal, visible stand-in for a symbol id this build cannot resolve -- a dashed
+// box with no pins, so DesignCanvas/connectivity/export code that assumes every placed Symbol
+// item has a valid registered definition keeps working, without pretending to know the real
+// shape. Never used for a *known* id; only reached when findSymbol (registry + alias table) misses.
+SymbolDefinition placeholderSymbolDefinition(const QString& id, Workspace workspace) {
+    SymbolDefinition symbol;
+    symbol.id = id;
+    symbol.workspace = workspace;
+    symbol.category = SymbolCategory::Component;
+    SymbolShape box;
+    box.points = {{-2.54, -2.54}, {2.54, -2.54}, {2.54, 2.54}, {-2.54, 2.54}};
+    box.closed = true;
+    symbol.shapes = {box};
+    symbol.pins = {{0, 0}}; // one pin at the anchor; the real pin count/layout is unknown
+    return symbol;
+}
+
 QString documentFromJson(const QJsonValue& value, Workspace workspace, const QString& where,
-                         SketchDocument& document) {
+                         SketchDocument& document, QStringList& warnings) {
     if (!value.isObject() || !value.toObject().value(QStringLiteral("items")).isArray()) {
         return tr("The %1 section is missing or invalid.").arg(where);
     }
@@ -250,6 +269,11 @@ QString documentFromJson(const QJsonValue& value, Workspace workspace, const QSt
         if (!mirroredX.isUndefined()) item.mirroredX = mirroredX.toBool();
         const QJsonValue mirroredY = object.value(QStringLiteral("mirroredY"));
         if (!mirroredY.isUndefined()) item.mirroredY = mirroredY.toBool();
+        const QJsonValue variantVal = object.value(QStringLiteral("symbolVariant"));
+        if (!variantVal.isUndefined()) {
+            if (!variantVal.isString()) return tr("%1 has an invalid symbol variant.").arg(at);
+            item.symbolVariant = variantVal.toString();
+        }
         const QJsonValue padVal = object.value(QStringLiteral("pad"));
         if (!padVal.isUndefined() && padVal.isObject())
             item.pad = padFromJson(padVal.toObject());
@@ -278,8 +302,17 @@ QString documentFromJson(const QJsonValue& value, Workspace workspace, const QSt
         }
         if (item.kind == SketchItem::Kind::Symbol) {
             const auto* symbol = findSymbol(item.variant);
-            if (symbol == nullptr || symbol->workspace != workspace) {
+            if (symbol != nullptr && symbol->workspace != workspace) {
                 return tr("%1 uses the unknown symbol '%2'.").arg(at, item.variant);
+            }
+            if (symbol == nullptr) {
+                // #61/ADR-0017: neither the registry nor the built-in library's legacy alias
+                // table resolved this id (findSymbol already tried both). A visible placeholder,
+                // not a rejection: register one under the original id so every other reader of
+                // this document (rendering, connectivity, export) also sees a valid symbol, and
+                // keep the item's own fields untouched so it round-trips unchanged.
+                registerSymbols({placeholderSymbolDefinition(item.variant, workspace)});
+                warnings << tr("%1 uses the unknown symbol '%2'; kept as a placeholder.").arg(at, item.variant);
             }
         }
         document.append(item);
@@ -390,7 +423,6 @@ bool readLength(const QJsonObject& object, const char* key, double& target) {
 // Reads the library before the documents: custom symbols must be registered so that document items
 // using them validate.
 QString libraryFromJson(const QJsonValue& value, ProjectLibrary& library) {
-    registerBuiltInCatalog();
     // The library is optional: v1 files and early v2 files have none or an empty object.
     if (value.isUndefined()) return {};
     if (!value.isObject()) return tr("The library section is invalid.");
@@ -529,11 +561,15 @@ QString rulesFromJson(const QJsonValue& value, DesignRules& rules) { return desi
 } // namespace
 
 int requiredFormatVersion(const ProjectData& project) {
+    bool hasMirror = false;
     bool hasZoneFeature = false;
     for (const SketchDocument* document : {&project.schematic, &project.board}) {
         for (const SketchItem& item : *document) {
+            if (item.symbolVariant != QLatin1String("standard")) {
+                return ProjectVariantFormatVersion;
+            }
             if (item.mirroredX || item.mirroredY) {
-                return ProjectFormatVersion;
+                hasMirror = true;
             }
             if (item.variant == KeepoutZoneVariant || item.variant == AreaZoneVariant ||
                 item.zoneFill != ZoneFillStyle::Solid) {
@@ -541,6 +577,7 @@ int requiredFormatVersion(const ProjectData& project) {
             }
         }
     }
+    if (hasMirror) return ProjectMirrorFormatVersion;
     return hasZoneFeature ? ProjectZoneFormatVersion : ProjectBaseFormatVersion;
 }
 
@@ -599,14 +636,15 @@ ProjectLoad parseProject(const QByteArray& bytes) {
     if (error.isEmpty()) error = rulesFromJson(root.value(QStringLiteral("rules")), result.project.rules);
     if (error.isEmpty()) {
         error = documentFromJson(root.value(QStringLiteral("schematic")), Workspace::Schematic,
-                                 tr("schematic"), result.project.schematic);
+                                 tr("schematic"), result.project.schematic, result.warnings);
     }
     if (error.isEmpty()) {
         error = documentFromJson(root.value(QStringLiteral("board")), Workspace::Board, tr("board"),
-                                 result.project.board);
+                                 result.project.board, result.warnings);
     }
     if (!error.isEmpty()) {
         result.project = {};
+        result.warnings.clear();
         result.error = error;
     }
     return result;

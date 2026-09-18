@@ -77,6 +77,7 @@ void compareDocuments(const SketchDocument& actual, const SketchDocument& expect
         QCOMPARE(a.excludeFromBoard, e.excludeFromBoard);
         QCOMPARE(a.mirroredX, e.mirroredX);
         QCOMPARE(a.mirroredY, e.mirroredY);
+        QCOMPARE(a.symbolVariant, e.symbolVariant);
         QCOMPARE(a.fontFamily, e.fontFamily);
         if (e.kind == SketchItem::Kind::Pad) {
             QCOMPARE(a.pad.number, e.pad.number);
@@ -240,7 +241,7 @@ private slots:
         // A mirrored item forces version 5 (#8): older readers would ignore mirroredX/mirroredY
         // and place the symbol's pins/shapes unmirrored, which is a wrong position, not just a
         // missing feature.
-        QCOMPARE(requiredFormatVersion(project), ProjectFormatVersion);
+        QCOMPARE(requiredFormatVersion(project), ProjectMirrorFormatVersion);
         const QJsonObject root = QJsonDocument::fromJson(serializeProject(project)).object();
         QCOMPARE(root[QStringLiteral("formatVersion")].toInt(), 5);
 
@@ -252,8 +253,9 @@ private slots:
         QCOMPARE(serializeProject(load.project), serializeProject(project));
     }
 
-    // #8: mirroring outranks zone features (version 5), zone features alone still only need
-    // version 4, and a project using neither keeps writing the base version 3.
+    // #8/#61: a non-default symbolVariant outranks everything else (version 6), mirroring outranks
+    // zone features (version 5), zone features alone still only need version 4, and a project using
+    // none of the above keeps writing the base version 3.
     void formatVersionPicksTheHighestFeatureInUse() {
         ProjectData plain = sampleProject();
         QCOMPARE(requiredFormatVersion(plain), ProjectBaseFormatVersion);
@@ -270,8 +272,13 @@ private slots:
         SketchItem mirrored = item(SketchItem::Kind::Symbol, {{10, 10}}, QStringLiteral("schematic.resistor"));
         mirrored.mirroredY = true;
         mirroredAndZoned.schematic = {mirrored};
-        QCOMPARE(requiredFormatVersion(mirroredAndZoned), ProjectFormatVersion);
+        QCOMPARE(requiredFormatVersion(mirroredAndZoned), ProjectMirrorFormatVersion);
         QCOMPARE(QJsonDocument::fromJson(serializeProject(mirroredAndZoned)).object()[QStringLiteral("formatVersion")].toInt(), 5);
+
+        ProjectData variantUsed = mirroredAndZoned;
+        variantUsed.schematic.first().symbolVariant = QStringLiteral("animated");
+        QCOMPARE(requiredFormatVersion(variantUsed), ProjectVariantFormatVersion);
+        QCOMPARE(QJsonDocument::fromJson(serializeProject(variantUsed)).object()[QStringLiteral("formatVersion")].toInt(), 6);
     }
 
     void v1FileIsUpgradedToV2() {
@@ -300,6 +307,95 @@ private slots:
         QVERIFY(!load.project.schematic[0].excludeFromBoard);
         QVERIFY(!load.project.schematic[0].mirroredX);
         QVERIFY(!load.project.schematic[0].mirroredY);
+        QCOMPARE(load.project.schematic[0].symbolVariant, QStringLiteral("standard"));
+    }
+
+    // #61/ADR-0017: an id neither the registry nor the built-in library's legacy alias table
+    // resolves loads as a visible placeholder (not a rejection), keeping every one of its own
+    // fields, and reports a non-fatal warning naming it.
+    void unknownSymbolLoadsAsPlaceholderWithWarning() {
+        ProjectData project;
+        project.name = QStringLiteral("Unmapped");
+        SketchItem mystery = item(SketchItem::Kind::Symbol, {{12.7, 25.4}}, QStringLiteral("lib.mystery.part-9000"));
+        mystery.label = QStringLiteral("X1");
+        mystery.value = QStringLiteral("42");
+        project.schematic = {mystery};
+
+        const ProjectLoad load = parseProject(serializeProject(project));
+        QVERIFY2(load.ok(), qPrintable(load.error));
+        QCOMPARE(load.warnings.size(), 1);
+        QVERIFY2(load.warnings.first().contains(QStringLiteral("lib.mystery.part-9000")),
+                 qPrintable(load.warnings.first()));
+        QCOMPARE(load.project.schematic.size(), 1);
+        compareDocuments(load.project.schematic, project.schematic);
+        // Re-saving an unchanged project reproduces the same bytes: the placeholder item's own
+        // fields were not altered or dropped.
+        QCOMPARE(serializeProject(load.project), serializeProject(project));
+        QVERIFY(findSymbol(QStringLiteral("lib.mystery.part-9000")) != nullptr);
+    }
+
+    // A known legacy id (schematic.*, board.*) resolves via the alias table -- no warning, no
+    // placeholder, and the item's own `variant` stays exactly as read (round-trip only ever
+    // rewrites ids at the point of new placement, not on every load/save of an old project).
+    void legacyIdResolvesWithoutWarningOrPlaceholder() {
+        ProjectData project;
+        project.name = QStringLiteral("Legacy");
+        project.schematic = {item(SketchItem::Kind::Symbol, {{0, 0}}, QStringLiteral("schematic.resistor"))};
+
+        const ProjectLoad load = parseProject(serializeProject(project));
+        QVERIFY2(load.ok(), qPrintable(load.error));
+        QVERIFY(load.warnings.isEmpty());
+        QCOMPARE(load.project.schematic.first().variant, QStringLiteral("schematic.resistor"));
+    }
+
+    // #61 PR (b) review: registerBuiltInCatalog() (which used to register ComponentCatalog's
+    // symbols into the runtime registry before any lookup) was removed -- the catalog's devices
+    // and footprints are folded into builtInLibrary()/symbolLibrary() now, and findSymbol()
+    // already reads that on every call, registry or not. This test calls parseProject() as the
+    // very first thing this executable does with a catalog.device.* id (no prior findSymbol,
+    // registerSymbols or UI interaction), matching "the app opens a .hatt file with nothing else
+    // touched yet" -- proving there is no hidden ordering dependency on a call that no longer
+    // exists.
+    void catalogDeviceIdResolvesOnAColdProjectLoad() {
+        ProjectData project;
+        project.name = QStringLiteral("ColdCatalogLoad");
+        project.schematic = {item(SketchItem::Kind::Symbol, {{0, 0}}, QStringLiteral("catalog.device.bc547"))};
+
+        const ProjectLoad load = parseProject(serializeProject(project));
+        QVERIFY2(load.ok(), qPrintable(load.error));
+        QVERIFY(load.warnings.isEmpty());
+        QCOMPARE(load.project.schematic.first().variant, QStringLiteral("catalog.device.bc547"));
+        QVERIFY(findSymbol(QStringLiteral("catalog.device.bc547")) != nullptr);
+    }
+
+    // Review follow-up: a document item can reference a custom device id that IS declared in the
+    // same file's library section (the normal case, unlike the unmapped-id test above).
+    // `libraryFromJson`/`registerProjectLibrary` registers `library.customDevices` before
+    // `documentFromJson` validates document items, so the real definition must already be in the
+    // registry by the time any item is checked -- the placeholder path in documentFromJson is
+    // never reached, and registerSymbols' last-write-wins replacement never gets a chance to let a
+    // placeholder clobber it. Confirms a project's own device is never permanently reduced to an
+    // empty placeholder box.
+    void properlyDeclaredCustomDeviceNeverShadowedByAPlaceholder() {
+        ProjectData project;
+        project.name = QStringLiteral("CustomDeviceWins");
+        DeviceDefinition device;
+        device.id = newCustomDeviceId();
+        device.name = QStringLiteral("Real Part");
+        device.prefix = QStringLiteral("Z");
+        device.pinCount = 3;
+        device.pinNames = {QStringLiteral("A"), QStringLiteral("B"), QStringLiteral("C")};
+        project.library.customDevices = {device};
+        project.library.devices = {device.id};
+        project.schematic = {item(SketchItem::Kind::Symbol, {{0, 0}}, device.id)};
+
+        const ProjectLoad load = parseProject(serializeProject(project));
+        QVERIFY2(load.ok(), qPrintable(load.error));
+        QVERIFY2(load.warnings.isEmpty(), qPrintable(load.warnings.join(QStringLiteral("; "))));
+        const auto* symbol = findSymbol(device.id);
+        QVERIFY(symbol != nullptr);
+        QCOMPARE(symbol->prefix, QStringLiteral("Z"));
+        QCOMPARE(symbol->pins.size(), 3); // the real device's pin count, not the placeholder's one pin
     }
 
     void padItemRoundTrip() {
@@ -536,11 +632,17 @@ private slots:
         QVERIFY(!errorFor(libraryWith({}, mapped)).isEmpty());
         mapped[QStringLiteral("pinPadMap")] = QJsonArray{3, 1, 2};
         QVERIFY(errorFor(libraryWith({}, mapped)).isEmpty());
-        // A document using an unregistered custom device does not open.
-        QJsonObject root = withFirstSchematicItem(sampleJson(), [](QJsonObject& first) {
-            first[QStringLiteral("variant")] = newCustomDeviceId();
+        // #61/ADR-0017: a document using an unregistered custom device id now opens as a visible
+        // placeholder with a warning, not a rejection (unknownSymbolLoadsAsPlaceholderWithWarning
+        // covers this in more depth; this just confirms a *custom*-namespaced id takes the same path).
+        const QString unregisteredDeviceId = newCustomDeviceId();
+        QJsonObject root = withFirstSchematicItem(sampleJson(), [&](QJsonObject& first) {
+            first[QStringLiteral("variant")] = unregisteredDeviceId;
         });
-        QVERIFY(!errorFor(root).isEmpty());
+        const ProjectLoad load = parseProject(QJsonDocument(root).toJson());
+        QVERIFY2(load.ok(), qPrintable(load.error));
+        QCOMPARE(load.warnings.size(), 1);
+        QVERIFY(load.warnings.first().contains(unregisteredDeviceId));
     }
 };
 

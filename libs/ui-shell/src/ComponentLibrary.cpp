@@ -1,5 +1,4 @@
 #include "hatt/ui/ComponentLibrary.hpp"
-#include "hatt/ui/ComponentCatalog.hpp"
 
 #include <QCoreApplication>
 #include <QRectF>
@@ -409,14 +408,12 @@ void registerProjectLibrary(const ProjectLibrary& library) {
 }
 
 QList<const SymbolDefinition*> footprintsWithPads(const ProjectLibrary& library, int padCount) {
-    registerBuiltInCatalog();
+    // symbolLibrary() already contains every built-in footprint (#61 PR (b) folded
+    // ComponentCatalog's footprints into the same builtin.json); only project-specific footprints
+    // need a separate lookup through the runtime registry.
     QList<const SymbolDefinition*> result;
     for (const auto& symbol : symbolLibrary()) {
         if (symbol.workspace == Workspace::Board && symbol.pins.size() == padCount) result.append(&symbol);
-    }
-    for (const auto& footprint : footprintCatalog()) {
-        const auto* symbol = findSymbol(footprint.id);
-        if (symbol != nullptr && symbol->pins.size() == padCount) result.append(symbol);
     }
     for (const auto& footprint : library.customFootprints) {
         const auto* symbol = findSymbol(footprint.id);
@@ -426,11 +423,9 @@ QList<const SymbolDefinition*> footprintsWithPads(const ProjectLibrary& library,
 }
 
 QList<const SymbolDefinition*> pickableDevices(const ProjectLibrary& library) {
-    registerBuiltInCatalog();
+    // symbolsFor() already contains every built-in Component-category device, catalog ones
+    // included (#61 PR (b)); only project-specific devices need a separate registry lookup.
     QList<const SymbolDefinition*> result = symbolsFor(Workspace::Schematic, SymbolCategory::Component);
-    for (const auto& entry : componentCatalog()) {
-        if (const auto* symbol = findSymbol(entry.device.id)) result.append(symbol);
-    }
     for (const auto& device : library.customDevices) {
         if (const auto* symbol = findSymbol(device.id)) result.append(symbol);
     }

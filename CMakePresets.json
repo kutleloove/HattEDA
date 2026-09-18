@@ -80,7 +80,8 @@
       "output": { "outputOnFailure": true },
       "environment": {
         "PATH": "C:/Qt/6.11.2/mingw_64/bin;$penv{PATH}",
-        "QT_QPA_PLATFORM": "offscreen"
+        "QT_QPA_PLATFORM": "offscreen",
+        "QT_QPA_FONTDIR": "$penv{SystemRoot}/Fonts"
       }
     },
     {
@@ -94,7 +95,8 @@
       "execution": { "noTestsAction": "error", "timeout": 300 },
       "environment": {
         "PATH": "$penv{QT_ROOT_DIR}/bin;$penv{HATTEDA_MINGW_DIR}/bin;$penv{PATH}",
-        "QT_QPA_PLATFORM": "offscreen"
+        "QT_QPA_PLATFORM": "offscreen",
+        "QT_QPA_FONTDIR": "$penv{SystemRoot}/Fonts"
       }
     }
   ]

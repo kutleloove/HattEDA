@@ -31,3 +31,17 @@ else()
 endif()
 
 install(TARGETS hatteda RUNTIME DESTINATION .)
+
+# Bundles the Qt/MinGW runtime and plugins hatteda needs (windeployqt under the hood on Windows),
+# so `cmake --install` produces a folder that runs without Qt or MinGW on PATH (issue #5).
+# The deploy script runs as its own `cmake -P` at install time, so QT_DEPLOY_BIN_DIR (default
+# "bin") must be set via install(CODE ...) rather than a configure-time variable. Keep it "."
+# to match the existing flat RUNTIME DESTINATION "." so hatteda.exe finds its DLLs via Windows'
+# default same-directory search, instead of a "bin" subfolder the exe would not look in.
+install(CODE "set(QT_DEPLOY_BIN_DIR \".\")")
+qt_generate_deploy_app_script(
+    TARGET hatteda
+    OUTPUT_SCRIPT hatteda_deploy_script
+    NO_UNSUPPORTED_PLATFORM_ERROR
+)
+install(SCRIPT ${hatteda_deploy_script})

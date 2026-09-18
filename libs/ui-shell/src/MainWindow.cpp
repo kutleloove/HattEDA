@@ -2462,9 +2462,10 @@ void MainWindow::pickDevices() {
         QStringList terms{name, symbol->prefix, symbol->defaultValue};
         int catalogCategory = -1;
         if (const auto* entry = findCatalogComponent(symbol->id)) {
-            terms << entry->description << entry->keywords << entry->device.pinNames
-                  << entry->device.spec.manufacturer << entry->device.spec.partNumber;
-            catalogCategory = static_cast<int>(entry->category);
+            terms << catalogDescription(entry->description) << entry->keywords;
+            for (const auto& pin : entry->pins) terms << pin.name;
+            terms << entry->manufacturer << entry->partNumber;
+            catalogCategory = static_cast<int>(entry->catalogCategory);
         }
         item->setData(Qt::UserRole + 10, terms.join(QLatin1Char(' ')));
         item->setData(Qt::UserRole + 11, catalogCategory);
@@ -2494,25 +2495,26 @@ void MainWindow::pickDevices() {
                               .arg(symbol->defaultValue.isEmpty() ? MainWindow::tr("none") : symbol->defaultValue,
                                    footprint ? symbolDisplayName(*footprint) : MainWindow::tr("unassigned"))};
         if (const auto* entry = findCatalogComponent(symbol->id)) {
-            lines.prepend(catalogCategoryName(entry->category) + QStringLiteral(" — ") + entry->description);
+            lines.prepend(catalogCategoryName(entry->catalogCategory) + QStringLiteral(" — ") +
+                          catalogDescription(entry->description));
             QStringList pins;
-            for (int i = 0; i < entry->device.pinNames.size(); ++i) {
+            for (const auto& pin : entry->pins) {
                 pins << QStringLiteral("%1 %2 (%3)")
-                            .arg(i + 1)
-                            .arg(entry->device.pinNames[i], pinElectricalTypeName(entry->pinTypes.value(i)));
+                            .arg(pin.number)
+                            .arg(pin.name, pinElectricalTypeName(pin.type));
             }
             lines << MainWindow::tr("Pins: %1").arg(pins.join(QStringLiteral(", ")));
-            if (!entry->device.spec.partNumber.isEmpty())
-                lines << MainWindow::tr("Part number: %1").arg(entry->device.spec.partNumber);
-            if (!entry->device.spec.manufacturer.isEmpty())
-                lines << MainWindow::tr("Manufacturer: %1").arg(entry->device.spec.manufacturer);
-            if (const auto* model = findSimulationModel(entry->device.simulationModel)) {
+            if (!entry->partNumber.isEmpty())
+                lines << MainWindow::tr("Part number: %1").arg(entry->partNumber);
+            if (!entry->manufacturer.isEmpty())
+                lines << MainWindow::tr("Manufacturer: %1").arg(entry->manufacturer);
+            if (const auto* model = findSimulationModel(entry->simulationModel)) {
                 lines << MainWindow::tr("Simulation: %1").arg(model->name);
                 if (!model->limitation.isEmpty()) lines << model->limitation;
             }
             QStringList packages;
-            for (const auto& id : entry->footprintOptions) {
-                if (const auto* candidate = findSymbol(id)) packages << symbolDisplayName(*candidate);
+            for (const auto& option : entry->footprints) {
+                if (const auto* candidate = findSymbol(option.footprintId)) packages << symbolDisplayName(*candidate);
             }
             if (!packages.isEmpty()) lines << MainWindow::tr("Suitable packages: %1").arg(packages.join(QStringLiteral(", ")));
         }
@@ -2870,6 +2872,15 @@ bool MainWindow::openProjectFile(const QString& path) {
     }
     addRecentProject(path);
     activateProject(path, load.project);
+    if (!load.warnings.isEmpty()) {
+        // #61/ADR-0017: an item used a symbol id this build could not resolve and loaded as a
+        // placeholder instead of rejecting the file; tell the user which ones.
+        QMessageBox::warning(this, tr("Open project"),
+                             tr("%1 opened, but %n item(s) use a symbol this version of HattEDA "
+                                "does not recognize and were kept as placeholders:\n\n%2",
+                                nullptr, load.warnings.size())
+                                 .arg(QDir::toNativeSeparators(path), load.warnings.join(QLatin1Char('\n'))));
+    }
     if (recovery == ProjectGuard::Recovery::Restored) {
         // Recovered content is not on disk yet: keep the window modified until it is saved.
         for (auto* canvas : canvases_) canvas->undoStack()->resetClean();
