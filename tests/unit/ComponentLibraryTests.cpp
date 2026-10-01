@@ -4,6 +4,7 @@
 
 #include <QtTest>
 
+#include <algorithm>
 #include <cmath>
 
 using namespace hatt::ui;
@@ -12,6 +13,23 @@ namespace {
 
 bool near(double a, double b, double tolerance = 1e-6) { return std::abs(a - b) <= tolerance; }
 bool near(QPointF a, QPointF b) { return near(a.x(), b.x()) && near(a.y(), b.y()); }
+
+bool lineCrossesRectInterior(QPointF a, QPointF b, const QRectF& rect) {
+    constexpr double epsilon = 1e-6;
+    if (near(a.y(), b.y())) {
+        const double left = std::max(std::min(a.x(), b.x()), rect.left());
+        const double right = std::min(std::max(a.x(), b.x()), rect.right());
+        return a.y() > rect.top() + epsilon && a.y() < rect.bottom() - epsilon &&
+               right - left > epsilon;
+    }
+    if (near(a.x(), b.x())) {
+        const double top = std::max(std::min(a.y(), b.y()), rect.top());
+        const double bottom = std::min(std::max(a.y(), b.y()), rect.bottom());
+        return a.x() > rect.left() + epsilon && a.x() < rect.right() - epsilon &&
+               bottom - top > epsilon;
+    }
+    return true;
+}
 
 FootprintParams soic8() {
     FootprintParams p;
@@ -162,15 +180,16 @@ private slots:
         struct Row {
             const char* id;
             double a, b, d; // YAGEO Table 1 columns A, B, D (mm); C is derived, not needed here
+            double bodyWidth, bodyLength;
         };
         const Row rows[] = {
-            {"lib.footprint.chip-0402", 1.5, 0.5, 0.6},
-            {"lib.footprint.chip-0603", 2.6, 0.8, 0.8},
-            {"lib.footprint.chip-0805", 3.0, 1.2, 1.2},
-            {"lib.footprint.chip-1206", 4.2, 2.2, 1.5},
-            {"lib.footprint.chip-1210", 4.2, 2.2, 2.4},
-            {"lib.footprint.chip-2010", 6.1, 3.3, 2.4},
-            {"lib.footprint.chip-2512", 8.0, 4.4, 4.0},
+            {"lib.footprint.chip-0402", 1.5, 0.5, 0.6, 1.0, 0.5},
+            {"lib.footprint.chip-0603", 2.6, 0.8, 0.8, 1.6, 0.8},
+            {"lib.footprint.chip-0805", 3.0, 1.2, 1.2, 2.0, 1.25},
+            {"lib.footprint.chip-1206", 4.2, 2.2, 1.5, 3.2, 1.6},
+            {"lib.footprint.chip-1210", 4.2, 2.2, 2.4, 3.2, 2.5},
+            {"lib.footprint.chip-2010", 6.1, 3.3, 2.4, 5.0, 2.5},
+            {"lib.footprint.chip-2512", 8.0, 4.4, 4.0, 6.35, 3.2},
         };
         for (const auto& row : rows) {
             const auto footprint = std::find_if(
@@ -183,6 +202,9 @@ private slots:
             QVERIFY2(near(footprint->params.padWidth, expectedPadLength), row.id);   // sizeX (along axis)
             QVERIFY2(near(footprint->params.padLength, row.d), row.id);              // sizeY (breadth)
             QVERIFY2(near(footprint->params.rowSpacing, expectedCenterDistance), row.id);
+            QVERIFY2(near(footprint->params.bodyWidth, row.bodyWidth), row.id);
+            QVERIFY2(near(footprint->params.bodyLength, row.bodyLength), row.id);
+            QVERIFY2(!footprint->source.isEmpty(), row.id);
             QCOMPARE(footprint->params.style, PackageStyle::TwoTerminal);
             QCOMPARE(footprint->params.drill, 0.0);
 
@@ -194,6 +216,22 @@ private slots:
             // Deterministic pad centres: TwoTerminal places them at x = +-rowSpacing/2, y = 0.
             QVERIFY2(near(symbol->pins[0], {-expectedCenterDistance / 2.0, 0.0}), row.id);
             QVERIFY2(near(symbol->pins[1], {expectedCenterDistance / 2.0, 0.0}), row.id);
+
+            // A passive chip has no pin-1 dot. Its real body outline is split into silk segments
+            // with 0.2 mm pad clearance instead of being drawn across copper.
+            QVERIFY2(!symbol->shapes.isEmpty(), row.id);
+            for (const SymbolShape& shape : symbol->shapes) {
+                QCOMPARE(shape.points.size(), 2);
+                QVERIFY2(!shape.filled, row.id);
+                for (int pad = 0; pad < symbol->pads.size(); ++pad) {
+                    const QRectF copper(symbol->pins[pad].x() - symbol->pads[pad].width / 2.0 - 0.2,
+                                        symbol->pins[pad].y() - symbol->pads[pad].height / 2.0 - 0.2,
+                                        symbol->pads[pad].width + 0.4,
+                                        symbol->pads[pad].height + 0.4);
+                    QVERIFY2(!lineCrossesRectInterior(shape.points[0], shape.points[1], copper),
+                             row.id);
+                }
+            }
         }
     }
 

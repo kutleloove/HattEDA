@@ -26,6 +26,8 @@ constexpr StyleToken StyleTokens[] = {
 };
 
 constexpr double SilkMargin = 0.25;
+constexpr double SilkPadClearance = 0.2;
+constexpr double MinimumSilkSegment = 0.1;
 constexpr double SchematicGrid = 2.54;
 
 struct PlacedPad {
@@ -96,6 +98,61 @@ SymbolShape lineShape(QPointF a, QPointF b) {
     SymbolShape shape;
     shape.points = {a, b};
     return shape;
+}
+
+QVector<QPair<double, double>> subtractInterval(QVector<QPair<double, double>> intervals,
+                                                double blockedStart, double blockedEnd) {
+    QVector<QPair<double, double>> result;
+    for (const auto& interval : intervals) {
+        if (blockedEnd <= interval.first || blockedStart >= interval.second) {
+            result.append(interval);
+            continue;
+        }
+        if (blockedStart - interval.first >= MinimumSilkSegment)
+            result.append({interval.first, blockedStart});
+        if (interval.second - blockedEnd >= MinimumSilkSegment)
+            result.append({blockedEnd, interval.second});
+    }
+    return result;
+}
+
+// Draws a rectangular component body without putting silkscreen over a copper pad. Generated
+// package families are axis-aligned, so clipping each edge as one-dimensional intervals keeps the
+// result deterministic and makes the same geometry usable by the canvas and Gerber exporter.
+QVector<SymbolShape> clippedBodyShapes(const QRectF& body, const QVector<PlacedPad>& pads) {
+    QVector<QRectF> obstacles;
+    for (const auto& pad : pads) {
+        obstacles.append(padRect(pad).adjusted(-SilkPadClearance, -SilkPadClearance,
+                                               SilkPadClearance, SilkPadClearance));
+    }
+
+    QVector<SymbolShape> shapes;
+    auto horizontal = [&](double y) {
+        QVector<QPair<double, double>> intervals{{body.left(), body.right()}};
+        for (const QRectF& obstacle : obstacles) {
+            if (y >= obstacle.top() && y <= obstacle.bottom())
+                intervals = subtractInterval(intervals, obstacle.left(), obstacle.right());
+        }
+        for (const auto& interval : intervals)
+            if (interval.second - interval.first >= MinimumSilkSegment)
+                shapes.append(lineShape({interval.first, y}, {interval.second, y}));
+    };
+    auto vertical = [&](double x) {
+        QVector<QPair<double, double>> intervals{{body.top(), body.bottom()}};
+        for (const QRectF& obstacle : obstacles) {
+            if (x >= obstacle.left() && x <= obstacle.right())
+                intervals = subtractInterval(intervals, obstacle.top(), obstacle.bottom());
+        }
+        for (const auto& interval : intervals)
+            if (interval.second - interval.first >= MinimumSilkSegment)
+                shapes.append(lineShape({x, interval.first}, {x, interval.second}));
+    };
+
+    horizontal(body.top());
+    vertical(body.right());
+    horizontal(body.bottom());
+    vertical(body.left());
+    return shapes;
 }
 
 bool geometryKnown(const DeviceSpec& s) {
@@ -264,11 +321,14 @@ SymbolDefinition footprintSymbol(const FootprintDefinition& footprint) {
         symbol.pads.append(pad);
         padBounds = padBounds.isNull() ? padRect(placed[i]) : padBounds.united(padRect(placed[i]));
     }
-    const QRectF body = p.bodyWidth > 0 && p.bodyLength > 0
-                            ? QRectF(-p.bodyWidth / 2, -p.bodyLength / 2, p.bodyWidth, p.bodyLength)
-                            : padBounds.adjusted(-SilkMargin, -SilkMargin, SilkMargin, SilkMargin);
-    symbol.shapes.append(rectangleShape(body));
-    if (!placed.isEmpty()) {
+    if (p.bodyWidth > 0 && p.bodyLength > 0) {
+        const QRectF body(-p.bodyWidth / 2, -p.bodyLength / 2, p.bodyWidth, p.bodyLength);
+        symbol.shapes.append(clippedBodyShapes(body, placed));
+    } else {
+        symbol.shapes.append(
+            rectangleShape(padBounds.adjusted(-SilkMargin, -SilkMargin, SilkMargin, SilkMargin)));
+    }
+    if (p.style != PackageStyle::TwoTerminal && !placed.isEmpty()) {
         const QRectF first = padRect(placed.first());
         symbol.shapes.append(circleShape(first.topLeft() - QPointF(0.45, 0.45), 0.2, true));
     }

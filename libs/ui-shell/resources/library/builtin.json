@@ -36887,8 +36887,8 @@
         "padWidth": 1,
         "padLength": 1.5,
         "drill": 0,
-        "bodyWidth": 0,
-        "bodyLength": 0
+        "bodyWidth": 3.2,
+        "bodyLength": 1.6
       },
       "source": "YAGEO Chip Resistor Surface Mount - Mounting, Product Specification, Feb. 13 2018 V.10, Table 1 (reflow soldering)"
     },
@@ -36904,8 +36904,8 @@
         "padWidth": 1,
         "padLength": 2.4,
         "drill": 0,
-        "bodyWidth": 0,
-        "bodyLength": 0
+        "bodyWidth": 3.2,
+        "bodyLength": 2.5
       },
       "source": "YAGEO Chip Resistor Surface Mount - Mounting, Product Specification, Feb. 13 2018 V.10, Table 1 (reflow soldering)"
     },
@@ -36921,8 +36921,8 @@
         "padWidth": 1.4,
         "padLength": 2.4,
         "drill": 0,
-        "bodyWidth": 0,
-        "bodyLength": 0
+        "bodyWidth": 5.0,
+        "bodyLength": 2.5
       },
       "source": "YAGEO Chip Resistor Surface Mount - Mounting, Product Specification, Feb. 13 2018 V.10, Table 1 (reflow soldering)"
     },
@@ -36938,8 +36938,8 @@
         "padWidth": 1.8,
         "padLength": 4,
         "drill": 0,
-        "bodyWidth": 0,
-        "bodyLength": 0
+        "bodyWidth": 6.35,
+        "bodyLength": 3.2
       },
       "source": "YAGEO Chip Resistor Surface Mount - Mounting, Product Specification, Feb. 13 2018 V.10, Table 1 (reflow soldering)"
     },
@@ -36955,8 +36955,8 @@
         "padWidth": 0.5,
         "padLength": 0.6,
         "drill": 0,
-        "bodyWidth": 0,
-        "bodyLength": 0
+        "bodyWidth": 1.0,
+        "bodyLength": 0.5
       },
       "source": "YAGEO Chip Resistor Surface Mount - Mounting, Product Specification, Feb. 13 2018 V.10, Table 1 (reflow soldering)"
     },
@@ -36972,8 +36972,8 @@
         "padWidth": 0.9,
         "padLength": 0.8,
         "drill": 0,
-        "bodyWidth": 0,
-        "bodyLength": 0
+        "bodyWidth": 1.6,
+        "bodyLength": 0.8
       },
       "source": "YAGEO Chip Resistor Surface Mount - Mounting, Product Specification, Feb. 13 2018 V.10, Table 1 (reflow soldering)"
     },
@@ -36989,8 +36989,8 @@
         "padWidth": 0.9,
         "padLength": 1.2,
         "drill": 0,
-        "bodyWidth": 0,
-        "bodyLength": 0
+        "bodyWidth": 2.0,
+        "bodyLength": 1.25
       },
       "source": "YAGEO Chip Resistor Surface Mount - Mounting, Product Specification, Feb. 13 2018 V.10, Table 1 (reflow soldering)"
     }
