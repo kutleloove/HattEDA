@@ -2,6 +2,7 @@
 #include "hatt/ui/ComponentCatalog.hpp"
 #include "hatt/ui/LibraryModel.hpp"
 
+#include <QPolygonF>
 #include <QtTest>
 
 #include <algorithm>
@@ -267,6 +268,36 @@ private slots:
         QCOMPARE(symbol.pads, via->pads);
         QCOMPARE(symbol.pins, via->pins);
         QCOMPARE(symbol.shapes.size(), via->shapes.size());
+    }
+
+    void axialDiodesHaveBodyBandAndLeadSilkscreen() {
+        for (const QString& id : {QStringLiteral("lib.footprint.do35"),
+                                  QStringLiteral("lib.footprint.do41")}) {
+            const SymbolDefinition* symbol = findSymbol(id);
+            QVERIFY2(symbol != nullptr, qPrintable(id));
+            QCOMPARE(symbol->pads.size(), 2);
+            QCOMPARE(symbol->shapes.size(), 4);
+
+            const SymbolShape& body = symbol->shapes[0];
+            QVERIFY2(body.closed && !body.filled && body.points.size() >= 8, qPrintable(id));
+            const SymbolShape& cathodeBand = symbol->shapes[1];
+            QVERIFY2(cathodeBand.closed && cathodeBand.filled && cathodeBand.points.size() == 4,
+                     qPrintable(id));
+            const QRectF bandBounds = QPolygonF(cathodeBand.points).boundingRect();
+            QVERIFY2(bandBounds.center().x() > 0.0 && bandBounds.height() > bandBounds.width(),
+                     qPrintable(id));
+
+            for (int lead = 2; lead < 4; ++lead) {
+                const SymbolShape& line = symbol->shapes[lead];
+                QVERIFY2(!line.closed && !line.filled && line.points.size() == 2, qPrintable(id));
+                QVERIFY2(near(line.points[0].y(), 0.0) && near(line.points[1].y(), 0.0),
+                         qPrintable(id));
+            }
+            QVERIFY2(symbol->shapes[2].points[0].x() < symbol->shapes[2].points[1].x(),
+                     qPrintable(id));
+            QVERIFY2(symbol->shapes[3].points[0].x() < symbol->shapes[3].points[1].x(),
+                     qPrintable(id));
+        }
     }
 
     void dualRowPadsAreNumberedCounterClockwise() {

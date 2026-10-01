@@ -21,6 +21,7 @@ private slots:
     void designatorsFollowFootprintRotation();
     void previewDrawsLayersInBoardColours();
     void chipFootprintProducesCopperMaskPasteAndSilkWithNoDrill();
+    void axialDiodeExportsDetailedSilkAndTwoDrills();
 };
 
 void GerberExportTests::buildsCopperMaskPasteOutlineAndDrills() {
@@ -301,6 +302,27 @@ void GerberExportTests::chipFootprintProducesCopperMaskPasteAndSilkWithNoDrill()
     QVERIFY(gerber.contains("%ADD10R,0.900000X0.800000*%"));
     const QByteArray drill = excellonDrill(output.drills);
     QVERIFY(!drill.contains("T1")); // no tool defined: nothing to drill
+}
+
+void GerberExportTests::axialDiodeExportsDetailedSilkAndTwoDrills() {
+    SketchItem diode;
+    diode.kind = SketchItem::Kind::Symbol;
+    diode.variant = QStringLiteral("lib.footprint.do41");
+    diode.points = {{20.0, 20.0}};
+
+    const CamOutput output = buildCamOutput({diode});
+    const auto& copper = output.layers[static_cast<int>(CamLayerKind::TopCopper)].primitives;
+    const auto& silk = output.layers[static_cast<int>(CamLayerKind::TopSilk)].primitives;
+    QCOMPARE(copper.size(), 2);
+    QCOMPARE(silk.size(), 4); // rounded body, filled cathode band, two lead lines
+    QCOMPARE(silk[0].kind, CamPrimitive::Kind::Stroke);
+    QVERIFY(silk[0].points.size() >= 8);
+    QCOMPARE(silk[1].kind, CamPrimitive::Kind::Region);
+    QCOMPARE(silk[2].kind, CamPrimitive::Kind::Stroke);
+    QCOMPARE(silk[3].kind, CamPrimitive::Kind::Stroke);
+    QCOMPARE(output.drills.size(), 2);
+    QVERIFY(qAbs(output.drills[0].diameter - 1.0) < 1e-6);
+    QVERIFY(qAbs(output.drills[1].diameter - 1.0) < 1e-6);
 }
 
 QTEST_MAIN(GerberExportTests)
