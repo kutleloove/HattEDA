@@ -782,6 +782,15 @@
           "footprintId": "lib.footprint.chip-1206"
         },
         {
+          "footprintId": "lib.footprint.chip-1210"
+        },
+        {
+          "footprintId": "lib.footprint.chip-2010"
+        },
+        {
+          "footprintId": "lib.footprint.chip-2512"
+        },
+        {
           "footprintId": "lib.footprint.radial5_0"
         }
       ],
@@ -1117,6 +1126,15 @@
           "footprintId": "lib.footprint.chip-1206"
         },
         {
+          "footprintId": "lib.footprint.chip-1210"
+        },
+        {
+          "footprintId": "lib.footprint.chip-2010"
+        },
+        {
+          "footprintId": "lib.footprint.chip-2512"
+        },
+        {
           "footprintId": "lib.footprint.radial5_0"
         }
       ],
@@ -1224,6 +1242,15 @@
         },
         {
           "footprintId": "lib.footprint.chip-1206"
+        },
+        {
+          "footprintId": "lib.footprint.chip-1210"
+        },
+        {
+          "footprintId": "lib.footprint.chip-2010"
+        },
+        {
+          "footprintId": "lib.footprint.chip-2512"
         },
         {
           "footprintId": "lib.footprint.radial5_0"

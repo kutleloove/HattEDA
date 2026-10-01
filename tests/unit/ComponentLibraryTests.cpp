@@ -113,6 +113,19 @@ private slots:
         QCOMPARE(bc547Pins, QStringList({QStringLiteral("C"), QStringLiteral("B"), QStringLiteral("E")}));
         QCOMPARE(findCatalogComponent(QStringLiteral("catalog.device.lm358"))->pins.size(), 8);
 
+        const auto* resistor = findCatalogComponent(QStringLiteral("lib.passive.resistor"));
+        QVERIFY(resistor != nullptr);
+        QSet<QString> resistorFootprints;
+        for (const auto& option : resistor->footprints)
+            resistorFootprints.insert(option.footprintId);
+        for (const QString& size : {QStringLiteral("0402"), QStringLiteral("0603"),
+                                    QStringLiteral("0805"), QStringLiteral("1206"),
+                                    QStringLiteral("1210"), QStringLiteral("2010"),
+                                    QStringLiteral("2512")}) {
+            QVERIFY2(resistorFootprints.contains(QStringLiteral("lib.footprint.chip-") + size),
+                     qPrintable(size));
+        }
+
         QSet<QString> pickableIds;
         for (const auto* symbol : pickableDevices({})) {
             QVERIFY2(!pickableIds.contains(symbol->id), qPrintable(symbol->id));
