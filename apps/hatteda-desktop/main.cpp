@@ -10,7 +10,7 @@
 int main(int argc, char* argv[]) {
     QApplication application(argc, argv);
     QCoreApplication::setApplicationName(QStringLiteral("HattEDA"));
-    QCoreApplication::setApplicationVersion(QStringLiteral("0.1.0"));
+    QCoreApplication::setApplicationVersion(QStringLiteral("0.1.0-alpha.1"));
     QCoreApplication::setOrganizationName(QStringLiteral("HattEDA"));
 
     QTranslator translator;
