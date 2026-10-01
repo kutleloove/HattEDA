@@ -10,6 +10,8 @@
 #include <QUuid>
 #include <QtTest>
 
+#include <cmath>
+
 using namespace hatt::ui;
 
 namespace {
@@ -366,6 +368,34 @@ private slots:
         QVERIFY(load.warnings.isEmpty());
         QCOMPARE(load.project.schematic.first().variant, QStringLiteral("catalog.device.bc547"));
         QVERIFY(findSymbol(QStringLiteral("catalog.device.bc547")) != nullptr);
+    }
+
+    // #63 team-lead condition: a board saved with the old, approximate r0603 footprint id must
+    // still open, and must now resolve to the real-dimension chip-0603 geometry, not the old one
+    // -- the item's own stored id is untouched (ADR-0017's "read-direction only" alias rule), but
+    // findSymbol()'s pad geometry for it has genuinely changed. This is expected and desired (a
+    // saved board's footprint outline/pad size can shift after this loads), not a regression.
+    void legacyFootprintIdResolvesToTheNewRealDimensionGeometry() {
+        ProjectData project;
+        project.name = QStringLiteral("LegacyFootprint");
+        project.board = {item(SketchItem::Kind::Symbol, {{10, 10}}, QStringLiteral("board.r0603"))};
+
+        const ProjectLoad load = parseProject(serializeProject(project));
+        QVERIFY2(load.ok(), qPrintable(load.error));
+        QVERIFY(load.warnings.isEmpty());
+        QCOMPARE(load.project.board.first().variant, QStringLiteral("board.r0603")); // id untouched
+
+        const auto* symbol = findSymbol(QStringLiteral("board.r0603"));
+        QVERIFY(symbol != nullptr);
+        QCOMPARE(symbol->id, QStringLiteral("lib.footprint.chip-0603"));
+        QCOMPARE(symbol->pads.size(), 2);
+        // YAGEO chip-0603 reflow-soldering dimensions (see chipFamilyPadDimensionsMatchPublishedDatasheetValues
+        // in ComponentLibraryTests.cpp for the full derivation): 0.9 x 0.8 mm pads, 1.7 mm apart --
+        // not the old literal migration's approximate r0603 geometry.
+        QVERIFY(std::abs(symbol->pads[0].width - 0.9) < 1e-6);
+        QVERIFY(std::abs(symbol->pads[0].height - 0.8) < 1e-6);
+        QVERIFY(std::abs(symbol->pins[0].x() - (-0.85)) < 1e-6);
+        QVERIFY(std::abs(symbol->pins[1].x() - 0.85) < 1e-6);
     }
 
     // Review follow-up: a document item can reference a custom device id that IS declared in the

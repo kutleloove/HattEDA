@@ -1,5 +1,6 @@
 #pragma once
 
+#include "hatt/ui/ComponentLibrary.hpp"
 #include "hatt/ui/SketchModel.hpp"
 
 #include <QByteArray>
@@ -104,6 +105,11 @@ struct LibraryDevice {
     [[nodiscard]] const LibrarySymbolVariant* variant(const QString& id) const;
 };
 
+// A footprint is either parametric (`params` describes it; the standard, most-used case, #63) or
+// explicit (`pads` non-empty, hand-drawn geometry that does not fit a parametric family --
+// mirroring FootprintDefinition::isExplicit()'s own escape hatch for project-authored footprints).
+// Geometry for either kind is computed once, at builtInLibrary() load time (a function-local
+// static), never per findSymbol() call.
 struct LibraryFootprint {
     QString id; // lib.footprint.<package>
     QString displayNameKey;
@@ -111,10 +117,13 @@ struct LibraryFootprint {
     // mounting hole) so they still list in Kayra's Terminal mode, matching symbolsFor().
     SymbolCategory category = SymbolCategory::Component;
     QString prefix;
-    QVector<SymbolShape> shapes;
+    FootprintParams params;      // parametric geometry, reusing ComponentLibrary.hpp's generator
+    QVector<SymbolShape> shapes; // explicit escape hatch: non-empty `pads` below means explicit
     QVector<QPointF> pins;
-    QVector<PadDefinition> pads; // pads[i] at pins[i]
+    QVector<PadDefinition> pads; // pads[i] at pins[i]; non-empty selects the explicit path
     QString source; // the standard/datasheet the dimensions came from; empty until #63
+
+    [[nodiscard]] bool isExplicit() const { return !pads.isEmpty(); }
 };
 
 // One legacy id (schematic.*, board.*, catalog.device.*, catalog.footprint.*) mapped to its

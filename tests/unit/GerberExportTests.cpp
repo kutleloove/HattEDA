@@ -20,6 +20,8 @@ private slots:
     void strokeFontCoversDesignators();
     void designatorsFollowFootprintRotation();
     void previewDrawsLayersInBoardColours();
+    void chipFootprintProducesCopperMaskPasteAndSilkWithNoDrill();
+    void axialDiodeExportsDetailedSilkAndTwoDrills();
 };
 
 void GerberExportTests::buildsCopperMaskPasteOutlineAndDrills() {
@@ -264,6 +266,63 @@ void GerberExportTests::writesFilesAtomically() {
     }
     QVERIFY(!writeCamFiles({{QStringLiteral("../escape.gbr"), QByteArray("bad")}}, directory.path())
                  .isEmpty());
+}
+
+// #63 team-lead condition: the fabrication output chain, not just on-screen geometry, must be
+// verified for at least one of the newly real-dimensioned footprints. lib.footprint.chip-0603 is
+// surface-mount (no drill by design, per its YAGEO source dimensions -- see
+// ComponentLibraryTests::chipFamilyPadDimensionsMatchPublishedDatasheetValues), so this checks
+// copper/mask/paste pads and silk are produced and confirms no spurious drill hole appears; a
+// through-hole family (DIP, TO-92, header, ...), added in a later #63 content PR, is the one to
+// exercise the drill/Excellon path.
+void GerberExportTests::chipFootprintProducesCopperMaskPasteAndSilkWithNoDrill() {
+    SketchItem chip;
+    chip.kind = SketchItem::Kind::Symbol;
+    chip.variant = QStringLiteral("lib.footprint.chip-0603");
+    chip.points = {{10.0, 20.0}};
+    chip.label = QStringLiteral("R1");
+
+    const CamOutput output = buildCamOutput({chip});
+    QCOMPARE(output.layers[static_cast<int>(CamLayerKind::TopCopper)].primitives.size(), 2);
+    QCOMPARE(output.layers[static_cast<int>(CamLayerKind::TopMask)].primitives.size(), 2);
+    QCOMPARE(output.layers[static_cast<int>(CamLayerKind::TopPaste)].primitives.size(), 2);
+    QVERIFY(!output.layers[static_cast<int>(CamLayerKind::TopSilk)].primitives.isEmpty());
+    QVERIFY(output.drills.isEmpty()); // SMD: no hole, by the datasheet's own dimensions
+
+    for (const auto& primitive : output.layers[static_cast<int>(CamLayerKind::TopCopper)].primitives) {
+        QCOMPARE(primitive.kind, CamPrimitive::Kind::Flash);
+        QCOMPARE(primitive.aperture.shape, CamApertureShape::Rectangle);
+        QVERIFY2(qAbs(primitive.aperture.width - 0.9) < 1e-6, qPrintable(QString::number(primitive.aperture.width)));
+        QVERIFY2(qAbs(primitive.aperture.height - 0.8) < 1e-6, qPrintable(QString::number(primitive.aperture.height)));
+    }
+
+    // Round-trips through the real Gerber X2/Excellon serializers, not just the CamOutput model.
+    const QByteArray gerber = gerberLayer(output.layers[static_cast<int>(CamLayerKind::TopCopper)],
+                                          QStringLiteral("chip-0603"));
+    QVERIFY(gerber.contains("%ADD10R,0.900000X0.800000*%"));
+    const QByteArray drill = excellonDrill(output.drills);
+    QVERIFY(!drill.contains("T1")); // no tool defined: nothing to drill
+}
+
+void GerberExportTests::axialDiodeExportsDetailedSilkAndTwoDrills() {
+    SketchItem diode;
+    diode.kind = SketchItem::Kind::Symbol;
+    diode.variant = QStringLiteral("lib.footprint.do41");
+    diode.points = {{20.0, 20.0}};
+
+    const CamOutput output = buildCamOutput({diode});
+    const auto& copper = output.layers[static_cast<int>(CamLayerKind::TopCopper)].primitives;
+    const auto& silk = output.layers[static_cast<int>(CamLayerKind::TopSilk)].primitives;
+    QCOMPARE(copper.size(), 2);
+    QCOMPARE(silk.size(), 4); // rounded body, filled cathode band, two lead lines
+    QCOMPARE(silk[0].kind, CamPrimitive::Kind::Stroke);
+    QVERIFY(silk[0].points.size() >= 8);
+    QCOMPARE(silk[1].kind, CamPrimitive::Kind::Region);
+    QCOMPARE(silk[2].kind, CamPrimitive::Kind::Stroke);
+    QCOMPARE(silk[3].kind, CamPrimitive::Kind::Stroke);
+    QCOMPARE(output.drills.size(), 2);
+    QVERIFY(qAbs(output.drills[0].diameter - 1.0) < 1e-6);
+    QVERIFY(qAbs(output.drills[1].diameter - 1.0) < 1e-6);
 }
 
 QTEST_MAIN(GerberExportTests)

@@ -24,6 +24,10 @@ add_subdirectory(libs/ui-shell)
 add_subdirectory(apps/hatteda-desktop)
 add_subdirectory(apps/hatteda-embedded-agent)
 
+# Files a user needs beside a binary distribution. Third-party runtime notices remain in their
+# own directories as well (for example autorouter/runtime/legal when a Java runtime is bundled).
+install(FILES LICENSE README.md THIRD_PARTY_LICENSES.md DESTINATION .)
+
 if(BUILD_TESTING)
     find_package(Qt6 6.11 REQUIRED COMPONENTS Test)
     add_subdirectory(tests/unit)

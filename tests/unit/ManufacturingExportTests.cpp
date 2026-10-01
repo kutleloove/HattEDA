@@ -77,7 +77,7 @@ private slots:
         const auto lines = rows(bomCsv(bom));
         QCOMPARE(lines.size(), 5);
         QCOMPARE(lines[0], QByteArray("Item,Quantity,References,Value,Footprint,Device,Manufacturer,Part number"));
-        QVERIFY(lines[2].startsWith("2,2,R2 R10,1k,Resistor 0603,Resistor,,"));
+        QVERIFY(lines[2].startsWith("2,2,R2 R10,1k,Chip 0603,Resistor,,"));
         // Commas and quotes are quoted (RFC 4180).
         QVERIFY(lines[4].contains("\"LDO, 3.3 V\""));
         QVERIFY(lines[4].contains("\"Texas \"\"TI\"\" Instruments\""));
@@ -116,7 +116,7 @@ private slots:
 
         const auto lines = rows(placementCsv(placement));
         QCOMPARE(lines[0], QByteArray("Designator,Value,Package,Mid X (mm),Mid Y (mm),Rotation,Layer"));
-        QVERIFY(lines.contains("R1,1k,Resistor 0603,10.0000,-20.0000,0,Top"));
+        QVERIFY(lines.contains("R1,1k,Chip 0603,10.0000,-20.0000,0,Top"));
     }
 
     void dividerExampleAfterTransfer() {

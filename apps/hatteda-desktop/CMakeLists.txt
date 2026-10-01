@@ -15,6 +15,19 @@ if(HATTEDA_FREEROUTING_JAR AND HATTEDA_JAVA_RUNTIME)
                 "${HATTEDA_JAVA_RUNTIME}"
                 "$<TARGET_FILE_DIR:hatteda>/autorouter/runtime"
         COMMENT "Bundling Freerouting and its Java runtime")
+
+    # POST_BUILD above makes the development tree runnable. The install rules are separate because
+    # cmake --install only copies declared install artifacts into the distributable folder.
+    install(FILES "${HATTEDA_FREEROUTING_JAR}"
+            DESTINATION autorouter
+            RENAME freerouting.jar)
+    install(DIRECTORY "${HATTEDA_JAVA_RUNTIME}/"
+            DESTINATION autorouter/runtime)
+    # HattEDA and Freerouting use the same GPL-3.0 license text. Keep an explicitly named copy next
+    # to the JAR so the external program's terms remain obvious in an extracted binary bundle.
+    install(FILES "${CMAKE_SOURCE_DIR}/LICENSE"
+            DESTINATION autorouter
+            RENAME FREEROUTING-LICENSE.txt)
 endif()
 
 qt_add_translations(hatteda

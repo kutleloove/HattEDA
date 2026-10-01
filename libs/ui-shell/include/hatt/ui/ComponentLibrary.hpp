@@ -34,7 +34,8 @@ inline constexpr int MaxGeneratedPads = 400;
 
 // Board symbol of a footprint. Explicit footprints copy their shapes and pads, ordered by pad
 // number. Generated ones get a silkscreen body and pin 1 mark in `shapes`, pad centres in `pins`
-// and pad definitions in `pads` (same order, numbered from 1). Pads are placed as follows:
+// and pad definitions in `pads` (same order, numbered from 1). A specified body outline is clipped
+// away from pads; non-polar two-terminal packages omit the pin-1 mark. Pads are placed as follows:
 // two-terminal at x = ±rowSpacing/2; single row downwards along Y; dual row pads 1..n/2 down the
 // left row then up the right row; quad row counter-clockwise from the top of the left row.
 [[nodiscard]] SymbolDefinition footprintSymbol(const FootprintDefinition& footprint);

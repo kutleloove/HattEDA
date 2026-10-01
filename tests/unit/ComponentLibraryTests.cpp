@@ -2,8 +2,10 @@
 #include "hatt/ui/ComponentCatalog.hpp"
 #include "hatt/ui/LibraryModel.hpp"
 
+#include <QPolygonF>
 #include <QtTest>
 
+#include <algorithm>
 #include <cmath>
 
 using namespace hatt::ui;
@@ -12,6 +14,23 @@ namespace {
 
 bool near(double a, double b, double tolerance = 1e-6) { return std::abs(a - b) <= tolerance; }
 bool near(QPointF a, QPointF b) { return near(a.x(), b.x()) && near(a.y(), b.y()); }
+
+bool lineCrossesRectInterior(QPointF a, QPointF b, const QRectF& rect) {
+    constexpr double epsilon = 1e-6;
+    if (near(a.y(), b.y())) {
+        const double left = std::max(std::min(a.x(), b.x()), rect.left());
+        const double right = std::min(std::max(a.x(), b.x()), rect.right());
+        return a.y() > rect.top() + epsilon && a.y() < rect.bottom() - epsilon &&
+               right - left > epsilon;
+    }
+    if (near(a.x(), b.x())) {
+        const double top = std::max(std::min(a.y(), b.y()), rect.top());
+        const double bottom = std::min(std::max(a.y(), b.y()), rect.bottom());
+        return a.x() > rect.left() + epsilon && a.x() < rect.right() - epsilon &&
+               bottom - top > epsilon;
+    }
+    return true;
+}
 
 FootprintParams soic8() {
     FootprintParams p;
@@ -76,7 +95,10 @@ private slots:
             QVERIFY2(!footprintIds.contains(footprint.id), qPrintable(footprint.id));
             footprintIds.insert(footprint.id);
             const SymbolDefinition symbol = footprintToSymbolDefinition(footprint);
-            QCOMPARE(symbol.pads.size(), footprint.pins.size());
+            // #63: a parametric footprint (isExplicit() == false) stores no pins/pads of its own --
+            // they are generated from `params` at load time -- so the expected pad count comes
+            // from params.padCount instead of footprint.pins.size() (always 0 for those).
+            QCOMPARE(symbol.pads.size(), footprint.isExplicit() ? footprint.pins.size() : footprint.params.padCount);
             for (int i = 0; i < symbol.pads.size(); ++i) QCOMPARE(symbol.pads[i].number, i + 1);
             // Shape count varies by provenance: PR (a)'s original 10 footprints are a single body
             // outline (or none for via/test-point), while #61 PR (b)'s catalog-generated ones add
@@ -91,6 +113,19 @@ private slots:
         for (const auto& pin : findCatalogComponent(QStringLiteral("catalog.device.bc547"))->pins) bc547Pins << pin.name;
         QCOMPARE(bc547Pins, QStringList({QStringLiteral("C"), QStringLiteral("B"), QStringLiteral("E")}));
         QCOMPARE(findCatalogComponent(QStringLiteral("catalog.device.lm358"))->pins.size(), 8);
+
+        const auto* resistor = findCatalogComponent(QStringLiteral("lib.passive.resistor"));
+        QVERIFY(resistor != nullptr);
+        QSet<QString> resistorFootprints;
+        for (const auto& option : resistor->footprints)
+            resistorFootprints.insert(option.footprintId);
+        for (const QString& size : {QStringLiteral("0402"), QStringLiteral("0603"),
+                                    QStringLiteral("0805"), QStringLiteral("1206"),
+                                    QStringLiteral("1210"), QStringLiteral("2010"),
+                                    QStringLiteral("2512")}) {
+            QVERIFY2(resistorFootprints.contains(QStringLiteral("lib.footprint.chip-") + size),
+                     qPrintable(size));
+        }
 
         QSet<QString> pickableIds;
         for (const auto* symbol : pickableDevices({})) {
@@ -128,12 +163,141 @@ private slots:
             }
             const auto* symbol = findSymbol(oldId);
             QVERIFY2(symbol != nullptr, qPrintable(oldId));
-            QCOMPARE(symbol->id, it.value());
+            // The alias table's own entry may be one hop of a chain (#63 retired some #61-era
+            // footprints in favour of the real-dimension chip family, e.g.
+            // catalog.footprint.passive.1206 -> lib.footprint.passive.1206 -> lib.footprint.chip-1206);
+            // findSymbol() follows the whole chain, so resolve it the same way here instead of
+            // comparing against just the first hop.
+            QString resolved = it.value();
+            while (true) {
+                const auto next = builtInLibrary().aliases.constFind(resolved);
+                if (next == builtInLibrary().aliases.constEnd() || next.value() == resolved) break;
+                resolved = next.value();
+            }
+            QCOMPARE(symbol->id, resolved);
             if (oldId.startsWith(QLatin1String("catalog.device."))) ++deviceAliases;
             else ++footprintAliases;
         }
         QVERIFY(deviceAliases >= 50);
         QVERIFY(footprintAliases >= 30);
+    }
+
+    // #63: chip family (0402-2512) reflow-soldering pad dimensions, cross-checked against a
+    // published source (not "verifying our own generator against itself"). Source: YAGEO "Chip
+    // Resistor Surface Mount - Mounting" product specification, Feb. 13 2018 V.10, Table 1
+    // (reflow soldering), Fig. 4: A = outer edge-to-outer edge span, B = gap between pads,
+    // C = each pad's length along the part axis = (A-B)/2, D = each pad's width (breadth).
+    // This is also the deterministic "golden" check the team lead asked for: placePads() is a
+    // pure function of FootprintParams, so a formula change anywhere that shifts one of these
+    // package sizes without shifting the others would fail here.
+    void chipFamilyPadDimensionsMatchPublishedDatasheetValues() {
+        struct Row {
+            const char* id;
+            double a, b, d; // YAGEO Table 1 columns A, B, D (mm); C is derived, not needed here
+            double bodyWidth, bodyLength;
+        };
+        const Row rows[] = {
+            {"lib.footprint.chip-0402", 1.5, 0.5, 0.6, 1.0, 0.5},
+            {"lib.footprint.chip-0603", 2.6, 0.8, 0.8, 1.6, 0.8},
+            {"lib.footprint.chip-0805", 3.0, 1.2, 1.2, 2.0, 1.25},
+            {"lib.footprint.chip-1206", 4.2, 2.2, 1.5, 3.2, 1.6},
+            {"lib.footprint.chip-1210", 4.2, 2.2, 2.4, 3.2, 2.5},
+            {"lib.footprint.chip-2010", 6.1, 3.3, 2.4, 5.0, 2.5},
+            {"lib.footprint.chip-2512", 8.0, 4.4, 4.0, 6.35, 3.2},
+        };
+        for (const auto& row : rows) {
+            const auto footprint = std::find_if(
+                builtInLibraryData().footprints.begin(), builtInLibraryData().footprints.end(),
+                [&](const LibraryFootprint& f) { return f.id == QLatin1String(row.id); });
+            QVERIFY2(footprint != builtInLibraryData().footprints.end(), row.id);
+            QVERIFY2(!footprint->isExplicit(), row.id); // parametric, not baked shapes
+            const double expectedPadLength = (row.a - row.b) / 2.0; // C
+            const double expectedCenterDistance = row.a - expectedPadLength; // A - C
+            QVERIFY2(near(footprint->params.padWidth, expectedPadLength), row.id);   // sizeX (along axis)
+            QVERIFY2(near(footprint->params.padLength, row.d), row.id);              // sizeY (breadth)
+            QVERIFY2(near(footprint->params.rowSpacing, expectedCenterDistance), row.id);
+            QVERIFY2(near(footprint->params.bodyWidth, row.bodyWidth), row.id);
+            QVERIFY2(near(footprint->params.bodyLength, row.bodyLength), row.id);
+            QVERIFY2(!footprint->source.isEmpty(), row.id);
+            QCOMPARE(footprint->params.style, PackageStyle::TwoTerminal);
+            QCOMPARE(footprint->params.drill, 0.0);
+
+            const auto* symbol = findSymbol(QString::fromLatin1(row.id));
+            QVERIFY2(symbol != nullptr, row.id);
+            QCOMPARE(symbol->pads.size(), 2);
+            QVERIFY2(near(symbol->pads[0].width, expectedPadLength), row.id);
+            QVERIFY2(near(symbol->pads[0].height, row.d), row.id);
+            // Deterministic pad centres: TwoTerminal places them at x = +-rowSpacing/2, y = 0.
+            QVERIFY2(near(symbol->pins[0], {-expectedCenterDistance / 2.0, 0.0}), row.id);
+            QVERIFY2(near(symbol->pins[1], {expectedCenterDistance / 2.0, 0.0}), row.id);
+
+            // A passive chip has no pin-1 dot. Its real body outline is split into silk segments
+            // with 0.2 mm pad clearance instead of being drawn across copper.
+            QVERIFY2(!symbol->shapes.isEmpty(), row.id);
+            for (const SymbolShape& shape : symbol->shapes) {
+                QCOMPARE(shape.points.size(), 2);
+                QVERIFY2(!shape.filled, row.id);
+                for (int pad = 0; pad < symbol->pads.size(); ++pad) {
+                    const QRectF copper(symbol->pins[pad].x() - symbol->pads[pad].width / 2.0 - 0.2,
+                                        symbol->pins[pad].y() - symbol->pads[pad].height / 2.0 - 0.2,
+                                        symbol->pads[pad].width + 0.4,
+                                        symbol->pads[pad].height + 0.4);
+                    QVERIFY2(!lineCrossesRectInterior(shape.points[0], shape.points[1], copper),
+                             row.id);
+                }
+            }
+        }
+    }
+
+    // #63 team-lead condition: the explicit escape hatch for a parametric family must actually be
+    // exercised by shipped built-in content, not just theoretically supported. lib.footprint.via
+    // (PR (a)) has no rectangular pad arrangement a FootprintParams style can express (a round pad
+    // with no silkscreen body), so it stays explicit.
+    void builtInEscapeHatchIsUsedByARealFootprint() {
+        const auto via = std::find_if(builtInLibraryData().footprints.begin(),
+                                      builtInLibraryData().footprints.end(),
+                                      [](const LibraryFootprint& f) {
+                                          return f.id == QLatin1String("lib.footprint.via");
+                                      });
+        QVERIFY(via != builtInLibraryData().footprints.end());
+        QVERIFY(via->isExplicit());
+        QVERIFY(!via->pads.isEmpty());
+        const SymbolDefinition symbol = footprintToSymbolDefinition(*via);
+        // The explicit path must return the footprint's own stored geometry unchanged, not run it
+        // through the parametric generator (which would need params.style != None to do anything).
+        QCOMPARE(symbol.pads, via->pads);
+        QCOMPARE(symbol.pins, via->pins);
+        QCOMPARE(symbol.shapes.size(), via->shapes.size());
+    }
+
+    void axialDiodesHaveBodyBandAndLeadSilkscreen() {
+        for (const QString& id : {QStringLiteral("lib.footprint.do35"),
+                                  QStringLiteral("lib.footprint.do41")}) {
+            const SymbolDefinition* symbol = findSymbol(id);
+            QVERIFY2(symbol != nullptr, qPrintable(id));
+            QCOMPARE(symbol->pads.size(), 2);
+            QCOMPARE(symbol->shapes.size(), 4);
+
+            const SymbolShape& body = symbol->shapes[0];
+            QVERIFY2(body.closed && !body.filled && body.points.size() >= 8, qPrintable(id));
+            const SymbolShape& cathodeBand = symbol->shapes[1];
+            QVERIFY2(cathodeBand.closed && cathodeBand.filled && cathodeBand.points.size() == 4,
+                     qPrintable(id));
+            const QRectF bandBounds = QPolygonF(cathodeBand.points).boundingRect();
+            QVERIFY2(bandBounds.center().x() > 0.0 && bandBounds.height() > bandBounds.width(),
+                     qPrintable(id));
+
+            for (int lead = 2; lead < 4; ++lead) {
+                const SymbolShape& line = symbol->shapes[lead];
+                QVERIFY2(!line.closed && !line.filled && line.points.size() == 2, qPrintable(id));
+                QVERIFY2(near(line.points[0].y(), 0.0) && near(line.points[1].y(), 0.0),
+                         qPrintable(id));
+            }
+            QVERIFY2(symbol->shapes[2].points[0].x() < symbol->shapes[2].points[1].x(),
+                     qPrintable(id));
+            QVERIFY2(symbol->shapes[3].points[0].x() < symbol->shapes[3].points[1].x(),
+                     qPrintable(id));
+        }
     }
 
     void dualRowPadsAreNumberedCounterClockwise() {
