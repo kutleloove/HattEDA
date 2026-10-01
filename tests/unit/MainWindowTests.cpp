@@ -175,7 +175,7 @@ void MainWindowTests::componentModeUsesProjectDevicesAndSchematicParts() {
     clickCanvas(schematic, {20.32, 20.32});
     clickCanvas(schematic, {40.64, 20.32});
     QCOMPARE(schematic->document().size(), 2);
-    QCOMPARE(schematic->document().first().footprint, QStringLiteral("lib.footprint.r0603"));
+    QCOMPARE(schematic->document().first().footprint, QStringLiteral("lib.footprint.chip-0603"));
     QCOMPARE(schematic->document().first().pinPadMap, QVector<int>({1, 2}));
     QVERIFY(!window.removeProjectDevice(QStringLiteral("lib.passive.resistor")));
     QVERIFY(window.removeProjectDevice(QStringLiteral("lib.passive.capacitor")));
@@ -193,7 +193,7 @@ void MainWindowTests::componentModeUsesProjectDevicesAndSchematicParts() {
     QCOMPARE(selector->count(), 2);
     QVERIFY(selector->item(0)->text().startsWith(QStringLiteral("R1")));
     QCOMPARE(board->tool(), CanvasTool::Symbol);
-    QCOMPARE(board->toolVariant(), QStringLiteral("lib.footprint.r0603"));
+    QCOMPARE(board->toolVariant(), QStringLiteral("lib.footprint.chip-0603"));
     clickCanvas(board, {10.0, 10.0});
     QCOMPARE(board->document().size(), 1);
     QCOMPARE(board->document().first().sourceId, schematic->document().first().id);
@@ -360,7 +360,7 @@ void MainWindowTests::contextPropertiesAcceptAndCancel() {
             x->setValue(1000);
             dialog->findChild<QLineEdit*>(QStringLiteral("ItemValue"))->setText(QStringLiteral("4.7k"));
             auto* footprint = dialog->findChild<QComboBox*>(QStringLiteral("ItemFootprint"));
-            footprint->setCurrentIndex(footprint->findData(QStringLiteral("lib.footprint.r0603")));
+            footprint->setCurrentIndex(footprint->findData(QStringLiteral("lib.footprint.chip-0603")));
             auto* mapping = dialog->findChild<QLineEdit*>(QStringLiteral("ItemPinPadMap"));
             mapping->setText(QStringLiteral("1,1"));
             if (accept) {
@@ -383,7 +383,7 @@ void MainWindowTests::contextPropertiesAcceptAndCancel() {
     QCOMPARE(canvas->document().first().label, QStringLiteral("R99"));
     QCOMPARE(canvas->document().first().points.first().x(), 25.4);
     QCOMPARE(canvas->document().first().value, QStringLiteral("4.7k"));
-    QCOMPARE(canvas->document().first().footprint, QStringLiteral("lib.footprint.r0603"));
+    QCOMPARE(canvas->document().first().footprint, QStringLiteral("lib.footprint.chip-0603"));
     QCOMPARE(canvas->document().first().pinPadMap, QVector<int>({2, 1}));
     QCOMPARE(canvas->undoStack()->count(), 2);
     canvas->undoStack()->undo();

@@ -76,7 +76,10 @@ private slots:
             QVERIFY2(!footprintIds.contains(footprint.id), qPrintable(footprint.id));
             footprintIds.insert(footprint.id);
             const SymbolDefinition symbol = footprintToSymbolDefinition(footprint);
-            QCOMPARE(symbol.pads.size(), footprint.pins.size());
+            // #63: a parametric footprint (isExplicit() == false) stores no pins/pads of its own --
+            // they are generated from `params` at load time -- so the expected pad count comes
+            // from params.padCount instead of footprint.pins.size() (always 0 for those).
+            QCOMPARE(symbol.pads.size(), footprint.isExplicit() ? footprint.pins.size() : footprint.params.padCount);
             for (int i = 0; i < symbol.pads.size(); ++i) QCOMPARE(symbol.pads[i].number, i + 1);
             // Shape count varies by provenance: PR (a)'s original 10 footprints are a single body
             // outline (or none for via/test-point), while #61 PR (b)'s catalog-generated ones add
@@ -128,12 +131,91 @@ private slots:
             }
             const auto* symbol = findSymbol(oldId);
             QVERIFY2(symbol != nullptr, qPrintable(oldId));
-            QCOMPARE(symbol->id, it.value());
+            // The alias table's own entry may be one hop of a chain (#63 retired some #61-era
+            // footprints in favour of the real-dimension chip family, e.g.
+            // catalog.footprint.passive.1206 -> lib.footprint.passive.1206 -> lib.footprint.chip-1206);
+            // findSymbol() follows the whole chain, so resolve it the same way here instead of
+            // comparing against just the first hop.
+            QString resolved = it.value();
+            while (true) {
+                const auto next = builtInLibrary().aliases.constFind(resolved);
+                if (next == builtInLibrary().aliases.constEnd() || next.value() == resolved) break;
+                resolved = next.value();
+            }
+            QCOMPARE(symbol->id, resolved);
             if (oldId.startsWith(QLatin1String("catalog.device."))) ++deviceAliases;
             else ++footprintAliases;
         }
         QVERIFY(deviceAliases >= 50);
         QVERIFY(footprintAliases >= 30);
+    }
+
+    // #63: chip family (0402-2512) reflow-soldering pad dimensions, cross-checked against a
+    // published source (not "verifying our own generator against itself"). Source: YAGEO "Chip
+    // Resistor Surface Mount - Mounting" product specification, Feb. 13 2018 V.10, Table 1
+    // (reflow soldering), Fig. 4: A = outer edge-to-outer edge span, B = gap between pads,
+    // C = each pad's length along the part axis = (A-B)/2, D = each pad's width (breadth).
+    // This is also the deterministic "golden" check the team lead asked for: placePads() is a
+    // pure function of FootprintParams, so a formula change anywhere that shifts one of these
+    // package sizes without shifting the others would fail here.
+    void chipFamilyPadDimensionsMatchPublishedDatasheetValues() {
+        struct Row {
+            const char* id;
+            double a, b, d; // YAGEO Table 1 columns A, B, D (mm); C is derived, not needed here
+        };
+        const Row rows[] = {
+            {"lib.footprint.chip-0402", 1.5, 0.5, 0.6},
+            {"lib.footprint.chip-0603", 2.6, 0.8, 0.8},
+            {"lib.footprint.chip-0805", 3.0, 1.2, 1.2},
+            {"lib.footprint.chip-1206", 4.2, 2.2, 1.5},
+            {"lib.footprint.chip-1210", 4.2, 2.2, 2.4},
+            {"lib.footprint.chip-2010", 6.1, 3.3, 2.4},
+            {"lib.footprint.chip-2512", 8.0, 4.4, 4.0},
+        };
+        for (const auto& row : rows) {
+            const auto footprint = std::find_if(
+                builtInLibraryData().footprints.begin(), builtInLibraryData().footprints.end(),
+                [&](const LibraryFootprint& f) { return f.id == QLatin1String(row.id); });
+            QVERIFY2(footprint != builtInLibraryData().footprints.end(), row.id);
+            QVERIFY2(!footprint->isExplicit(), row.id); // parametric, not baked shapes
+            const double expectedPadLength = (row.a - row.b) / 2.0; // C
+            const double expectedCenterDistance = row.a - expectedPadLength; // A - C
+            QVERIFY2(near(footprint->params.padWidth, expectedPadLength), row.id);   // sizeX (along axis)
+            QVERIFY2(near(footprint->params.padLength, row.d), row.id);              // sizeY (breadth)
+            QVERIFY2(near(footprint->params.rowSpacing, expectedCenterDistance), row.id);
+            QCOMPARE(footprint->params.style, PackageStyle::TwoTerminal);
+            QCOMPARE(footprint->params.drill, 0.0);
+
+            const auto* symbol = findSymbol(QString::fromLatin1(row.id));
+            QVERIFY2(symbol != nullptr, row.id);
+            QCOMPARE(symbol->pads.size(), 2);
+            QVERIFY2(near(symbol->pads[0].width, expectedPadLength), row.id);
+            QVERIFY2(near(symbol->pads[0].height, row.d), row.id);
+            // Deterministic pad centres: TwoTerminal places them at x = +-rowSpacing/2, y = 0.
+            QVERIFY2(near(symbol->pins[0], {-expectedCenterDistance / 2.0, 0.0}), row.id);
+            QVERIFY2(near(symbol->pins[1], {expectedCenterDistance / 2.0, 0.0}), row.id);
+        }
+    }
+
+    // #63 team-lead condition: the explicit escape hatch for a parametric family must actually be
+    // exercised by shipped built-in content, not just theoretically supported. lib.footprint.via
+    // (PR (a)) has no rectangular pad arrangement a FootprintParams style can express (a round pad
+    // with no silkscreen body), so it stays explicit.
+    void builtInEscapeHatchIsUsedByARealFootprint() {
+        const auto via = std::find_if(builtInLibraryData().footprints.begin(),
+                                      builtInLibraryData().footprints.end(),
+                                      [](const LibraryFootprint& f) {
+                                          return f.id == QLatin1String("lib.footprint.via");
+                                      });
+        QVERIFY(via != builtInLibraryData().footprints.end());
+        QVERIFY(via->isExplicit());
+        QVERIFY(!via->pads.isEmpty());
+        const SymbolDefinition symbol = footprintToSymbolDefinition(*via);
+        // The explicit path must return the footprint's own stored geometry unchanged, not run it
+        // through the parametric generator (which would need params.style != None to do anything).
+        QCOMPARE(symbol.pads, via->pads);
+        QCOMPARE(symbol.pins, via->pins);
+        QCOMPARE(symbol.shapes.size(), via->shapes.size());
     }
 
     void dualRowPadsAreNumberedCounterClockwise() {

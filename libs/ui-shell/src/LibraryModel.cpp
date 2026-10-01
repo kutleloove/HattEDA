@@ -1,5 +1,7 @@
 #include "hatt/ui/LibraryModel.hpp"
 
+#include "hatt/ui/ComponentLibrary.hpp"
+
 #include <QCoreApplication>
 #include <QFile>
 #include <QJsonArray>
@@ -187,6 +189,15 @@ namespace {
     QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Trimmer potentiometer, 3 pin"),
     QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "XOR gate"),
     QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Zener diode"),
+    // #63: real-dimension chip family (IPC-7351B/datasheet-derived), replacing the old
+    // approximate lib.footprint.r0603/c0805/passive.* footprints.
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Chip 0402"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Chip 0603"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Chip 0805"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Chip 1206"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Chip 1210"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Chip 2010"),
+    QT_TRANSLATE_NOOP("hatt::ui::SymbolLibrary", "Chip 2512"),
 };
 
 QJsonArray pointToJson(QPointF p) { return {p.x(), p.y()}; }
@@ -485,17 +496,48 @@ bool deviceFromJson(const QJsonValue& value, LibraryDevice& out, QStringList& er
     return true;
 }
 
+QJsonObject footprintParamsToJson(const FootprintParams& p) {
+    return {{QStringLiteral("style"), packageStyleToken(p.style)},
+            {QStringLiteral("padCount"), p.padCount},
+            {QStringLiteral("pitch"), p.pitch},
+            {QStringLiteral("rowSpacing"), p.rowSpacing},
+            {QStringLiteral("shape"), QLatin1String(padShapeToken(p.shape))},
+            {QStringLiteral("padWidth"), p.padWidth},
+            {QStringLiteral("padLength"), p.padLength},
+            {QStringLiteral("drill"), p.drill},
+            {QStringLiteral("bodyWidth"), p.bodyWidth},
+            {QStringLiteral("bodyLength"), p.bodyLength}};
+}
+
+bool footprintParamsFromJson(const QJsonObject& o, FootprintParams& out) {
+    if (!packageStyleFromToken(o.value(QStringLiteral("style")).toString(), out.style)) return false;
+    out.padCount = o.value(QStringLiteral("padCount")).toInt();
+    out.pitch = o.value(QStringLiteral("pitch")).toDouble();
+    out.rowSpacing = o.value(QStringLiteral("rowSpacing")).toDouble();
+    if (!padShapeFromToken(o.value(QStringLiteral("shape")).toString(), out.shape)) return false;
+    out.padWidth = o.value(QStringLiteral("padWidth")).toDouble();
+    out.padLength = o.value(QStringLiteral("padLength")).toDouble();
+    out.drill = o.value(QStringLiteral("drill")).toDouble();
+    out.bodyWidth = o.value(QStringLiteral("bodyWidth")).toDouble();
+    out.bodyLength = o.value(QStringLiteral("bodyLength")).toDouble();
+    return true;
+}
+
 QJsonObject footprintToJson(const LibraryFootprint& f) {
     QJsonObject o;
     o[QStringLiteral("id")] = f.id;
     if (!f.displayNameKey.isEmpty()) o[QStringLiteral("displayNameKey")] = f.displayNameKey;
     if (f.category != SymbolCategory::Component) o[QStringLiteral("category")] = QLatin1String(categoryToken(f.category));
     if (!f.prefix.isEmpty()) o[QStringLiteral("prefix")] = f.prefix;
-    o[QStringLiteral("shapes")] = shapesToJson(f.shapes);
-    o[QStringLiteral("pins")] = pointsToJson(f.pins);
-    QJsonArray pads;
-    for (const auto& p : f.pads) pads.append(padToJson(p));
-    o[QStringLiteral("pads")] = pads;
+    if (f.isExplicit()) {
+        o[QStringLiteral("shapes")] = shapesToJson(f.shapes);
+        o[QStringLiteral("pins")] = pointsToJson(f.pins);
+        QJsonArray pads;
+        for (const auto& p : f.pads) pads.append(padToJson(p));
+        o[QStringLiteral("pads")] = pads;
+    } else {
+        o[QStringLiteral("params")] = footprintParamsToJson(f.params);
+    }
     if (!f.source.isEmpty()) o[QStringLiteral("source")] = f.source;
     return o;
 }
@@ -513,6 +555,19 @@ bool footprintFromJson(const QJsonValue& value, LibraryFootprint& out, QStringLi
         return false;
     }
     out.prefix = o.value(QStringLiteral("prefix")).toString();
+    out.source = o.value(QStringLiteral("source")).toString();
+    if (o.contains(QStringLiteral("params"))) {
+        if (!footprintParamsFromJson(o.value(QStringLiteral("params")).toObject(), out.params)) {
+            errors << QStringLiteral("%1: invalid params").arg(out.id);
+            return false;
+        }
+        const QString validation = validateFootprintParams(out.params);
+        if (!validation.isEmpty()) {
+            errors << QStringLiteral("%1: %2").arg(out.id, validation);
+            return false;
+        }
+        return true;
+    }
     if (!shapesFromJson(o.value(QStringLiteral("shapes")), out.shapes)) {
         errors << QStringLiteral("%1: invalid shapes").arg(out.id);
         return false;
@@ -526,11 +581,11 @@ bool footprintFromJson(const QJsonValue& value, LibraryFootprint& out, QStringLi
         if (!padFromJson(pv, pad)) { errors << QStringLiteral("%1: invalid pad").arg(out.id); return false; }
         out.pads.append(pad);
     }
+    if (out.pads.isEmpty()) { errors << QStringLiteral("%1: no params and no explicit pads").arg(out.id); return false; }
     if (out.pads.size() != out.pins.size()) {
         errors << QStringLiteral("%1: %2 pads for %3 pins").arg(out.id).arg(out.pads.size()).arg(out.pins.size());
         return false;
     }
-    out.source = o.value(QStringLiteral("source")).toString();
     return true;
 }
 
@@ -595,13 +650,25 @@ SymbolDefinition deviceVariantToSymbolDefinition(const LibraryDevice& device, co
 
 SymbolDefinition footprintToSymbolDefinition(const LibraryFootprint& footprint) {
     SymbolDefinition symbol;
+    if (footprint.isExplicit()) {
+        symbol.shapes = footprint.shapes;
+        symbol.pins = footprint.pins;
+        symbol.pads = footprint.pads;
+    } else {
+        // Parametric (#63): reuse ComponentLibrary.hpp's existing generator (the same one project-
+        // authored footprints use) instead of a second geometry engine. Computed once here, at
+        // builtInLibrary()'s function-local-static load, not per findSymbol() call.
+        FootprintDefinition generated;
+        generated.params = footprint.params;
+        const SymbolDefinition generatedSymbol = footprintSymbol(generated);
+        symbol.shapes = generatedSymbol.shapes;
+        symbol.pins = generatedSymbol.pins;
+        symbol.pads = generatedSymbol.pads;
+    }
     symbol.id = footprint.id;
     symbol.workspace = Workspace::Board;
     symbol.category = footprint.category;
     symbol.prefix = footprint.prefix;
-    symbol.shapes = footprint.shapes;
-    symbol.pins = footprint.pins;
-    symbol.pads = footprint.pads;
     symbol.displayName = footprint.displayNameKey.isEmpty()
         ? QString()
         : QCoreApplication::translate("hatt::ui::SymbolLibrary", footprint.displayNameKey.toUtf8().constData());

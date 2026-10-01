@@ -731,6 +731,34 @@
     {
       "newId": "lib.analog.lm317",
       "oldId": "catalog.device.lm317"
+    },
+    {
+      "oldId": "lib.footprint.r0603",
+      "newId": "lib.footprint.chip-0603"
+    },
+    {
+      "oldId": "lib.footprint.c0805",
+      "newId": "lib.footprint.chip-0805"
+    },
+    {
+      "oldId": "lib.footprint.passive.0402",
+      "newId": "lib.footprint.chip-0402"
+    },
+    {
+      "oldId": "lib.footprint.passive.0603",
+      "newId": "lib.footprint.chip-0603"
+    },
+    {
+      "oldId": "lib.footprint.passive.0805",
+      "newId": "lib.footprint.chip-0805"
+    },
+    {
+      "oldId": "lib.footprint.passive.1206",
+      "newId": "lib.footprint.chip-1206"
+    },
+    {
+      "oldId": "lib.footprint.passive.1210",
+      "newId": "lib.footprint.chip-1210"
     }
   ],
   "devices": [
@@ -742,19 +770,16 @@
       "displayNameKey": "Resistor",
       "footprints": [
         {
-          "footprintId": "lib.footprint.r0603"
+          "footprintId": "lib.footprint.chip-0603"
         },
         {
-          "footprintId": "lib.footprint.passive.0603"
+          "footprintId": "lib.footprint.chip-0402"
         },
         {
-          "footprintId": "lib.footprint.passive.0402"
+          "footprintId": "lib.footprint.chip-0805"
         },
         {
-          "footprintId": "lib.footprint.passive.0805"
-        },
-        {
-          "footprintId": "lib.footprint.passive.1206"
+          "footprintId": "lib.footprint.chip-1206"
         },
         {
           "footprintId": "lib.footprint.radial5_0"
@@ -1080,19 +1105,16 @@
       "displayNameKey": "Capacitor",
       "footprints": [
         {
-          "footprintId": "lib.footprint.c0805"
+          "footprintId": "lib.footprint.chip-0805"
         },
         {
-          "footprintId": "lib.footprint.passive.0805"
+          "footprintId": "lib.footprint.chip-0402"
         },
         {
-          "footprintId": "lib.footprint.passive.0402"
+          "footprintId": "lib.footprint.chip-0603"
         },
         {
-          "footprintId": "lib.footprint.passive.0603"
-        },
-        {
-          "footprintId": "lib.footprint.passive.1206"
+          "footprintId": "lib.footprint.chip-1206"
         },
         {
           "footprintId": "lib.footprint.radial5_0"
@@ -1192,19 +1214,16 @@
       "displayNameKey": "Inductor",
       "footprints": [
         {
-          "footprintId": "lib.footprint.c0805"
+          "footprintId": "lib.footprint.chip-0805"
         },
         {
-          "footprintId": "lib.footprint.passive.0805"
+          "footprintId": "lib.footprint.chip-0402"
         },
         {
-          "footprintId": "lib.footprint.passive.0402"
+          "footprintId": "lib.footprint.chip-0603"
         },
         {
-          "footprintId": "lib.footprint.passive.0603"
-        },
-        {
-          "footprintId": "lib.footprint.passive.1206"
+          "footprintId": "lib.footprint.chip-1206"
         },
         {
           "footprintId": "lib.footprint.radial5_0"
@@ -1439,7 +1458,7 @@
       "displayNameKey": "Diode",
       "footprints": [
         {
-          "footprintId": "lib.footprint.c0805"
+          "footprintId": "lib.footprint.chip-0805"
         },
         {
           "footprintId": "lib.footprint.do35"
@@ -1554,7 +1573,7 @@
       "displayNameKey": "LED",
       "footprints": [
         {
-          "footprintId": "lib.footprint.c0805"
+          "footprintId": "lib.footprint.chip-0805"
         },
         {
           "footprintId": "lib.footprint.led5mm"
@@ -3461,16 +3480,16 @@
           "footprintId": "lib.footprint.radial5_0"
         },
         {
-          "footprintId": "lib.footprint.passive.0402"
+          "footprintId": "lib.footprint.chip-0402"
         },
         {
-          "footprintId": "lib.footprint.passive.0603"
+          "footprintId": "lib.footprint.chip-0603"
         },
         {
-          "footprintId": "lib.footprint.passive.0805"
+          "footprintId": "lib.footprint.chip-0805"
         },
         {
-          "footprintId": "lib.footprint.passive.1206"
+          "footprintId": "lib.footprint.chip-1206"
         }
       ],
       "id": "lib.passive.ldr",
@@ -3568,16 +3587,16 @@
           "footprintId": "lib.footprint.radial5_0"
         },
         {
-          "footprintId": "lib.footprint.passive.0402"
+          "footprintId": "lib.footprint.chip-0402"
         },
         {
-          "footprintId": "lib.footprint.passive.0603"
+          "footprintId": "lib.footprint.chip-0603"
         },
         {
-          "footprintId": "lib.footprint.passive.0805"
+          "footprintId": "lib.footprint.chip-0805"
         },
         {
-          "footprintId": "lib.footprint.passive.1206"
+          "footprintId": "lib.footprint.chip-1206"
         }
       ],
       "id": "lib.passive.ntc",
@@ -3674,16 +3693,16 @@
           "footprintId": "lib.footprint.radial5_0"
         },
         {
-          "footprintId": "lib.footprint.passive.0402"
+          "footprintId": "lib.footprint.chip-0402"
         },
         {
-          "footprintId": "lib.footprint.passive.0603"
+          "footprintId": "lib.footprint.chip-0603"
         },
         {
-          "footprintId": "lib.footprint.passive.0805"
+          "footprintId": "lib.footprint.chip-0805"
         },
         {
-          "footprintId": "lib.footprint.passive.1206"
+          "footprintId": "lib.footprint.chip-1206"
         }
       ],
       "id": "lib.passive.ptc",
@@ -3780,16 +3799,16 @@
           "footprintId": "lib.footprint.radial2_5"
         },
         {
-          "footprintId": "lib.footprint.passive.0402"
+          "footprintId": "lib.footprint.chip-0402"
         },
         {
-          "footprintId": "lib.footprint.passive.0603"
+          "footprintId": "lib.footprint.chip-0603"
         },
         {
-          "footprintId": "lib.footprint.passive.0805"
+          "footprintId": "lib.footprint.chip-0805"
         },
         {
-          "footprintId": "lib.footprint.passive.1206"
+          "footprintId": "lib.footprint.chip-1206"
         },
         {
           "footprintId": "lib.footprint.radial5_0"
@@ -12804,118 +12823,6 @@
       ]
     },
     {
-      "displayNameKey": "Resistor 0603",
-      "id": "lib.footprint.r0603",
-      "pads": [
-        {
-          "drill": 0,
-          "height": 0.95,
-          "layers": 1,
-          "number": 1,
-          "shape": "rect",
-          "width": 0.8
-        },
-        {
-          "drill": 0,
-          "height": 0.95,
-          "layers": 1,
-          "number": 2,
-          "shape": "rect",
-          "width": 0.8
-        }
-      ],
-      "pins": [
-        [
-          -0.8,
-          0
-        ],
-        [
-          0.8,
-          0
-        ]
-      ],
-      "prefix": "R",
-      "shapes": [
-        {
-          "closed": true,
-          "points": [
-            [
-              -1.45,
-              -0.8
-            ],
-            [
-              1.45,
-              -0.8
-            ],
-            [
-              1.45,
-              0.8
-            ],
-            [
-              -1.45,
-              0.8
-            ]
-          ]
-        }
-      ]
-    },
-    {
-      "displayNameKey": "Capacitor 0805",
-      "id": "lib.footprint.c0805",
-      "pads": [
-        {
-          "drill": 0,
-          "height": 1.3,
-          "layers": 1,
-          "number": 1,
-          "shape": "rect",
-          "width": 1
-        },
-        {
-          "drill": 0,
-          "height": 1.3,
-          "layers": 1,
-          "number": 2,
-          "shape": "rect",
-          "width": 1
-        }
-      ],
-      "pins": [
-        [
-          -0.95,
-          0
-        ],
-        [
-          0.95,
-          0
-        ]
-      ],
-      "prefix": "C",
-      "shapes": [
-        {
-          "closed": true,
-          "points": [
-            [
-              -1.8,
-              -1
-            ],
-            [
-              1.8,
-              -1
-            ],
-            [
-              1.8,
-              1
-            ],
-            [
-              -1.8,
-              1
-            ]
-          ]
-        }
-      ]
-    },
-    {
       "displayNameKey": "SOT-23",
       "id": "lib.footprint.sot23",
       "pads": [
@@ -13743,631 +13650,6 @@
             [
               -0.6652240934977428,
               -0.676536686473018
-            ]
-          ]
-        }
-      ]
-    },
-    {
-      "displayNameKey": "SMD passive 0402",
-      "id": "lib.footprint.passive.0402",
-      "pads": [
-        {
-          "drill": 0,
-          "height": 0.6,
-          "layers": 1,
-          "number": 1,
-          "shape": "rect",
-          "width": 0.55
-        },
-        {
-          "drill": 0,
-          "height": 0.6,
-          "layers": 1,
-          "number": 2,
-          "shape": "rect",
-          "width": 0.55
-        }
-      ],
-      "pins": [
-        [
-          -0.45,
-          0
-        ],
-        [
-          0.45,
-          0
-        ]
-      ],
-      "shapes": [
-        {
-          "closed": true,
-          "points": [
-            [
-              -0.55,
-              -0.3
-            ],
-            [
-              0.55,
-              -0.3
-            ],
-            [
-              0.55,
-              0.3
-            ],
-            [
-              -0.55,
-              0.3
-            ]
-          ]
-        },
-        {
-          "closed": true,
-          "filled": true,
-          "points": [
-            [
-              -0.9750000000000001,
-              -0.75
-            ],
-            [
-              -0.9902240934977427,
-              -0.6734633135269821
-            ],
-            [
-              -1.0335786437626906,
-              -0.6085786437626906
-            ],
-            [
-              -1.0984633135269821,
-              -0.5652240934977426
-            ],
-            [
-              -1.175,
-              -0.55
-            ],
-            [
-              -1.251536686473018,
-              -0.5652240934977426
-            ],
-            [
-              -1.3164213562373095,
-              -0.6085786437626904
-            ],
-            [
-              -1.3597759065022574,
-              -0.6734633135269821
-            ],
-            [
-              -1.375,
-              -0.75
-            ],
-            [
-              -1.3597759065022574,
-              -0.8265366864730179
-            ],
-            [
-              -1.3164213562373095,
-              -0.8914213562373094
-            ],
-            [
-              -1.2515366864730182,
-              -0.9347759065022573
-            ],
-            [
-              -1.175,
-              -0.95
-            ],
-            [
-              -1.0984633135269821,
-              -0.9347759065022574
-            ],
-            [
-              -1.0335786437626906,
-              -0.8914213562373096
-            ],
-            [
-              -0.9902240934977428,
-              -0.8265366864730181
-            ]
-          ]
-        }
-      ]
-    },
-    {
-      "displayNameKey": "SMD passive 0603",
-      "id": "lib.footprint.passive.0603",
-      "pads": [
-        {
-          "drill": 0,
-          "height": 0.95,
-          "layers": 1,
-          "number": 1,
-          "shape": "rect",
-          "width": 0.8
-        },
-        {
-          "drill": 0,
-          "height": 0.95,
-          "layers": 1,
-          "number": 2,
-          "shape": "rect",
-          "width": 0.8
-        }
-      ],
-      "pins": [
-        [
-          -0.8,
-          0
-        ],
-        [
-          0.8,
-          0
-        ]
-      ],
-      "shapes": [
-        {
-          "closed": true,
-          "points": [
-            [
-              -0.85,
-              -0.45
-            ],
-            [
-              0.85,
-              -0.45
-            ],
-            [
-              0.85,
-              0.45
-            ],
-            [
-              -0.85,
-              0.45
-            ]
-          ]
-        },
-        {
-          "closed": true,
-          "filled": true,
-          "points": [
-            [
-              -1.4500000000000002,
-              -0.925
-            ],
-            [
-              -1.4652240934977427,
-              -0.8484633135269821
-            ],
-            [
-              -1.5085786437626907,
-              -0.7835786437626906
-            ],
-            [
-              -1.5734633135269822,
-              -0.7402240934977427
-            ],
-            [
-              -1.6500000000000001,
-              -0.7250000000000001
-            ],
-            [
-              -1.726536686473018,
-              -0.7402240934977427
-            ],
-            [
-              -1.7914213562373096,
-              -0.7835786437626905
-            ],
-            [
-              -1.8347759065022575,
-              -0.8484633135269821
-            ],
-            [
-              -1.85,
-              -0.925
-            ],
-            [
-              -1.8347759065022575,
-              -1.001536686473018
-            ],
-            [
-              -1.7914213562373096,
-              -1.0664213562373095
-            ],
-            [
-              -1.7265366864730183,
-              -1.1097759065022574
-            ],
-            [
-              -1.6500000000000001,
-              -1.125
-            ],
-            [
-              -1.5734633135269822,
-              -1.1097759065022574
-            ],
-            [
-              -1.5085786437626907,
-              -1.0664213562373095
-            ],
-            [
-              -1.4652240934977427,
-              -1.0015366864730182
-            ]
-          ]
-        }
-      ]
-    },
-    {
-      "displayNameKey": "SMD passive 0805",
-      "id": "lib.footprint.passive.0805",
-      "pads": [
-        {
-          "drill": 0,
-          "height": 1.3,
-          "layers": 1,
-          "number": 1,
-          "shape": "rect",
-          "width": 1
-        },
-        {
-          "drill": 0,
-          "height": 1.3,
-          "layers": 1,
-          "number": 2,
-          "shape": "rect",
-          "width": 1
-        }
-      ],
-      "pins": [
-        [
-          -0.95,
-          0
-        ],
-        [
-          0.95,
-          0
-        ]
-      ],
-      "shapes": [
-        {
-          "closed": true,
-          "points": [
-            [
-              -1.05,
-              -0.65
-            ],
-            [
-              1.05,
-              -0.65
-            ],
-            [
-              1.05,
-              0.65
-            ],
-            [
-              -1.05,
-              0.65
-            ]
-          ]
-        },
-        {
-          "closed": true,
-          "filled": true,
-          "points": [
-            [
-              -1.7,
-              -1.1
-            ],
-            [
-              -1.7152240934977425,
-              -1.0234633135269822
-            ],
-            [
-              -1.7585786437626905,
-              -0.9585786437626906
-            ],
-            [
-              -1.823463313526982,
-              -0.9152240934977427
-            ],
-            [
-              -1.9,
-              -0.9000000000000001
-            ],
-            [
-              -1.9765366864730178,
-              -0.9152240934977427
-            ],
-            [
-              -2.0414213562373096,
-              -0.9585786437626905
-            ],
-            [
-              -2.0847759065022573,
-              -1.0234633135269822
-            ],
-            [
-              -2.1,
-              -1.1
-            ],
-            [
-              -2.0847759065022573,
-              -1.176536686473018
-            ],
-            [
-              -2.0414213562373096,
-              -1.2414213562373095
-            ],
-            [
-              -1.976536686473018,
-              -1.2847759065022575
-            ],
-            [
-              -1.9,
-              -1.3
-            ],
-            [
-              -1.823463313526982,
-              -1.2847759065022575
-            ],
-            [
-              -1.7585786437626905,
-              -1.2414213562373095
-            ],
-            [
-              -1.7152240934977425,
-              -1.1765366864730182
-            ]
-          ]
-        }
-      ]
-    },
-    {
-      "displayNameKey": "SMD passive 1206",
-      "id": "lib.footprint.passive.1206",
-      "pads": [
-        {
-          "drill": 0,
-          "height": 1.6,
-          "layers": 1,
-          "number": 1,
-          "shape": "rect",
-          "width": 1.2
-        },
-        {
-          "drill": 0,
-          "height": 1.6,
-          "layers": 1,
-          "number": 2,
-          "shape": "rect",
-          "width": 1.2
-        }
-      ],
-      "pins": [
-        [
-          -1.6,
-          0
-        ],
-        [
-          1.6,
-          0
-        ]
-      ],
-      "shapes": [
-        {
-          "closed": true,
-          "points": [
-            [
-              -1.65,
-              -0.85
-            ],
-            [
-              1.65,
-              -0.85
-            ],
-            [
-              1.65,
-              0.85
-            ],
-            [
-              -1.65,
-              0.85
-            ]
-          ]
-        },
-        {
-          "closed": true,
-          "filled": true,
-          "points": [
-            [
-              -2.45,
-              -1.25
-            ],
-            [
-              -2.465224093497743,
-              -1.173463313526982
-            ],
-            [
-              -2.5085786437626907,
-              -1.1085786437626906
-            ],
-            [
-              -2.5734633135269824,
-              -1.0652240934977426
-            ],
-            [
-              -2.6500000000000004,
-              -1.05
-            ],
-            [
-              -2.7265366864730183,
-              -1.0652240934977426
-            ],
-            [
-              -2.79142135623731,
-              -1.1085786437626906
-            ],
-            [
-              -2.8347759065022577,
-              -1.173463313526982
-            ],
-            [
-              -2.8500000000000005,
-              -1.25
-            ],
-            [
-              -2.8347759065022577,
-              -1.326536686473018
-            ],
-            [
-              -2.79142135623731,
-              -1.3914213562373094
-            ],
-            [
-              -2.7265366864730183,
-              -1.4347759065022574
-            ],
-            [
-              -2.6500000000000004,
-              -1.45
-            ],
-            [
-              -2.5734633135269824,
-              -1.4347759065022574
-            ],
-            [
-              -2.5085786437626907,
-              -1.3914213562373094
-            ],
-            [
-              -2.465224093497743,
-              -1.3265366864730181
-            ]
-          ]
-        }
-      ]
-    },
-    {
-      "displayNameKey": "SMD passive 1210",
-      "id": "lib.footprint.passive.1210",
-      "pads": [
-        {
-          "drill": 0,
-          "height": 2.8,
-          "layers": 1,
-          "number": 1,
-          "shape": "rect",
-          "width": 1.2
-        },
-        {
-          "drill": 0,
-          "height": 2.8,
-          "layers": 1,
-          "number": 2,
-          "shape": "rect",
-          "width": 1.2
-        }
-      ],
-      "pins": [
-        [
-          -1.6,
-          0
-        ],
-        [
-          1.6,
-          0
-        ]
-      ],
-      "shapes": [
-        {
-          "closed": true,
-          "points": [
-            [
-              -1.65,
-              -1.3
-            ],
-            [
-              1.65,
-              -1.3
-            ],
-            [
-              1.65,
-              1.3
-            ],
-            [
-              -1.65,
-              1.3
-            ]
-          ]
-        },
-        {
-          "closed": true,
-          "filled": true,
-          "points": [
-            [
-              -2.45,
-              -1.8499999999999999
-            ],
-            [
-              -2.465224093497743,
-              -1.773463313526982
-            ],
-            [
-              -2.5085786437626907,
-              -1.7085786437626904
-            ],
-            [
-              -2.5734633135269824,
-              -1.6652240934977425
-            ],
-            [
-              -2.6500000000000004,
-              -1.65
-            ],
-            [
-              -2.7265366864730183,
-              -1.6652240934977425
-            ],
-            [
-              -2.79142135623731,
-              -1.7085786437626904
-            ],
-            [
-              -2.8347759065022577,
-              -1.773463313526982
-            ],
-            [
-              -2.8500000000000005,
-              -1.8499999999999999
-            ],
-            [
-              -2.8347759065022577,
-              -1.9265366864730178
-            ],
-            [
-              -2.79142135623731,
-              -1.9914213562373093
-            ],
-            [
-              -2.7265366864730183,
-              -2.034775906502257
-            ],
-            [
-              -2.6500000000000004,
-              -2.05
-            ],
-            [
-              -2.5734633135269824,
-              -2.034775906502257
-            ],
-            [
-              -2.5085786437626907,
-              -1.9914213562373093
-            ],
-            [
-              -2.465224093497743,
-              -1.926536686473018
             ]
           ]
         }
@@ -37592,6 +36874,125 @@
           ]
         }
       ]
+    },
+    {
+      "id": "lib.footprint.chip-1206",
+      "displayNameKey": "Chip 1206",
+      "params": {
+        "style": "two-terminal",
+        "padCount": 2,
+        "pitch": 0,
+        "rowSpacing": 3.2,
+        "shape": "rect",
+        "padWidth": 1,
+        "padLength": 1.5,
+        "drill": 0,
+        "bodyWidth": 0,
+        "bodyLength": 0
+      },
+      "source": "YAGEO Chip Resistor Surface Mount - Mounting, Product Specification, Feb. 13 2018 V.10, Table 1 (reflow soldering)"
+    },
+    {
+      "id": "lib.footprint.chip-1210",
+      "displayNameKey": "Chip 1210",
+      "params": {
+        "style": "two-terminal",
+        "padCount": 2,
+        "pitch": 0,
+        "rowSpacing": 3.2,
+        "shape": "rect",
+        "padWidth": 1,
+        "padLength": 2.4,
+        "drill": 0,
+        "bodyWidth": 0,
+        "bodyLength": 0
+      },
+      "source": "YAGEO Chip Resistor Surface Mount - Mounting, Product Specification, Feb. 13 2018 V.10, Table 1 (reflow soldering)"
+    },
+    {
+      "id": "lib.footprint.chip-2010",
+      "displayNameKey": "Chip 2010",
+      "params": {
+        "style": "two-terminal",
+        "padCount": 2,
+        "pitch": 0,
+        "rowSpacing": 4.7,
+        "shape": "rect",
+        "padWidth": 1.4,
+        "padLength": 2.4,
+        "drill": 0,
+        "bodyWidth": 0,
+        "bodyLength": 0
+      },
+      "source": "YAGEO Chip Resistor Surface Mount - Mounting, Product Specification, Feb. 13 2018 V.10, Table 1 (reflow soldering)"
+    },
+    {
+      "id": "lib.footprint.chip-2512",
+      "displayNameKey": "Chip 2512",
+      "params": {
+        "style": "two-terminal",
+        "padCount": 2,
+        "pitch": 0,
+        "rowSpacing": 6.2,
+        "shape": "rect",
+        "padWidth": 1.8,
+        "padLength": 4,
+        "drill": 0,
+        "bodyWidth": 0,
+        "bodyLength": 0
+      },
+      "source": "YAGEO Chip Resistor Surface Mount - Mounting, Product Specification, Feb. 13 2018 V.10, Table 1 (reflow soldering)"
+    },
+    {
+      "id": "lib.footprint.chip-0402",
+      "displayNameKey": "Chip 0402",
+      "params": {
+        "style": "two-terminal",
+        "padCount": 2,
+        "pitch": 0,
+        "rowSpacing": 1,
+        "shape": "rect",
+        "padWidth": 0.5,
+        "padLength": 0.6,
+        "drill": 0,
+        "bodyWidth": 0,
+        "bodyLength": 0
+      },
+      "source": "YAGEO Chip Resistor Surface Mount - Mounting, Product Specification, Feb. 13 2018 V.10, Table 1 (reflow soldering)"
+    },
+    {
+      "id": "lib.footprint.chip-0603",
+      "displayNameKey": "Chip 0603",
+      "params": {
+        "style": "two-terminal",
+        "padCount": 2,
+        "pitch": 0,
+        "rowSpacing": 1.7,
+        "shape": "rect",
+        "padWidth": 0.9,
+        "padLength": 0.8,
+        "drill": 0,
+        "bodyWidth": 0,
+        "bodyLength": 0
+      },
+      "source": "YAGEO Chip Resistor Surface Mount - Mounting, Product Specification, Feb. 13 2018 V.10, Table 1 (reflow soldering)"
+    },
+    {
+      "id": "lib.footprint.chip-0805",
+      "displayNameKey": "Chip 0805",
+      "params": {
+        "style": "two-terminal",
+        "padCount": 2,
+        "pitch": 0,
+        "rowSpacing": 2.1,
+        "shape": "rect",
+        "padWidth": 0.9,
+        "padLength": 1.2,
+        "drill": 0,
+        "bodyWidth": 0,
+        "bodyLength": 0
+      },
+      "source": "YAGEO Chip Resistor Surface Mount - Mounting, Product Specification, Feb. 13 2018 V.10, Table 1 (reflow soldering)"
     }
   ]
 }
