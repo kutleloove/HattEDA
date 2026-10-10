@@ -2802,7 +2802,7 @@ void MainWindow::createNewProject() {
     QDialog dialog(this);
     dialog.setObjectName(QStringLiteral("NewProjectDialog"));
     dialog.setWindowTitle(tr("New project"));
-    dialog.setMinimumWidth(500);
+    dialog.setMinimumWidth(600);
     auto* layout = new QVBoxLayout(&dialog);
     layout->addWidget(label(tr("Create a HattEDA project"), QStringLiteral("WorkspaceTitle"), &dialog));
     auto* form = new QFormLayout;
@@ -2822,25 +2822,32 @@ void MainWindow::createNewProject() {
     auto* description = new QLabel(tr("Start with an empty schematic and PCB."), &dialog);
     description->setObjectName(QStringLiteral("NewProjectTemplateDescription"));
     description->setWordWrap(true);
+    description->setMinimumHeight(40);
     for (int i = 0; i <= entries.size(); ++i) {
         const QString id = i == 0 ? QStringLiteral("blank") : entries[i - 1].id;
         auto* card = new QToolButton(&dialog);
         card->setObjectName(QStringLiteral("hatteda.template.%1").arg(id));
         card->setText(i == 0 ? tr("Blank project") : entries[i - 1].title);
         card->setCheckable(true);
+        card->setProperty("templateCard", true);
         card->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
         card->setIconSize({170, 100});
         DesignCanvas preview(Workspace::Schematic);
+        preview.setMinimumSize(0, 0);
         preview.resize(340, 200);
         preview.setPalette(palette());
         if (i > 0) {
             const auto loaded = loadProjectTemplate(id);
             card->setEnabled(loaded.ok());
-            preview.restore(loaded.project.schematic, {});
+            auto drawing = loaded.project.schematic;
+            drawing.erase(std::remove_if(drawing.begin(), drawing.end(), [](const SketchItem& item) {
+                return item.kind == SketchItem::Kind::Text;
+            }), drawing.end());
+            preview.restore(drawing, {});
             preview.zoomToFit();
             card->setToolTip(loaded.ok() ? entries[i - 1].description : loaded.error);
         }
-        card->setIcon(QIcon(preview.grab()));
+        card->setIcon(QIcon(preview.grab(QRect(0, 0, 340, 178))));
         templates->addButton(card, i);
         cards->addWidget(card);
         connect(card, &QToolButton::clicked, &dialog, [description, entries, i, this] {

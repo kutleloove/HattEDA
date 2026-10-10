@@ -90,6 +90,8 @@ void Theme::apply(QApplication& application, ThemeMode mode) {
         QPushButton[quiet="true"]:hover { background: #222d38; color: #ffffff; border-color: #3b4a58; }
         #WorkspaceHeader { background: #121920; border-bottom: 1px solid #232e39; }
         #WorkspaceTitle { color: #f0f4f8; font-size: 18px; font-weight: 650; }
+        QToolButton[templateCard="true"] { background: #151b22; color: #dfe6ed; border: 1px solid #34414e; border-radius: 5px; padding: 6px; }
+        QToolButton[templateCard="true"]:checked { background: #163431; border: 2px solid #18b6a4; }
         #WorkspaceSubtitle { color: #7f8d9a; }
         #CanvasSurface { background: #0b1016; border: 1px solid #26313d; border-radius: 8px; }
         #EmptyTitle { color: #dfe6ed; font-size: 16px; font-weight: 600; }
@@ -112,6 +114,10 @@ void Theme::apply(QApplication& application, ThemeMode mode) {
     if (mode == ThemeMode::Light) {
         styleSheet += QStringLiteral(R"(
             QMainWindow, #WelcomePage { background: #f3f5f7; }
+            #WorkspaceTitle, #WelcomeTitle, #ProjectTitle { color: #26323d; }
+            QLineEdit { background: #ffffff; color: #26323d; border-color: #bfc8d0; }
+            QToolButton[templateCard="true"] { background: #ffffff; color: #26323d; border-color: #bfc8d0; }
+            QToolButton[templateCard="true"]:checked { background: #d7eeea; border-color: #087f73; }
             QMenuBar, #DocumentBar, #CommandBar, #AlignmentBar { background: #eef1f4; color: #34404b; border-color: #cbd2d9; }
             QPushButton[snap="true"] { color: #53616c; border-color: #bcc6cf; }
             QPushButton[snap="true"]:checked { background: #d7eeea; color: #075f57; border-color: #55a79f; }

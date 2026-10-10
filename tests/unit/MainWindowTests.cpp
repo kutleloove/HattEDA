@@ -159,7 +159,9 @@ void MainWindowTests::basicTemplatesCreateIndependentProjects() {
         QVERIFY(original.project.schematic[i].id != copy.project.schematic[i].id);
     QVERIFY(!loadProjectTemplate("unknown").ok());
     const auto erc = runElectricalRuleCheck(original.project.schematic);
-    QCOMPARE(erc.count(CheckSeverity::Error), 0);
+    QStringList violations;
+    for (const auto& violation : erc.violations) violations.append(violation.message);
+    QVERIFY2(violations.isEmpty(), qPrintable(violations.join("; ")));
     const auto snapshot = analyzeSchematic(original.project.schematic);
     QVERIFY2(snapshot.simulationErrors.isEmpty(), qPrintable(snapshot.simulationErrors.join("; ")));
     const auto result = hatt::electrical::solveDc(snapshot.dc);
@@ -178,6 +180,11 @@ void MainWindowTests::basicTemplatesCreateIndependentProjects() {
         QVERIFY(dialog);
         QTimer::singleShot(5000, dialog, &QDialog::reject);
         QVERIFY(dialog->findChild<QButtonGroup*>("NewProjectTemplates"));
+        auto* title = dialog->findChild<QLabel*>("WorkspaceTitle");
+        QVERIFY(title);
+        title->ensurePolished();
+        QVERIFY(light ? title->palette().color(QPalette::WindowText).lightness() < 100
+                      : title->palette().color(QPalette::WindowText).lightness() > 170);
         auto* card = dialog->findChild<QToolButton*>("hatteda.template." + templateId);
         QVERIFY(card && card->isEnabled());
         QVERIFY(!card->icon().isNull());
