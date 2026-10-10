@@ -92,7 +92,11 @@ docs/                   HATT-SPEC-0001 ana gereksinim belgesi
 - AI ve bulut uygulamanın çalışması için zorunlu değildir.
 - Yeni bağımlılık, kalıcı format alanı veya katmanlar arası bağımlılık ADR ve test olmadan eklenmez.
 
-## Yakın yol haritası
+## İlk MVP yayını
+
+Güncel eksikler, PR sırası, bağımlılıklar ve yayın kabul ölçütleri [MVP yayın hazırlığı](docs/releases/mvp-readiness.md) belgesinde izlenir. #60 kütüphane yenilemesi ve açık simülasyon PR #74 bu listede ayrıca ele alınır.
+
+## Sonraki mimari yol haritası
 
 1. `HATT-002`: kimlikler, `Result/Error` ve logging temeli
 2. `HATT-003`: fixed-point birimler ve geometri primitive'leri
@@ -101,7 +105,7 @@ docs/                   HATT-SPEC-0001 ana gereksinim belgesi
 5. `HATT-033`: Plugin API ve `ContributionRegistry`
 6. `HATT-034`: güvenilir native Qt plugin loader ve örnek plugin
 
-Geçici şema/PCB editörü, sağ tık özellikleri, netlist, PCB aktarımı/bağlantı rehberi ve direnç/DC kaynakları için çalışma noktası simülasyonu uygulanmıştır. Kalıcı proje dosyası, tam ERC/DRC, AC/transient simülasyon ve gerçek plugin yükleme henüz yoktur. [Kullanım ve sınırlar](docs/architecture/circuit-workflow.md).
+Geçici şema/PCB editörü, sağ tık özellikleri, netlist, PCB aktarımı/bağlantı rehberi ve direnç/DC kaynakları için çalışma noktası simülasyonu uygulanmıştır. Sürümlü `.hatt` proje kaydı, otomatik kayıt/kurtarma, ERC/DRC, net sınıfları ve üretim çıktıları uygulanmıştır. AC/transient ve gerçek plugin yükleme henüz yoktur. Doğrusal olmayan DC modelleri çekirdekte bulunur; katalogdan simülasyona UI bağlantısı henüz tamamlanmamıştır. [Kullanım ve sınırlar](docs/architecture/circuit-workflow.md).
 
 ## Katkı
 
@@ -114,3 +118,4 @@ HattEDA, isteğe bağlı otomatik yol yönlendirme (autorouting) için [Freerout
 ## Lisans
 
 HattEDA, [GNU General Public License v3.0](LICENSE) altında lisanslanmıştır. Copyright (C) 2026 Murat Çuka.
+
