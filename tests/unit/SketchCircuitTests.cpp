@@ -85,6 +85,10 @@ private slots:
         terminal("schematic.junction", {}, {100, 80});
         ProjectData project;
         project.schematic = document;
+        for (auto& item : project.schematic) {
+            if (item.kind == SketchItem::Kind::Symbol) item.variant = findSymbol(item.variant)->id;
+            if (!item.footprint.isEmpty()) item.footprint = findSymbol(item.footprint)->id;
+        }
         const auto loaded = parseProject(serializeProject(project));
         QVERIFY2(loaded.ok(), qPrintable(loaded.error));
         QVERIFY(std::any_of(loaded.project.schematic.begin(), loaded.project.schematic.end(), [](const SketchItem& item) {
