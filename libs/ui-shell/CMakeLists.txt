@@ -68,12 +68,19 @@ add_library(hatt-ui-shell STATIC
     src/SketchClipboard.cpp
     include/hatt/ui/LibraryModel.hpp
     src/LibraryModel.cpp
+    include/hatt/ui/ProjectTemplates.hpp
+    src/ProjectTemplates.cpp
 )
 
 qt_add_resources(hatt-ui-shell "builtin-library"
     PREFIX "/library"
     BASE "resources/library"
     FILES resources/library/builtin.json
+)
+qt_add_resources(hatt-ui-shell "project_templates"
+    PREFIX "/templates"
+    BASE "resources/templates"
+    FILES resources/templates/divider.hatt resources/templates/led.hatt
 )
 
 add_library(HattEDA::UiShell ALIAS hatt-ui-shell)

@@ -22,6 +22,7 @@
 #include "hatt/ui/ProjectSafety.hpp"
 #include "hatt/ui/RoutingStyles.hpp"
 #include "hatt/ui/SketchCircuit.hpp"
+#include "hatt/ui/ProjectTemplates.hpp"
 #include "hatt/ui/Theme.hpp"
 
 #include <QAction>
@@ -2813,6 +2814,42 @@ void MainWindow::createNewProject() {
     form->addRow(tr("Project name"), name);
     form->addRow(tr("Location"), location);
     layout->addLayout(form);
+    layout->addWidget(new QLabel(tr("Basic circuits"), &dialog));
+    auto* templates = new QButtonGroup(&dialog);
+    templates->setObjectName(QStringLiteral("NewProjectTemplates"));
+    auto* cards = new QHBoxLayout;
+    const auto entries = projectTemplates();
+    auto* description = new QLabel(tr("Start with an empty schematic and PCB."), &dialog);
+    description->setObjectName(QStringLiteral("NewProjectTemplateDescription"));
+    description->setWordWrap(true);
+    for (int i = 0; i <= entries.size(); ++i) {
+        const QString id = i == 0 ? QStringLiteral("blank") : entries[i - 1].id;
+        auto* card = new QToolButton(&dialog);
+        card->setObjectName(QStringLiteral("hatteda.template.%1").arg(id));
+        card->setText(i == 0 ? tr("Blank project") : entries[i - 1].title);
+        card->setCheckable(true);
+        card->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
+        card->setIconSize({170, 100});
+        DesignCanvas preview(Workspace::Schematic);
+        preview.resize(340, 200);
+        preview.setPalette(palette());
+        if (i > 0) {
+            const auto loaded = loadProjectTemplate(id);
+            card->setEnabled(loaded.ok());
+            preview.restore(loaded.project.schematic, {});
+            preview.zoomToFit();
+            card->setToolTip(loaded.ok() ? entries[i - 1].description : loaded.error);
+        }
+        card->setIcon(QIcon(preview.grab()));
+        templates->addButton(card, i);
+        cards->addWidget(card);
+        connect(card, &QToolButton::clicked, &dialog, [description, entries, i, this] {
+            description->setText(i == 0 ? tr("Start with an empty schematic and PCB.") : entries[i - 1].description);
+        });
+        if (i == 0) card->setChecked(true);
+    }
+    layout->addLayout(cards);
+    layout->addWidget(description);
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Cancel | QDialogButtonBox::Ok, &dialog);
     buttons->button(QDialogButtonBox::Ok)->setText(tr("Create project"));
     connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
@@ -2826,11 +2863,19 @@ void MainWindow::createNewProject() {
     const QString path = directory.filePath(projectName + QStringLiteral(".hatt"));
     if (QFileInfo::exists(path) &&
         QMessageBox::question(this, tr("New project"),
-                              tr("%1 already exists. Replace it with an empty project?")
+                              tr("%1 already exists. Replace it with the selected project?")
                                   .arg(QDir::toNativeSeparators(path))) != QMessageBox::Yes) {
         return;
     }
     ProjectData project;
+    if (templates->checkedId() > 0) {
+        const auto loaded = loadProjectTemplate(entries[templates->checkedId() - 1].id);
+        if (!loaded.ok()) {
+            QMessageBox::warning(this, tr("New project"), loaded.error);
+            return;
+        }
+        project = loaded.project;
+    }
     project.name = projectName;
     QString error = QDir().mkpath(directory.absolutePath())
                         ? projectGuard_->save(path, project)

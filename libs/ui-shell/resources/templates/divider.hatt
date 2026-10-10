@@ -1,0 +1,167 @@
+{
+  "format": "hatteda-project",
+  "formatVersion": 3,
+  "name": "divider",
+  "schematic": {
+    "items": [
+      {
+        "id": "df331f4a-fe0d-448c-97f2-f303f926289e",
+        "kind": "symbol",
+        "points": [
+          [
+            20.32,
+            30.48
+          ]
+        ],
+        "variant": "lib.source.dc-voltage",
+        "label": "V1",
+        "value": "5",
+        "footprint": "lib.footprint.header-1x2",
+        "pinPadMap": [
+          1,
+          2
+        ]
+      },
+      {
+        "id": "934b3754-2dbb-425f-b00d-e54ca2f0f80d",
+        "kind": "symbol",
+        "points": [
+          [
+            45.72,
+            20.32
+          ]
+        ],
+        "variant": "lib.passive.resistor",
+        "label": "R1",
+        "value": "1k",
+        "footprint": "lib.footprint.chip-0603",
+        "pinPadMap": [
+          1,
+          2
+        ]
+      },
+      {
+        "id": "53be9e25-5ab0-4e92-8df4-d07093e34d04",
+        "kind": "symbol",
+        "points": [
+          [
+            60.96,
+            30.48
+          ]
+        ],
+        "variant": "lib.passive.resistor",
+        "label": "R2",
+        "value": "1k",
+        "quarterTurns": 1,
+        "footprint": "lib.footprint.chip-0603",
+        "pinPadMap": [
+          1,
+          2
+        ]
+      },
+      {
+        "id": "34e63502-179b-4db9-af29-b20228e5b011",
+        "kind": "symbol",
+        "points": [
+          [
+            20.32,
+            45.72
+          ]
+        ],
+        "variant": "lib.terminal.ground",
+        "label": ""
+      },
+      {
+        "id": "3e457784-89fe-4801-ae4c-2c8f6237c0a7",
+        "kind": "symbol",
+        "points": [
+          [
+            60.96,
+            20.32
+          ]
+        ],
+        "variant": "lib.probe.voltage",
+        "label": "VOUT"
+      },
+      {
+        "id": "2f12934b-c6f6-44a3-a1bd-43c98c507ab0",
+        "kind": "wire",
+        "points": [
+          [
+            20.32,
+            25.4
+          ],
+          [
+            20.32,
+            20.32
+          ],
+          [
+            40.64,
+            20.32
+          ]
+        ]
+      },
+      {
+        "id": "2b37189c-21b0-447c-8ded-1de8f5fb06e0",
+        "kind": "wire",
+        "points": [
+          [
+            50.8,
+            20.32
+          ],
+          [
+            60.96,
+            20.32
+          ],
+          [
+            60.96,
+            25.4
+          ]
+        ]
+      },
+      {
+        "id": "b6dfb3dc-7ce1-4246-95f5-2db393fe64ed",
+        "kind": "wire",
+        "points": [
+          [
+            20.32,
+            35.56
+          ],
+          [
+            20.32,
+            45.72
+          ],
+          [
+            60.96,
+            45.72
+          ],
+          [
+            60.96,
+            35.56
+          ]
+        ]
+      },
+      {
+        "id": "4732c843-f0a2-4693-810d-06f5d7dbe734",
+        "kind": "text",
+        "points": [
+          [
+            20.32,
+            7.62
+          ]
+        ],
+        "label": "Equal resistors halve the supply.\nVOUT = 5 V / 2 = 2.5 V.",
+        "width": 1.5
+      }
+    ]
+  },
+  "board": {
+    "items": []
+  },
+  "library": {
+    "devices": [
+      "lib.source.dc-voltage",
+      "lib.passive.resistor"
+    ]
+  }
+}

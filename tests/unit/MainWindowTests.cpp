@@ -3,6 +3,7 @@
 #include "hatt/ui/DesignCanvas.hpp"
 #include "hatt/ui/MainWindow.hpp"
 #include "hatt/ui/ProjectFile.hpp"
+#include "hatt/ui/ProjectTemplates.hpp"
 #include "hatt/ui/LayerColors.hpp"
 #include "hatt/ui/PadStyles.hpp"
 #include "hatt/ui/RoutingStyles.hpp"
@@ -12,6 +13,7 @@
 
 #include <QAction>
 #include <QApplication>
+#include <QButtonGroup>
 #include <QClipboard>
 #include <QDialog>
 #include <QDialogButtonBox>
@@ -41,6 +43,7 @@
 #include <QTreeWidget>
 #include <QUndoStack>
 #include <QtTest>
+#include <cmath>
 
 using hatt::ui::CanvasTool;
 using hatt::ui::DesignCanvas;
@@ -101,6 +104,8 @@ private slots:
     void boardUnitsFollowPreference();
     void arrayDialogCreatesGrid();
     void projectSaveOpenAndUnsavedChanges();
+    void basicTemplatesCreateIndependentProjects_data();
+    void basicTemplatesCreateIndependentProjects();
     void contextPropertiesAcceptAndCancel();
     void propertyCoordinatesUseEngineeringYAxis_data();
     void propertyCoordinatesUseEngineeringYAxis();
@@ -131,6 +136,70 @@ private slots:
 private:
     QTemporaryDir settingsDir_;
 };
+
+void MainWindowTests::basicTemplatesCreateIndependentProjects_data() {
+    QTest::addColumn<QString>("templateId");
+    QTest::addColumn<bool>("light");
+    for (const char* id : {"divider", "led"}) {
+        QTest::newRow(qPrintable(QString("%1-light").arg(id))) << QString(id) << true;
+        QTest::newRow(qPrintable(QString("%1-dark").arg(id))) << QString(id) << false;
+    }
+}
+
+void MainWindowTests::basicTemplatesCreateIndependentProjects() {
+    using namespace hatt::ui;
+    QFETCH(QString, templateId);
+    QFETCH(bool, light);
+    const auto original = loadProjectTemplate(templateId);
+    const auto copy = loadProjectTemplate(templateId);
+    QVERIFY2(original.ok(), qPrintable(original.error));
+    QVERIFY(original.warnings.isEmpty());
+    QCOMPARE(original.project.schematic.size(), copy.project.schematic.size());
+    for (qsizetype i = 0; i < original.project.schematic.size(); ++i)
+        QVERIFY(original.project.schematic[i].id != copy.project.schematic[i].id);
+    QVERIFY(!loadProjectTemplate("unknown").ok());
+    const auto erc = runElectricalRuleCheck(original.project.schematic);
+    QCOMPARE(erc.count(CheckSeverity::Error), 0);
+    const auto snapshot = analyzeSchematic(original.project.schematic);
+    QVERIFY2(snapshot.simulationErrors.isEmpty(), qPrintable(snapshot.simulationErrors.join("; ")));
+    const auto result = hatt::electrical::solveDc(snapshot.dc);
+    QVERIFY2(result.success, result.error.c_str());
+    QCOMPARE(snapshot.probes.size(), 1);
+    const double expected = templateId == QLatin1String("divider") ? 2.5 : 1.92144461;
+    const int probeNet = snapshot.dcNets.indexOf(snapshot.probes.first().net);
+    QVERIFY(probeNet >= 0);
+    QVERIFY(std::abs(result.voltages[probeNet] - expected) < 0.002);
+    auto* app = qobject_cast<QApplication*>(QCoreApplication::instance());
+    Theme::apply(*app, light ? ThemeMode::Light : ThemeMode::Dark);
+    MainWindow window;
+    QVERIFY(showActive(window));
+    QTimer::singleShot(0, [&] {
+        auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+        QVERIFY(dialog);
+        QTimer::singleShot(5000, dialog, &QDialog::reject);
+        QVERIFY(dialog->findChild<QButtonGroup*>("NewProjectTemplates"));
+        auto* card = dialog->findChild<QToolButton*>("hatteda.template." + templateId);
+        QVERIFY(card && card->isEnabled());
+        QVERIFY(!card->icon().isNull());
+        card->click();
+        QVERIFY(card->isChecked());
+        const QString directory = qEnvironmentVariable("HATT_SCREENSHOT_DIR");
+        if (!directory.isEmpty())
+            QVERIFY(dialog->grab().save(directory + "/templates-" + (light ? "light" : "dark") + ".png"));
+        dialog->accept();
+    });
+    window.createNewProject();
+    const auto created = loadProjectFile(window.projectPath());
+    QVERIFY(created.ok());
+    QCOMPARE(created.project.schematic.size(), original.project.schematic.size());
+    QVERIFY(created.project.board.isEmpty());
+    QVERIFY(window.activeCanvas()->undoStack()->isClean());
+    // Creating a populated project stores the initial state without an undo operation.
+    QCOMPARE(window.activeCanvas()->undoStack()->count(), 0);
+    for (qsizetype i = 0; i < original.project.schematic.size(); ++i)
+        QVERIFY(created.project.schematic[i].id != original.project.schematic[i].id);
+    Theme::apply(*app, ThemeMode::Dark);
+}
 
 void MainWindowTests::componentModeUsesProjectDevicesAndSchematicParts() {
     hatt::ui::MainWindow window;

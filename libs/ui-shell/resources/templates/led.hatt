@@ -1,0 +1,167 @@
+{
+  "format": "hatteda-project",
+  "formatVersion": 3,
+  "name": "led",
+  "schematic": {
+    "items": [
+      {
+        "id": "4bc901ea-e9c3-43e1-a89f-efdfe93d6e0a",
+        "kind": "symbol",
+        "points": [
+          [
+            20.32,
+            30.48
+          ]
+        ],
+        "variant": "lib.source.dc-voltage",
+        "label": "V1",
+        "value": "3.3",
+        "footprint": "lib.footprint.header-1x2",
+        "pinPadMap": [
+          1,
+          2
+        ]
+      },
+      {
+        "id": "92ebd670-a801-4bbd-a15f-061407512ca6",
+        "kind": "symbol",
+        "points": [
+          [
+            45.72,
+            20.32
+          ]
+        ],
+        "variant": "lib.passive.resistor",
+        "label": "R1",
+        "value": "100",
+        "footprint": "lib.footprint.chip-0603",
+        "pinPadMap": [
+          1,
+          2
+        ]
+      },
+      {
+        "id": "c0de6508-6796-4282-9968-8d9e15c9909d",
+        "kind": "symbol",
+        "points": [
+          [
+            60.96,
+            30.48
+          ]
+        ],
+        "variant": "lib.diode.led",
+        "label": "D1",
+        "quarterTurns": 1,
+        "footprint": "lib.footprint.chip-0805",
+        "pinPadMap": [
+          1,
+          2
+        ]
+      },
+      {
+        "id": "f0a4c960-3213-40c2-a0e0-be6e944049e6",
+        "kind": "symbol",
+        "points": [
+          [
+            20.32,
+            45.72
+          ]
+        ],
+        "variant": "lib.terminal.ground",
+        "label": ""
+      },
+      {
+        "id": "3e041ee1-032a-449f-afa5-f728346d6c1e",
+        "kind": "symbol",
+        "points": [
+          [
+            60.96,
+            20.32
+          ]
+        ],
+        "variant": "lib.probe.voltage",
+        "label": "VOUT"
+      },
+      {
+        "id": "486c9434-fd96-4efb-af76-7d92bc9259d4",
+        "kind": "wire",
+        "points": [
+          [
+            20.32,
+            25.4
+          ],
+          [
+            20.32,
+            20.32
+          ],
+          [
+            40.64,
+            20.32
+          ]
+        ]
+      },
+      {
+        "id": "2de43265-5af7-442b-bf81-2fdf08b1e475",
+        "kind": "wire",
+        "points": [
+          [
+            50.8,
+            20.32
+          ],
+          [
+            60.96,
+            20.32
+          ],
+          [
+            60.96,
+            25.4
+          ]
+        ]
+      },
+      {
+        "id": "8b955a6f-561c-43aa-a6b9-c03722f73646",
+        "kind": "wire",
+        "points": [
+          [
+            20.32,
+            35.56
+          ],
+          [
+            20.32,
+            45.72
+          ],
+          [
+            60.96,
+            45.72
+          ],
+          [
+            60.96,
+            35.56
+          ]
+        ]
+      },
+      {
+        "id": "63bba061-690d-4382-a27c-674e7ee75448",
+        "kind": "text",
+        "points": [
+          [
+            20.32,
+            7.62
+          ]
+        ],
+        "label": "R1 limits LED current.\nGeneric LED model; VOUT is the forward voltage.",
+        "width": 1.5
+      }
+    ]
+  },
+  "board": {
+    "items": []
+  },
+  "library": {
+    "devices": [
+      "lib.source.dc-voltage",
+      "lib.passive.resistor",
+      "lib.diode.led"
+    ]
+  }
+}
