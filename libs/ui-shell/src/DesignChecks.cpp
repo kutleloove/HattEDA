@@ -111,8 +111,8 @@ CheckReport runElectricalRuleCheck(const SketchDocument& schematic) {
                     add(report, E, S, "erc.footprint", tr("%1: the pin to pad map must use every pad once.").arg(reference), at, {item.id});
                 }
             }
-        } else if (symbol->category == SymbolCategory::Terminal && item.variant != QLatin1String("schematic.junction") &&
-                   item.variant != QLatin1String("schematic.ground") && item.label.trimmed().isEmpty()) {
+        } else if (symbol->category == SymbolCategory::Terminal && symbol->id != QLatin1String("lib.terminal.junction") &&
+                   symbol->id != QLatin1String("lib.terminal.ground") && item.label.trimmed().isEmpty()) {
             add(report, E, S, "erc.analysis", tr("A port or power rail has no net name."), at, {item.id});
         }
     }
@@ -159,16 +159,17 @@ CheckReport runElectricalRuleCheck(const SketchDocument& schematic) {
             const QString id = QString::fromStdString(pin.component);
             const auto* item = items.value(id);
             if (item == nullptr || net < 0) continue;
+            const auto* symbol = findSymbol(item->variant);
+            if (!symbol) continue;
             const QPointF at(pin.position.x, pin.position.y);
             if (schematicComponent(*item)) {
                 if (netPins[net] == 1) {
                     add(report, W, S, "erc.unconnected-pin",
                         tr("%1 pin %2 is not connected.").arg(item->label, QString::fromStdString(pin.number)), at, {id});
                 }
-            } else if (item->variant != QLatin1String("schematic.junction") && netComponentPins[net] == 0 &&
+            } else if (symbol->id != QLatin1String("lib.terminal.junction") && netComponentPins[net] == 0 &&
                        !reportedTerminals.contains(id)) {
                 reportedTerminals.insert(id);
-                const auto* symbol = findSymbol(item->variant);
                 const QString name = item->label.trimmed().isEmpty() ? symbolDisplayName(*symbol) : item->label.trimmed();
                 add(report, W, S, "erc.unused-terminal", tr("%1 is not connected to any component.").arg(name), at, {id});
             }

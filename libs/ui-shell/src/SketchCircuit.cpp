@@ -134,8 +134,8 @@ void collectSchematicInput(const SketchDocument& document, CircuitSnapshot& resu
             references.insert(item.label);
         } else if (!symbol->pins.isEmpty()) {
             const auto location = point(symbolToWorld(item, symbol->pins.first()));
-            if (item.variant == QLatin1String("schematic.junction")) result.input.junctions.push_back(location);
-            else if (item.variant == QLatin1String("schematic.ground")) result.input.names.push_back({location, "0"});
+            if (symbol->id == QLatin1String("lib.terminal.junction")) result.input.junctions.push_back(location);
+            else if (symbol->id == QLatin1String("lib.terminal.ground")) result.input.names.push_back({location, "0"});
             else if (symbol->category == SymbolCategory::Terminal) {
                 if (item.label.trimmed().isEmpty()) result.errors << tr("A port or power net needs a name.");
                 else result.input.names.push_back({location, item.label.trimmed().toStdString()});
@@ -157,8 +157,8 @@ CircuitSnapshot analyzeSchematic(const SketchDocument& document) {
     const auto nets = pinNets(result);
     QVector<QVector<int>> nonlinearPinNumbers;
     for (const auto& item : document) {
-        if (item.kind == SketchItem::Kind::Symbol && item.variant == QLatin1String("schematic.voltage-probe")) {
-            const auto* probe = findSymbol(item.variant);
+        if (const auto* probe = findSymbol(item.variant); item.kind == SketchItem::Kind::Symbol &&
+            probe && probe->id == QLatin1String("lib.probe.voltage")) {
             result.probes.append({item.id, symbolToWorld(item, probe->pins.value(0)), nets.value(pinKey(item.id, 1), -1)});
         }
         if (!component(item)) continue;
