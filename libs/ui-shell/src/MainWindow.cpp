@@ -900,7 +900,7 @@ void MainWindow::editItemProperties(DesignCanvas* canvas, int index) {
     if (item.kind == SketchItem::Kind::Symbol || item.kind == SketchItem::Kind::Pad ||
         item.kind == SketchItem::Kind::Via || item.kind == SketchItem::Kind::Text) {
         x = coordinate(QStringLiteral("ItemPositionX"), item.points.value(0).x());
-        y = coordinate(QStringLiteral("ItemPositionY"), item.points.value(0).y());
+        y = coordinate(QStringLiteral("ItemPositionY"), -item.points.value(0).y());
         form->addRow(tr("Position X"), x);
         form->addRow(tr("Position Y"), y);
     }
@@ -957,7 +957,7 @@ void MainWindow::editItemProperties(DesignCanvas* canvas, int index) {
         auto properties = item;
         properties.label = label->text();
         if (x && y)
-            properties.points[0] = {fromDisplayUnit(x->value(), unit), fromDisplayUnit(y->value(), unit)};
+            properties.points[0] = {fromDisplayUnit(x->value(), unit), -fromDisplayUnit(y->value(), unit)};
         if (rotation) properties.quarterTurns = rotation->currentIndex();
         if (value) properties.value = value->text();
         if (footprint) properties.footprint = footprint->currentData().toString();

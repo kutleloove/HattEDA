@@ -8,6 +8,7 @@
 #include "hatt/ui/RoutingStyles.hpp"
 #include "hatt/ui/SketchCircuit.hpp"
 #include "hatt/ui/Theme.hpp"
+#include "hatt/ui/Units.hpp"
 
 #include <QAction>
 #include <QApplication>
@@ -101,6 +102,8 @@ private slots:
     void arrayDialogCreatesGrid();
     void projectSaveOpenAndUnsavedChanges();
     void contextPropertiesAcceptAndCancel();
+    void propertyCoordinatesUseEngineeringYAxis_data();
+    void propertyCoordinatesUseEngineeringYAxis();
     void contextMenuUsesObjectSpecificCommandsAndKeepsMultiSelection();
     void componentModeUsesProjectDevicesAndSchematicParts();
     void catalogPickerShowsAllSuitablePackagesForADevice();
@@ -390,6 +393,89 @@ void MainWindowTests::contextPropertiesAcceptAndCancel() {
     QCOMPARE(canvas->document().first().label, original.label);
     QCOMPARE(canvas->document().first().value, original.value);
     QCOMPARE(canvas->document().first().footprint, original.footprint);
+}
+
+void MainWindowTests::propertyCoordinatesUseEngineeringYAxis_data() {
+    QTest::addColumn<bool>("board");
+    QTest::addColumn<int>("kind");
+    QTest::addColumn<QString>("unit");
+    QTest::addColumn<double>("storedY");
+    using Kind = hatt::ui::SketchItem::Kind;
+    QTest::newRow("schematic-positive-mil") << false << int(Kind::Symbol) << QString("mm") << 25.4;
+    QTest::newRow("schematic-negative-mil") << false << int(Kind::Symbol) << QString("mm") << -25.4;
+    QTest::newRow("board-symbol-mm") << true << int(Kind::Symbol) << QString("mm") << 25.4;
+    QTest::newRow("board-text-mm") << true << int(Kind::Text) << QString("mm") << -25.4;
+    QTest::newRow("board-pad-in") << true << int(Kind::Pad) << QString("in") << 25.4;
+    QTest::newRow("board-via-in") << true << int(Kind::Via) << QString("in") << -25.4;
+}
+
+void MainWindowTests::propertyCoordinatesUseEngineeringYAxis() {
+    QFETCH(bool, board);
+    QFETCH(int, kind);
+    QFETCH(QString, unit);
+    QFETCH(double, storedY);
+    QSettings().setValue(QStringLiteral("editor/units/board"), unit);
+    hatt::ui::MainWindow window;
+    QVERIFY(showActive(window));
+    activateEditor(window);
+    if (board) window.showKayraWorkspace();
+    auto* canvas = window.activeCanvas();
+    hatt::ui::SketchItem item;
+    item.kind = static_cast<hatt::ui::SketchItem::Kind>(kind);
+    item.variant = board ? QStringLiteral("lib.footprint.r0603")
+                         : QStringLiteral("schematic.resistor");
+    item.label = QStringLiteral("R1");
+    item.points = {{12.7, storedY}};
+    item.width = 1.0;
+    item.drillDiameter = 0.4;
+    canvas->applyDocumentEdit(QStringLiteral("Test item"), {item});
+    const auto original = canvas->document();
+    const double editedY = -storedY / 2.0;
+    auto properties = [&](bool accept, bool change) {
+        canvas->contextMenuRequested(canvas->mapToGlobal(QPoint(100, 100)), 0);
+        auto* menu = window.findChild<QMenu*>(QStringLiteral("CanvasContextMenu"));
+        QVERIFY(menu);
+        auto* edit = menu->findChild<QAction*>(QStringLiteral("hatteda.context.properties"));
+        QVERIFY(edit);
+        menu->hide();
+        QTimer::singleShot(0, [&] {
+            auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+            QVERIFY(dialog);
+            auto* x = dialog->findChild<QDoubleSpinBox*>(QStringLiteral("ItemPositionX"));
+            auto* y = dialog->findChild<QDoubleSpinBox*>(QStringLiteral("ItemPositionY"));
+            QVERIFY(x && y);
+            QCOMPARE(x->value(), hatt::ui::toDisplayUnit(12.7, canvas->lengthUnit()));
+            QCOMPARE(y->value(), hatt::ui::toDisplayUnit(-storedY, canvas->lengthUnit()));
+            const QString screenshot = qEnvironmentVariable("HATTEDA_PROPERTIES_SCREENSHOT");
+            if (!screenshot.isEmpty() && board && unit == QLatin1String("mm") && !change)
+                QVERIFY(dialog->grab().save(screenshot));
+            if (change) y->setValue(hatt::ui::toDisplayUnit(editedY, canvas->lengthUnit()));
+            if (accept) dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Ok)->click();
+            else dialog->reject();
+        });
+        edit->trigger();
+        delete menu;
+    };
+    properties(true, false); // Accepting displayed coordinates must not mirror the item.
+    QCOMPARE(canvas->document().first().points, original.first().points);
+    const int undoCount = canvas->undoStack()->count();
+    properties(false, true);
+    QCOMPARE(canvas->document().first().points, original.first().points);
+    QCOMPARE(canvas->undoStack()->count(), undoCount);
+    properties(true, true);
+    QCOMPARE(canvas->document().first().points.first(), QPointF(12.7, -editedY));
+    QCOMPARE(canvas->undoStack()->count(), undoCount + 1);
+    canvas->undoStack()->undo();
+    QCOMPARE(canvas->document().first().points, original.first().points);
+    canvas->undoStack()->redo();
+    hatt::ui::ProjectData project;
+    if (board) project.board = canvas->document();
+    else project.schematic = canvas->document();
+    const auto loaded = hatt::ui::parseProject(hatt::ui::serializeProject(project));
+    QVERIFY2(loaded.ok(), qPrintable(loaded.error));
+    const auto& restored = board ? loaded.project.board : loaded.project.schematic;
+    QCOMPARE(restored.first().points.first(), QPointF(12.7, -editedY));
+    QSettings().remove(QStringLiteral("editor/units"));
 }
 
 void MainWindowTests::contextMenuUsesObjectSpecificCommandsAndKeepsMultiSelection() {

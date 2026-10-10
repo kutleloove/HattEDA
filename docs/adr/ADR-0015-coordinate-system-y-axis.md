@@ -32,13 +32,13 @@ what shipped in the interim model and in `.hatt`.
 ## Decision
 
 - **Storage and internal APIs (`SketchItem::points`, `DesignCanvas` world space, `.hatt` `x`/`y`
-  pairs, item property dialogs' Position X/Y fields) use Y-down**, matching Qt's native widget
+  pairs) use Y-down**, matching Qt's native widget
   coordinate system. This is unchanged, existing behaviour, not a new choice — this ADR records it
   so it is not re-litigated or accidentally inverted by later work (HATT-003 in particular).
-- **Only the status bar coordinate readout displays Y-up**, by negating the value at render time
-  (`-world.y()`). No other reader of `SketchItem::points` performs this negation; item property
-  dialogs (e.g. `ItemPositionY` in `MainWindow.cpp`) show the stored Y-down value directly, not the
-  status bar's flipped one.
+- **User-facing coordinates use Y-up**: both the status bar and item property dialogs negate
+  stored Y for display. Property input is negated when converted back to millimetres; internal
+  storage remains Y-down. Follow-up issue #58 applies this to symbols, pads, vias and text in all
+  display units.
 - **The origin is wherever the first item was placed** — there is no fixed board/sheet origin
   today; `DesignCanvas` does not special-case `(0, 0)`.
 - HATT-003's fixed-point geometry types must adopt this same Y-down storage convention so that
@@ -46,10 +46,8 @@ what shipped in the interim model and in `.hatt`.
 
 ## Consequences
 
-- The Position X/Y fields in the item properties dialog do not match the sign of the status bar's Y
-  readout while editing the same item. This is confusing but pre-existing; fixing it (e.g. by
-  showing Y-up everywhere data is presented to the user) is separate follow-up work, not part of
-  this decision.
-- No code or `.hatt` format change accompanies this ADR; it documents the status quo so future work
-  (HATT-003, any coordinate-input UI, import/export of external formats) has a single point of
-  reference instead of reverse-engineering the convention from `DesignCanvas.cpp`.
+- Status bar and property coordinates have the same sign. Accepting unchanged properties never
+  mirrors the item; editing Y still creates one snapshot undo step.
+- Existing `.hatt` points, canvas coordinates and external format conversions remain unchanged.
+- Issue #58 is covered by property-dialog tests for both signs, mil/mm/inch, cancel, undo/redo
+  and project serialization.
