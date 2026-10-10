@@ -21,6 +21,7 @@ QString tr(const char* text) { return QCoreApplication::translate("hatt::ui::Cir
     QT_TRANSLATE_NOOP("hatt::ui::CircuitWorkflow", "The DC section at %1 pin %2 has no path to Ground."),
     QT_TRANSLATE_NOOP("hatt::ui::CircuitWorkflow", "%1: the diode model requires anode and cathode pins; additional pins must be declared no-connect."),
     QT_TRANSLATE_NOOP("hatt::ui::CircuitWorkflow", "%1 pin %2 is declared no-connect but is wired."),
+    QT_TRANSLATE_NOOP("hatt::ui::CircuitWorkflow", "%1: the transistor model requires named C/B/E or D/G/S catalog pins."),
 };
 // Legacy two-pin symbols use pin 1 = anode, pin 2 = cathode. Named catalog pins also
 // support packaged diodes with a separate NC pin (BAT54: A, NC, K).
@@ -40,6 +41,23 @@ QVector<int> diodePins(const SymbolDefinition& symbol) {
             return extraPinsAreNc ? QVector<int>{anode, cathode} : QVector<int>{};
     }
     return symbol.pins.size() == 2 ? QVector<int>{1, 2} : QVector<int>{};
+}
+
+QVector<int> transistorPins(const SymbolDefinition& symbol, bool mosfet) {
+    // The original NPN symbol predates named catalog pins: base is pin 1, collector
+    // is pin 2, emitter is pin 3. Keep those persisted pin numbers stable.
+    if (symbol.id == QLatin1String("lib.transistor.npn") && symbol.pins.size() == 3)
+        return {2, 1, 3};
+    const auto* device = findCatalogComponent(symbol.id);
+    if (!device || device->pins.size() != 3 || symbol.pins.size() != 3) return {};
+    QVector<int> pins(3, -1);
+    const QStringList roles = mosfet ? QStringList{"D", "G", "S"} : QStringList{"C", "B", "E"};
+    for (qsizetype p = 0; p < device->pins.size(); ++p) {
+        const auto role = roles.indexOf(device->pins[p].name);
+        if (role < 0 || pins[role] > 0) return {};
+        pins[role] = static_cast<int>(p) + 1;
+    }
+    return pins.contains(-1) ? QVector<int>{} : pins;
 }
 electrical::Point point(QPointF p) { return {p.x(), p.y()}; }
 bool component(const SketchItem& item) {
@@ -194,6 +212,31 @@ CircuitSnapshot analyzeSchematic(const SketchDocument& document) {
             nonlinearPinNumbers.append(pins);
             continue;
         }
+        const bool bjt = model == QLatin1String("nonlinear.bjt-npn") || model == QLatin1String("nonlinear.bjt-pnp");
+        const bool mosfet = model == QLatin1String("nonlinear.nmos") || model == QLatin1String("nonlinear.pmos");
+        if (bjt || mosfet) {
+            const auto pins = transistorPins(*symbol, mosfet);
+            if (pins.isEmpty()) {
+                result.simulationErrors << tr("%1: the transistor model requires named C/B/E or D/G/S catalog pins.").arg(item.label);
+                continue;
+            }
+            electrical::NonlinearElement e;
+            e.reference = item.label.toStdString();
+            for (int p : pins) e.nets.push_back(nets.value(pinKey(item.id, p), -1));
+            if (bjt) {
+                e.kind = model.endsWith(QLatin1String("npn")) ? electrical::NonlinearKind::BjtNpn : electrical::NonlinearKind::BjtPnp;
+                e.parameters = {definition->parameters.value(QStringLiteral("is")),
+                                definition->parameters.value(QStringLiteral("beta")),
+                                definition->parameters.value(QStringLiteral("betaReverse"))};
+            } else {
+                e.kind = model == QLatin1String("nonlinear.nmos") ? electrical::NonlinearKind::NMosfet : electrical::NonlinearKind::PMosfet;
+                e.parameters = {definition->parameters.value(QStringLiteral("vto")),
+                                definition->parameters.value(QStringLiteral("k"))};
+            }
+            result.dc.nonlinear.push_back(std::move(e));
+            nonlinearPinNumbers.append(pins);
+            continue;
+        }
         if (symbol->pins.size() != 2) {
             result.simulationErrors << tr("%1: the DC model requires exactly two pins.").arg(item.label);
             continue;
@@ -240,9 +283,19 @@ CircuitSnapshot analyzeSchematic(const SketchDocument& document) {
                 adjacent[e.negative].append(e.positive);
             }
             for (const auto& e : result.dc.nonlinear) {
-                if (e.nets[0] < 0 || e.nets[1] < 0) continue;
-                adjacent[e.nets[0]].append(e.nets[1]);
-                adjacent[e.nets[1]].append(e.nets[0]);
+                auto link = [&](int a, int b) {
+                    if (a < 0 || b < 0) return;
+                    adjacent[a].append(b);
+                    adjacent[b].append(a);
+                };
+                const bool mosfet = e.kind == electrical::NonlinearKind::NMosfet || e.kind == electrical::NonlinearKind::PMosfet;
+                // An ideal MOS gate needs an external DC path; the channel cannot
+                // ground it. BJT junctions connect all three terminals.
+                if (mosfet) link(e.nets[0], e.nets[2]);
+                else {
+                    link(e.nets[0], e.nets[1]);
+                    if (e.nets.size() == 3) link(e.nets[1], e.nets[2]);
+                }
             }
             QVector<bool> reachable(result.dc.netCount, false);
             QVector<int> pending{result.dc.ground};

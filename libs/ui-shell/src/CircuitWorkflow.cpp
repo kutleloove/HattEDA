@@ -427,7 +427,7 @@ void CircuitWorkflow::solve(bool reveal) {
     if (!projectOpen_() || running_) return;
     const auto snapshot = analyzeSchematic(schematic_->document());
     const QString heading = QStringLiteral("<h2>%1</h2><p>%2</p>").arg(tr("DC operating point").toHtmlEscaped(),
-        tr("Supported: resistors, independent DC voltage/current sources, capacitors (open), inductors (short), fixed switches and generic diode/LED/Zener models. Linear values use SI/SPICE suffixes (1k, 5, 1meg); unit labels are omitted.").toHtmlEscaped());
+        tr("Supported: resistors, independent DC voltage/current sources, capacitors (open), inductors (short), fixed switches and generic diode/LED/Zener/BJT/MOSFET models. Linear values use SI/SPICE suffixes (1k, 5, 1meg); unit labels are omitted.").toHtmlEscaped());
     if (!snapshot.errors.isEmpty() || !snapshot.simulationErrors.isEmpty()) {
         schematic_->setAnnotations({});
         report(simulation_, QStringLiteral("hatteda.tool.dc-results"), tr("DC operating point"))
@@ -493,9 +493,9 @@ void CircuitWorkflow::solve(bool reveal) {
         html += QStringLiteral("</table>");
         if (!snapshot.dc.nonlinear.empty()) {
             html += QStringLiteral("<p>%1</p>")
-                        .arg(tr("Diode simulation uses generic catalog models; component values do not change model parameters.").toHtmlEscaped());
+                        .arg(tr("Nonlinear simulation uses generic catalog models; component values do not change model parameters.").toHtmlEscaped());
             html += QStringLiteral("<h3>%1</h3><table border='1' cellpadding='6'>")
-                        .arg(tr("Nonlinear currents (into anode)").toHtmlEscaped());
+                        .arg(tr("Nonlinear currents (into anode / collector / drain)").toHtmlEscaped());
             for (std::size_t e = 0; e < result->nonlinearCurrents.size(); ++e)
                 html += QStringLiteral("<tr><td>%1</td><td>%2 A</td></tr>")
                             .arg(QString::fromStdString(snapshot.dc.nonlinear[e].reference).toHtmlEscaped())
