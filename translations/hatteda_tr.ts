@@ -4039,7 +4039,7 @@ Schematic, simulation, PCB and CAM design suite.</source>
     <message>
         <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2829"/>
         <source>%1 already exists. Replace it with the selected project?</source>
-        <translation>%1 zaten var. Boş bir projeyle değiştirilsin mi?</translation>
+        <translation>%1 zaten var. Seçilen projeyle değiştirilsin mi?</translation>
     </message>
     <message>
         <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2837"/>
