@@ -118,4 +118,3 @@ HattEDA, isteğe bağlı otomatik yol yönlendirme (autorouting) için [Freerout
 ## Lisans
 
 HattEDA, [GNU General Public License v3.0](LICENSE) altında lisanslanmıştır. Copyright (C) 2026 Murat Çuka.
-

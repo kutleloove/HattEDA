@@ -1,7 +1,7 @@
 # İlk MVP yayın hazırlığı
 
 Bu liste 2026-10-10 tarihinde `main` (fab9c07), açık issue'lar ve PR #74 incelenerek
-hazırlandı. `0.1.0-alpha.1` sürüm notlarının bulunması yayın kabulünün tamamlandığı
+hazırlandı. `0.1.0-alpha.1` geliştirici önizlemesi 2026-10-01 tarihinde GitHub üzerinde yayımlandı. Bu çalışma ilk MVP kabulünü tamamlamayı ve sonraki paketi hazırlamayı hedefler. Önizlemenin yayımlanmış olması yayın kabulünün tamamlandığı
 anlamına gelmez. İlk hedef Windows x64 üzerinde çevrimdışı çalışan bir geliştirme
 önizlemesidir; aşağıdaki kontroller yapılmadan yayın hazır kabul edilmez.
 
