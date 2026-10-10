@@ -1898,6 +1898,22 @@
         <translation>Akımlar (pin 1 → pin 2)</translation>
     </message>
     <message>
+        <source>Nonlinear currents (into anode)</source>
+        <translation>Doğrusal olmayan eleman akımları (anoda doğru)</translation>
+    </message>
+    <message>
+        <source>Diode simulation uses generic catalog models; component values do not change model parameters.</source>
+        <translation>Diyot simülasyonu genel katalog modellerini kullanır; parça değerleri model parametrelerini değiştirmez.</translation>
+    </message>
+    <message>
+        <source>%1: the diode model requires anode and cathode pins; additional pins must be declared no-connect.</source>
+        <translation>%1: diyot modeli anot ve katot pinleri gerektirir; ek pinler bağlantısız olarak tanımlanmalıdır.</translation>
+    </message>
+    <message>
+        <source>%1 pin %2 is declared no-connect but is wired.</source>
+        <translation>%1 pin %2 bağlantısız olarak tanımlanmış ancak tel bağlanmış.</translation>
+    </message>
+    <message>
         <source>%1: DC simulation does not support this component.</source>
         <translation type="vanished">%1: DC simülasyonu bu bileşeni desteklemiyor.</translation>
     </message>
@@ -2078,8 +2094,8 @@
     </message>
     <message>
         <location filename="../libs/ui-shell/src/CircuitWorkflow.cpp" line="430"/>
-        <source>Supported: resistors, independent DC voltage sources, capacitors (open) and inductors (short). Values use SI/SPICE suffixes (1k, 5, 1meg); unit labels are omitted.</source>
-        <translation>Desteklenenler: dirençler, bağımsız DC gerilim kaynakları, kondansatörler (açık devre) ve bobinler (kısa devre). Değerler SI/SPICE önekleriyle yazılır (1k, 5, 1meg); birim eklenmez.</translation>
+        <source>Supported: resistors, independent DC voltage/current sources, capacitors (open), inductors (short), fixed switches and generic diode/LED/Zener models. Linear values use SI/SPICE suffixes (1k, 5, 1meg); unit labels are omitted.</source>
+        <translation>Desteklenenler: dirençler, bağımsız DC gerilim/akım kaynakları, kondansatörler (açık devre), bobinler (kısa devre), sabit anahtarlar ve genel diyot/LED/Zener modelleri. Doğrusal eleman değerleri SI/SPICE önekleriyle yazılır (1k, 5, 1meg); birim eklenmez.</translation>
     </message>
     <message>
         <location filename="../libs/ui-shell/src/CircuitWorkflow.cpp" line="467"/>

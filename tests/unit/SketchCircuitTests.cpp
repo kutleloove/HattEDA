@@ -3,6 +3,7 @@
 #include "hatt/ui/CircuitWorkflow.hpp"
 #include "hatt/ui/MainWindow.hpp"
 #include "hatt/ui/Theme.hpp"
+#include "hatt/ui/ProjectFile.hpp"
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QComboBox>
@@ -23,8 +24,48 @@
 #include <QToolButton>
 #include <QUndoStack>
 #include <QtTest>
+#include <algorithm>
+#include <cmath>
 
 using namespace hatt::ui;
+namespace {
+SketchDocument seriesDiodeExample(const QString& variant, int cathode = 2, bool reverse = false) {
+    SketchDocument document;
+    auto port = [&](QPointF at, const QString& name) {
+        SketchItem item;
+        item.kind = SketchItem::Kind::Symbol;
+        item.variant = QStringLiteral("schematic.power");
+        item.label = name;
+        item.points = {at};
+        document.append(item);
+    };
+    // An unused net must stay out of the compact solver snapshot.
+    port({200, 100}, QStringLiteral("UNUSED"));
+    auto part = [&](const QString& id, const QString& label, const QString& value, QPointF at,
+                    const QVector<QString>& pinNets) {
+        SketchItem item;
+        item.kind = SketchItem::Kind::Symbol;
+        item.variant = id;
+        item.label = label;
+        item.value = value;
+        item.points = {at};
+        document.append(item);
+        const auto* symbol = findSymbol(id);
+        for (qsizetype p = 0; p < pinNets.size(); ++p)
+            if (!pinNets[p].isEmpty()) port(symbolToWorld(item, symbol->pins[p]), pinNets[p]);
+    };
+    part(QStringLiteral("schematic.vdc"), QStringLiteral("V1"), reverse ? "9" : "3.3",
+         {0, 20}, {"SUPPLY", "0"});
+    part(QStringLiteral("schematic.resistor"), QStringLiteral("R1"), reverse ? "1k" : "100",
+         {40, 20}, {"SUPPLY", "LOAD"});
+    QVector<QString> diodeNets(findSymbol(variant)->pins.size());
+    diodeNets[0] = reverse ? "0" : "LOAD";
+    diodeNets[cathode - 1] = reverse ? "LOAD" : "0";
+    part(variant, QStringLiteral("D1"), QStringLiteral("device label"), {80, 20}, diodeNets);
+    return document;
+}
+} // namespace
+
 class SketchCircuitTests : public QObject {
     Q_OBJECT
 private slots:
@@ -54,6 +95,140 @@ private slots:
         QVERIFY(std::abs(result.currents[1] - 0.0025) < 1e-10);
         QVERIFY(std::abs(result.currents[2] - 0.0025) < 1e-10);
         QVERIFY(std::abs(result.currents[0] + 0.0025) < 1e-10);
+    }
+    void catalogDiodesSolveFromSchematic_data() {
+        QTest::addColumn<QString>("variant");
+        QTest::addColumn<int>("cathode");
+        for (const char* id : {"schematic.diode", "schematic.led", "lib.diode.1n4148",
+                               "lib.diode.1n4007", "lib.diode.schottky"})
+            QTest::newRow(id) << QString::fromLatin1(id) << 2;
+        QTest::newRow("bat54-nc") << QStringLiteral("lib.diode.bat54") << 3;
+    }
+    void catalogDiodesSolveFromSchematic() {
+        QFETCH(QString, variant);
+        QFETCH(int, cathode);
+        const auto document = seriesDiodeExample(variant, cathode);
+        const auto snapshot = analyzeSchematic(document);
+        QVERIFY2(snapshot.errors.isEmpty(), qPrintable(snapshot.errors.join("; ")));
+        QVERIFY2(snapshot.simulationErrors.isEmpty(), qPrintable(snapshot.simulationErrors.join("; ")));
+        QCOMPARE(snapshot.dc.netCount, 3);
+        QVERIFY(snapshot.connectivity.nets.size() > std::size_t(snapshot.dc.netCount));
+        QCOMPARE(snapshot.dc.nonlinear.size(), std::size_t(1));
+        const auto& diode = snapshot.dc.nonlinear.front();
+        const auto result = hatt::electrical::solveDc(snapshot.dc);
+        QVERIFY2(result.success, result.error.c_str());
+        // Independent scalar Shockley + series-resistor reference at the core's 300 K default.
+        double low = 0, high = 3.3;
+        for (int step = 0; step < 100; ++step) {
+            const double voltage = (low + high) / 2;
+            const double current = diode.parameters[0] * std::expm1(voltage / (diode.parameters[1] * 0.025852));
+            if (current > (3.3 - voltage) / 100) high = voltage;
+            else low = voltage;
+        }
+        const double expected = (3.3 - (low + high) / 2) / 100;
+        QVERIFY(std::abs(result.nonlinearCurrents[0] - expected) < expected * 0.02);
+        QVERIFY(std::abs(result.currents[1] - expected) < expected * 0.02);
+        QVERIFY(std::abs(result.currents[0] + expected) < expected * 0.02);
+        if (diode.kind == hatt::electrical::NonlinearKind::Led)
+            QVERIFY(std::abs(result.nonlinearAux[0] - expected / 0.02) < 0.02);
+        ProjectData project;
+        project.schematic = document;
+        const auto loaded = parseProject(serializeProject(project));
+        QVERIFY2(loaded.ok(), qPrintable(loaded.error));
+        const auto restored = analyzeSchematic(loaded.project.schematic);
+        QVERIFY(restored.simulationErrors.isEmpty());
+        const auto restoredResult = hatt::electrical::solveDc(restored.dc);
+        QVERIFY(restoredResult.success);
+        QVERIFY(std::abs(restoredResult.nonlinearCurrents[0] - expected) < expected * 0.02);
+    }
+    void zenerBreakdownSolvesFromSchematic() {
+        const auto snapshot = analyzeSchematic(seriesDiodeExample("lib.diode.zener-5v1", 2, true));
+        QVERIFY2(snapshot.simulationErrors.isEmpty(), qPrintable(snapshot.simulationErrors.join("; ")));
+        const auto result = hatt::electrical::solveDc(snapshot.dc);
+        QVERIFY2(result.success, result.error.c_str());
+        const double expected = (9.0 - 5.1) / (1000.0 + 5.0);
+        QVERIFY(std::abs(result.nonlinearCurrents[0] + expected) < expected * 0.02);
+        QVERIFY(std::abs(result.currents[1] - expected) < expected * 0.02);
+    }
+    void diodeDiagnosticsRetainActualPinNumbers() {
+        auto document = seriesDiodeExample("lib.diode.bat54", 3);
+        auto diode = std::find_if(document.begin(), document.end(), [](const SketchItem& item) {
+            return item.label == QLatin1String("D1");
+        });
+        QVERIFY(diode != document.end());
+        SketchItem wire;
+        wire.kind = SketchItem::Kind::Wire;
+        const auto* symbol = findSymbol(diode->variant);
+        wire.points = {symbolToWorld(*diode, symbol->pins[1]), {100, 50}};
+        document.append(wire);
+        QVERIFY(analyzeSchematic(document).simulationErrors.join(" ").contains("D1 pin 2 is declared no-connect"));
+        document.removeLast();
+        diode = std::find_if(document.begin(), document.end(), [](const SketchItem& item) {
+            return item.label == QLatin1String("D1");
+        });
+        const QPointF cathode = symbolToWorld(*diode, symbol->pins[2]);
+        document.erase(std::remove_if(document.begin(), document.end(), [&](const SketchItem& item) {
+            return item.variant == QLatin1String("schematic.power") && item.points.first() == cathode;
+        }), document.end());
+        QVERIFY(analyzeSchematic(document).simulationErrors.join(" ").contains("D1 pin 3 is not connected"));
+    }
+    void nonlinearOnlySnapshotAndFloatingSection() {
+        auto document = seriesDiodeExample("schematic.diode");
+        document.erase(std::remove_if(document.begin(), document.end(), [](const SketchItem& item) {
+            return item.label == QLatin1String("V1") || item.label == QLatin1String("R1");
+        }), document.end());
+        const auto passive = analyzeSchematic(document);
+        QVERIFY2(passive.simulationErrors.isEmpty(), qPrintable(passive.simulationErrors.join("; ")));
+        QVERIFY(passive.dc.elements.empty());
+        QCOMPARE(passive.dc.netCount, 2);
+        const auto result = hatt::electrical::solveDc(passive.dc);
+        QVERIFY2(result.success, result.error.c_str());
+        QVERIFY(std::abs(result.nonlinearCurrents[0]) < 1e-12);
+
+        document = seriesDiodeExample("schematic.diode");
+        SketchItem floating;
+        floating.kind = SketchItem::Kind::Symbol;
+        floating.variant = QStringLiteral("schematic.led");
+        floating.label = QStringLiteral("D2");
+        floating.points = {{120, 60}};
+        document.append(floating);
+        const auto* symbol = findSymbol(floating.variant);
+        for (int p = 0; p < 2; ++p) {
+            SketchItem port;
+            port.kind = SketchItem::Kind::Symbol;
+            port.variant = QStringLiteral("schematic.power");
+            port.label = QStringLiteral("FLOAT%1").arg(p);
+            port.points = {symbolToWorld(floating, symbol->pins[p])};
+            document.append(port);
+        }
+        QVERIFY(analyzeSchematic(document).simulationErrors.join(" ").contains("DC section at D2"));
+    }
+    void actualWorkflowReportsNonlinearCurrentAndInvalidatesIt() {
+        QWidget host;
+        QMenu menu;
+        DesignCanvas schematic(Workspace::Schematic), board(Workspace::Board);
+        QPointer<QTextEdit> report;
+        CircuitWorkflow flow(&host, &menu, &schematic, &board,
+            [&](const QString&, const QString&, QWidget* widget) {
+                widget->setParent(&host);
+                report = qobject_cast<QTextEdit*>(widget);
+            }, [] { return true; }, [] {});
+        schematic.applyDocumentEdit("LED example", seriesDiodeExample("schematic.led"));
+        flow.runDc();
+        QVERIFY(report);
+        QTRY_VERIFY_WITH_TIMEOUT(report->toPlainText().contains("Nonlinear currents (into anode)"), 5000);
+        QVERIFY(report->toPlainText().contains("D1"));
+        const auto expected = hatt::electrical::solveDc(analyzeSchematic(schematic.document()).dc);
+        QVERIFY(expected.success);
+        QVERIFY(report->toPlainText().contains(QString::number(expected.nonlinearCurrents[0], 'g', 9)));
+        const QString directory = qEnvironmentVariable("HATT_SCREENSHOT_DIR");
+        if (!directory.isEmpty()) {
+            report->resize(720, 480);
+            report->show();
+            QVERIFY(report->grab().save(directory + "/diode-dc-results.png"));
+        }
+        schematic.undoStack()->undo();
+        QVERIFY(report->toPlainText().contains("out of date"));
     }
     // Issue #47: schematicWireNets resolves each Wire item to its schematic net name, keyed by
     // item id — a named net (a power rail's label) and an auto-generated one (no terminal/ground
@@ -322,11 +497,7 @@ private slots:
         track.points = {symbolToWorld(source, footprint->pins[0]), symbolToWorld(source, footprint->pins[1])};
         board.append(track);
         QVERIFY(boardGuidance(schematic, board).errors.join(" ").contains("short"));
-        schematic[1].variant = QStringLiteral("schematic.diode");
-        // #61 PR (b): lib.diode.standard now carries its real catalog model (nonlinear.diode)
-        // instead of an empty/unset one, so the reported reason is the model's own limitation
-        // text ("not implemented yet") rather than the generic no-model message; forward-
-        // compatible with #62 giving nonlinear.diode real DcOperatingPoint support later.
+        schematic[1].variant = QStringLiteral("lib.diode.photodiode");
         QVERIFY(analyzeSchematic(schematic).simulationErrors.join(" ").contains("not implemented"));
     }
     // Issue #30 follow-up: boardGuidance only turns a track crossing into a junction when the

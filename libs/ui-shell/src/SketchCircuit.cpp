@@ -19,7 +19,28 @@ QString tr(const char* text) { return QCoreApplication::translate("hatt::ui::Cir
     QT_TRANSLATE_NOOP("hatt::ui::CircuitWorkflow", "%1: the DC model requires exactly two pins."),
     QT_TRANSLATE_NOOP("hatt::ui::CircuitWorkflow", "%1 pin %2 is not connected to another component or terminal."),
     QT_TRANSLATE_NOOP("hatt::ui::CircuitWorkflow", "The DC section at %1 pin %2 has no path to Ground."),
+    QT_TRANSLATE_NOOP("hatt::ui::CircuitWorkflow", "%1: the diode model requires anode and cathode pins; additional pins must be declared no-connect."),
+    QT_TRANSLATE_NOOP("hatt::ui::CircuitWorkflow", "%1 pin %2 is declared no-connect but is wired."),
 };
+// Legacy two-pin symbols use pin 1 = anode, pin 2 = cathode. Named catalog pins also
+// support packaged diodes with a separate NC pin (BAT54: A, NC, K).
+QVector<int> diodePins(const SymbolDefinition& symbol) {
+    const auto* device = findCatalogComponent(symbol.id);
+    if (device) {
+        if (device->pins.size() != symbol.pins.size()) return {};
+        int anode = -1, cathode = -1;
+        bool extraPinsAreNc = true;
+        for (qsizetype p = 0; p < device->pins.size(); ++p) {
+            const auto& pin = device->pins[p];
+            if (pin.name == QLatin1String("A")) anode = static_cast<int>(p) + 1;
+            else if (pin.name == QLatin1String("K")) cathode = static_cast<int>(p) + 1;
+            else if (pin.type != PinElectricalType::NoConnect) extraPinsAreNc = false;
+        }
+        if (anode > 0 && cathode > 0)
+            return extraPinsAreNc ? QVector<int>{anode, cathode} : QVector<int>{};
+    }
+    return symbol.pins.size() == 2 ? QVector<int>{1, 2} : QVector<int>{};
+}
 electrical::Point point(QPointF p) { return {p.x(), p.y()}; }
 bool component(const SketchItem& item) {
     const auto* s = findSymbol(item.variant);
@@ -116,6 +137,7 @@ CircuitSnapshot analyzeSchematic(const SketchDocument& document) {
     for (int n = 0; n < result.dc.netCount; ++n)
         if (result.connectivity.nets[n].name == "0") result.dc.ground = n;
     const auto nets = pinNets(result);
+    QVector<QVector<int>> nonlinearPinNumbers;
     for (const auto& item : document) {
         if (item.kind == SketchItem::Kind::Symbol && item.variant == QLatin1String("schematic.voltage-probe")) {
             const auto* probe = findSymbol(item.variant);
@@ -138,7 +160,41 @@ CircuitSnapshot analyzeSchematic(const SketchDocument& document) {
             result.simulationErrors << tr("%1: %2").arg(item.label, reason);
             continue;
         }
-        if (symbol == nullptr || symbol->pins.size() != 2) {
+        if (model == QLatin1String("nonlinear.diode") || model == QLatin1String("nonlinear.zener") ||
+            model == QLatin1String("nonlinear.led")) {
+            const auto pins = diodePins(*symbol);
+            if (pins.isEmpty()) {
+                result.simulationErrors << tr("%1: the diode model requires anode and cathode pins; additional pins must be declared no-connect.").arg(item.label);
+                continue;
+            }
+            for (int p = 1; p <= symbol->pins.size(); ++p) {
+                if (pins.contains(p)) continue;
+                const int net = nets.value(pinKey(item.id, p), -1);
+                if (net >= 0 && (result.connectivity.nets[net].pins.size() > 1 ||
+                                std::find(result.connectivity.wireNets.begin(),
+                                          result.connectivity.wireNets.end(), net) !=
+                                    result.connectivity.wireNets.end()))
+                    result.simulationErrors << tr("%1 pin %2 is declared no-connect but is wired.").arg(item.label).arg(p);
+            }
+            electrical::NonlinearElement e;
+            e.reference = item.label.toStdString();
+            for (int p : pins) e.nets.push_back(nets.value(pinKey(item.id, p), -1));
+            e.parameters = {definition->parameters.value(QStringLiteral("is")),
+                            definition->parameters.value(QStringLiteral("n")),
+                            definition->parameters.value(QStringLiteral("rs"))};
+            if (model == QLatin1String("nonlinear.zener")) {
+                e.kind = electrical::NonlinearKind::Zener;
+                e.parameters.push_back(definition->parameters.value(QStringLiteral("breakdown")));
+                e.parameters.push_back(definition->parameters.value(QStringLiteral("rz")));
+            } else if (model == QLatin1String("nonlinear.led")) {
+                e.kind = electrical::NonlinearKind::Led;
+                e.parameters.push_back(definition->parameters.value(QStringLiteral("ratedCurrent")));
+            }
+            result.dc.nonlinear.push_back(std::move(e));
+            nonlinearPinNumbers.append(pins);
+            continue;
+        }
+        if (symbol->pins.size() != 2) {
             result.simulationErrors << tr("%1: the DC model requires exactly two pins.").arg(item.label);
             continue;
         }
@@ -160,7 +216,7 @@ CircuitSnapshot analyzeSchematic(const SketchDocument& document) {
             result.simulationErrors << tr("%1: invalid value '%2'.").arg(item.label, item.value);
         result.dc.elements.push_back(e);
     }
-    if (!result.dc.elements.empty()) {
+    if (!result.dc.elements.empty() || !result.dc.nonlinear.empty()) {
         // Proteus-style convenience: a closed circuit does not need an explicit Ground symbol.
         // Prefer the negative terminal of the first independent voltage source as the 0 V
         // reference; for source-less networks any element's negative terminal is deterministic.
@@ -171,9 +227,9 @@ CircuitSnapshot analyzeSchematic(const SketchDocument& document) {
                                              [](const electrical::DcElement& element) {
                                                  return element.kind == electrical::DcKind::VoltageSource;
                                              });
-            result.dc.ground = source != result.dc.elements.end()
-                                   ? source->negative
-                                   : result.dc.elements.front().negative;
+            result.dc.ground = source != result.dc.elements.end() ? source->negative
+                : !result.dc.elements.empty() ? result.dc.elements.front().negative
+                                             : result.dc.nonlinear.front().nets.back();
         }
         if (result.dc.ground >= 0) {
             QVector<QVector<int>> adjacent(result.dc.netCount);
@@ -182,6 +238,11 @@ CircuitSnapshot analyzeSchematic(const SketchDocument& document) {
                     e.negative >= result.dc.netCount) continue;
                 adjacent[e.positive].append(e.negative);
                 adjacent[e.negative].append(e.positive);
+            }
+            for (const auto& e : result.dc.nonlinear) {
+                if (e.nets[0] < 0 || e.nets[1] < 0) continue;
+                adjacent[e.nets[0]].append(e.nets[1]);
+                adjacent[e.nets[1]].append(e.nets[0]);
             }
             QVector<bool> reachable(result.dc.netCount, false);
             QVector<int> pending{result.dc.ground};
@@ -193,21 +254,25 @@ CircuitSnapshot analyzeSchematic(const SketchDocument& document) {
                 }
             }
             bool reportedFloating = false;
-            for (const auto& e : result.dc.elements) {
-                for (int pin = 1; pin <= 2; ++pin) {
-                    const int net = pin == 1 ? e.positive : e.negative;
-                    if (net < 0 || net >= result.dc.netCount) continue;
-                    const QString reference = QString::fromStdString(e.reference);
-                    if (!reportedFloating && !reachable[net]) {
-                        result.simulationErrors << tr("The DC section at %1 pin %2 has no path to Ground.")
-                                                       .arg(reference).arg(pin);
-                        reportedFloating = true;
-                    }
-                    if (result.connectivity.nets[net].pins.size() <= 1)
-                        result.simulationErrors << tr("%1 pin %2 is not connected to another component or terminal.")
-                                                       .arg(reference).arg(pin);
+            auto checkPin = [&](const QString& reference, int pin, int net) {
+                if (net < 0 || net >= result.dc.netCount) return;
+                if (!reportedFloating && !reachable[net]) {
+                    result.simulationErrors << tr("The DC section at %1 pin %2 has no path to Ground.")
+                                                   .arg(reference).arg(pin);
+                    reportedFloating = true;
                 }
+                if (result.connectivity.nets[net].pins.size() <= 1)
+                    result.simulationErrors << tr("%1 pin %2 is not connected to another component or terminal.")
+                                                   .arg(reference).arg(pin);
+            };
+            for (const auto& e : result.dc.elements) {
+                checkPin(QString::fromStdString(e.reference), 1, e.positive);
+                checkPin(QString::fromStdString(e.reference), 2, e.negative);
             }
+            for (qsizetype i = 0; i < nonlinearPinNumbers.size(); ++i)
+                for (qsizetype p = 0; p < nonlinearPinNumbers[i].size(); ++p)
+                    checkPin(QString::fromStdString(result.dc.nonlinear[i].reference),
+                             nonlinearPinNumbers[i][p], result.dc.nonlinear[i].nets[p]);
         }
     }
     // Nets no element touches (a lone probe, an unused port) are left out of the solve.
@@ -220,10 +285,13 @@ CircuitSnapshot analyzeSchematic(const SketchDocument& document) {
     };
     use(result.dc.ground);
     for (const auto& e : result.dc.elements) { use(e.positive); use(e.negative); }
+    for (const auto& e : result.dc.nonlinear) for (int net : e.nets) use(net);
     for (auto& e : result.dc.elements) {
         e.positive = e.positive >= 0 ? dcIndex[e.positive] : -1;
         e.negative = e.negative >= 0 ? dcIndex[e.negative] : -1;
     }
+    for (auto& e : result.dc.nonlinear)
+        for (int& net : e.nets) net = net >= 0 ? dcIndex[net] : -1;
     result.dc.ground = result.dc.ground >= 0 ? dcIndex[result.dc.ground] : -1;
     result.dc.netCount = static_cast<int>(result.dcNets.size());
     return result;
