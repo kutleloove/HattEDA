@@ -4038,8 +4038,8 @@ Schematic, simulation, PCB and CAM design suite.</source>
     </message>
     <message>
         <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2829"/>
-        <source>%1 already exists. Replace it with an empty project?</source>
-        <translation>%1 zaten var. Boş bir projeyle değiştirilsin mi?</translation>
+        <source>%1 already exists. Replace it with the selected project?</source>
+        <translation>%1 zaten var. Seçilen projeyle değiştirilsin mi?</translation>
     </message>
     <message>
         <location filename="../libs/ui-shell/src/MainWindow.cpp" line="2837"/>
@@ -6445,6 +6445,62 @@ Son projeler listesinden kaldırılsın mı?</translation>
         <location filename="../libs/ui-shell/src/ZoneFill.cpp" line="335"/>
         <source>No net, %1</source>
         <translation>Net yok, %1</translation>
+    </message>
+</context>
+
+<context>
+    <name>hatt::ui::MainWindow</name>
+    <message>
+        <source>Basic circuits</source>
+        <translation>Temel devreler</translation>
+    </message>
+    <message>
+        <source>Blank project</source>
+        <translation>Boş proje</translation>
+    </message>
+    <message>
+        <source>Start with an empty schematic and PCB.</source>
+        <translation>Boş şema ve PCB ile başlayın.</translation>
+    </message>
+</context>
+
+<context>
+    <name>hatt::ui::ProjectTemplates</name>
+    <message>
+        <source>Voltage divider</source>
+        <translation>Gerilim bölücü</translation>
+    </message>
+    <message>
+        <source>Light an LED</source>
+        <translation>LED yakma</translation>
+    </message>
+    <message>
+        <source>Two equal resistors divide 5 V into 2.5 V. Run DC to read the VOUT probe.</source>
+        <translation>İki eşit direnç 5 V gerilimi 2,5 V değerine böler. VOUT probunu okumak için DC simülasyonunu başlatın.</translation>
+    </message>
+    <message>
+        <source>A 3.3 V source and 100 ohm resistor demonstrate current limiting with a generic LED model.</source>
+        <translation>3,3 V kaynak ve 100 ohm direnç, genel LED modeliyle akım sınırlamayı gösterir.</translation>
+    </message>
+    <message>
+        <source>Unknown project template.</source>
+        <translation>Bilinmeyen proje şablonu.</translation>
+    </message>
+    <message>
+        <source>Cannot read the project template.</source>
+        <translation>Proje şablonu okunamıyor.</translation>
+    </message>
+    <message>
+        <source>R1 limits LED current.
+Generic LED model; VOUT is the forward voltage.</source>
+        <translation>R1 LED akımını sınırlar.
+Genel LED modeli; VOUT ileri yön gerilimidir.</translation>
+    </message>
+    <message>
+        <source>Equal resistors halve the supply.
+VOUT = 5 V / 2 = 2.5 V.</source>
+        <translation>Eşit dirençler kaynak gerilimini yarıya böler.
+VOUT = 5 V / 2 = 2,5 V.</translation>
     </message>
 </context>
 </TS>
