@@ -129,10 +129,18 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
-      - name: Upload deployed Release build
+      - name: Package tested Release build
+        run: |
+          ./scripts/New-ReleasePackage.ps1 `
+            -DeploymentDirectory build/ci-mingw-release/dist `
+            -OutputDirectory build/ci-mingw-release/packages `
+            -Version 0.1.0-ci -SourceCommit '${{ github.sha }}' `
+            -QtVersion '${{ env.QT_VERSION }}' -CompilerVersion 'MinGW GCC 13.1.0'
+
+      - name: Upload release candidate and checksum
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: hatteda-windows-mingw-release
-          path: build/ci-mingw-release/dist/
+          path: build/ci-mingw-release/packages/
           if-no-files-found: error
           retention-days: 14
