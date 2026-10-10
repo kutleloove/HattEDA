@@ -63,8 +63,8 @@ copying the Qt/MinGW DLLs and the plugins `hatteda` actually uses into the insta
 `ci.yml`'s Release job now runs `cmake --install` after the Release build, then launches the
 deployed `hatteda.exe` with `PATH` reduced to `C:\WINDOWS\system32;C:\WINDOWS` (no Qt, no MinGW) to
 prove it is self-contained: if the process exits within 5 seconds, the job fails. The deployed
-folder is uploaded as a build artifact (`hatteda-windows-mingw-release`, 14-day retention) either
-way, so a red smoke test still leaves the broken deploy available to inspect.
+folder is uploaded as a build artifact (`hatteda-windows-mingw-release`, 14-day retention) only
+after the smoke check passes. Failed smoke logs are uploaded separately.
 
 ### Offscreen tests: `QT_QPA_FONTDIR`
 
@@ -86,3 +86,20 @@ offscreen *test* environment, matching what issue #5 asked to "consider" for CI.
   (the install step still "succeeds" — it just produces an exe that cannot find its DLLs).
 - The CI smoke test only proves the process survives 5 seconds under `offscreen` with no window
   shown; it is not a substitute for issue #2's still-pending manual desktop QA pass.
+
+### Smoke test cleanup follow-up
+
+The CI check calls `scripts/Test-DeployedRelease.ps1`, which launches from the deployed
+folder with a minimal Windows PATH. A `finally` block stops the process, restores the caller's
+PATH/platform/font environment and removes the temporary offscreen DLL, including on early
+exit or launch failure. A pre-existing offscreen DLL is rejected without overwriting it.
+Qt plugin and QML import paths are cleared for the child and restored afterwards: install-qt
+sets QT_PLUGIN_PATH to the developer kit, which must not supply plugins during the package check.
+Diagnostics stay outside the distributable directory and are uploaded when CI fails.
+
+`hatt-release-deployment-tests` runs PowerShell without an extra testing dependency, with a
+statically linked plain C++ process fixture. It checks successful startup, early exit with
+stderr/exit code, an existing plugin, and failure to launch an exclusively locked executable.
+The sharing lock avoids the interactive Windows error dialog an invalid PE file can trigger. These
+regressions verify the cleanup contract; CI's actual deployed Release smoke check still proves
+Qt/MinGW runtime completeness. Neither check replaces manual desktop QA (#2).
