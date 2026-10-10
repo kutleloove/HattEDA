@@ -29,6 +29,7 @@ try {
     Assert ($env:PATH -eq $saved['PATH']) 'PATH was not restored'
     Assert ($env:QT_QPA_PLATFORM -eq 'sentinel-platform') 'Platform was not restored'
     Assert ($env:QT_QPA_FONTDIR -eq 'sentinel-fonts') 'Fonts were not restored'
+    Assert ((Get-Content -LiteralPath "$logs/hatteda-smoke-out.txt") -eq $deploy) 'Wrong working directory'
 
     $env:HATTEDA_SMOKE_FAKE_EXIT = '1'
     $failure = ''
