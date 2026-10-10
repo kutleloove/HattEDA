@@ -115,28 +115,32 @@ jobs:
       - name: Smoke test deployed Release build
         shell: pwsh
         run: |
-          Copy-Item "$env:QT_ROOT_DIR/plugins/platforms/qoffscreen.dll" `
-            "build/ci-mingw-release/dist/plugins/platforms/qoffscreen.dll"
-          $env:QT_QPA_PLATFORM = "offscreen"
-          $env:QT_QPA_FONTDIR = "$env:SystemRoot/Fonts"
-          $env:PATH = "C:/WINDOWS/system32;C:/WINDOWS"
-          $proc = Start-Process -FilePath "build/ci-mingw-release/dist/hatteda.exe" -PassThru `
-            -RedirectStandardError "hatteda-smoke-err.txt" -RedirectStandardOutput "hatteda-smoke-out.txt"
-          Start-Sleep -Seconds 5
-          $running = Get-Process -Id $proc.Id -ErrorAction SilentlyContinue
-          if (-not $running) {
-            Write-Host "::error::hatteda.exe exited within 5s (exit code $($proc.ExitCode)) with only" `
-              "C:/WINDOWS on PATH - it is not self-contained"
-            Get-Content hatteda-smoke-err.txt -ErrorAction SilentlyContinue
-            exit 1
-          }
-          Stop-Process -Id $proc.Id -Force
-          Write-Host "hatteda.exe ran for 5s with no Qt/MinGW on PATH: deploy is self-contained"
+          ./scripts/Test-DeployedRelease.ps1 `
+            -DeploymentDirectory build/ci-mingw-release/dist `
+            -QtRootDirectory $env:QT_ROOT_DIR `
+            -LogDirectory build/ci-mingw-release/smoke-logs
 
-      - name: Upload deployed Release build
+      - name: Upload release smoke logs
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-smoke-logs
+          path: build/ci-mingw-release/smoke-logs/
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Package tested Release build
+        run: |
+          ./scripts/New-ReleasePackage.ps1 `
+            -DeploymentDirectory build/ci-mingw-release/dist `
+            -OutputDirectory build/ci-mingw-release/packages `
+            -Version 0.1.0-ci -SourceCommit '${{ github.sha }}' `
+            -QtVersion '${{ env.QT_VERSION }}' -CompilerVersion 'MinGW GCC 13.1.0'
+
+      - name: Upload release candidate and checksum
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: hatteda-windows-mingw-release
-          path: build/ci-mingw-release/dist/
+          path: build/ci-mingw-release/packages/
           if-no-files-found: error
           retention-days: 14
