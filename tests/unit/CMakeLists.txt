@@ -101,3 +101,23 @@ hatt_add_qt_test(hatt-agentic-gateway-tests)
 add_executable(hatt-agentic-mcp-client-tests AgenticMcpClientTests.cpp)
 target_link_libraries(hatt-agentic-mcp-client-tests PRIVATE HattEDA::AgenticMcp Qt6::Test Qt6::Network)
 hatt_add_qt_test(hatt-agentic-mcp-client-tests)
+
+# Windows deployment uses PowerShell. This plain C++ process fixture is statically linked so
+# the smoke regressions exercise a minimal PATH without needing a Qt/MinGW deployment themselves.
+if(WIN32)
+    find_program(HATTEDA_POWERSHELL NAMES pwsh powershell REQUIRED)
+    add_executable(hatt-release-smoke-fake ReleaseSmokeFake.cpp)
+    set_target_properties(hatt-release-smoke-fake PROPERTIES AUTOMOC OFF)
+    if(MINGW)
+        target_link_options(hatt-release-smoke-fake PRIVATE -static)
+    elseif(MSVC)
+        set_property(TARGET hatt-release-smoke-fake PROPERTY MSVC_RUNTIME_LIBRARY
+                     "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    endif()
+    add_test(NAME hatt-release-deployment-tests
+        COMMAND "${HATTEDA_POWERSHELL}" -NoProfile -ExecutionPolicy Bypass
+                -File "${CMAKE_CURRENT_SOURCE_DIR}/ReleaseDeploymentTests.ps1"
+                -FakeExecutable "$<TARGET_FILE:hatt-release-smoke-fake>"
+                -SmokeScript "${CMAKE_SOURCE_DIR}/scripts/Test-DeployedRelease.ps1")
+    set_tests_properties(hatt-release-deployment-tests PROPERTIES TIMEOUT 30)
+endif()
