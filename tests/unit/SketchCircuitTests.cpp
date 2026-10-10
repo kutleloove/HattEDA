@@ -69,6 +69,89 @@ SketchDocument seriesDiodeExample(const QString& variant, int cathode = 2, bool 
 class SketchCircuitTests : public QObject {
     Q_OBJECT
 private slots:
+    void catalogTransistorsSolveFromSchematic_data() {
+        QTest::addColumn<QString>("variant");
+        QTest::addColumn<QVector<int>>("roles");
+        QTest::addColumn<bool>("mosfet");
+        QTest::addColumn<bool>("reverse");
+        QTest::newRow("legacy-npn") << QString("lib.transistor.npn") << QVector<int>{2, 1, 3} << false << false;
+        QTest::newRow("pnp") << QString("lib.transistor.pnp") << QVector<int>{1, 2, 3} << false << true;
+        QTest::newRow("bc547") << QString("lib.transistor.bc547") << QVector<int>{1, 2, 3} << false << false;
+        QTest::newRow("bc557") << QString("lib.transistor.bc557") << QVector<int>{1, 2, 3} << false << true;
+        QTest::newRow("2n2222") << QString("lib.transistor.2n2222") << QVector<int>{3, 2, 1} << false << false;
+        QTest::newRow("nmos") << QString("lib.transistor.nmos") << QVector<int>{1, 2, 3} << true << false;
+        QTest::newRow("pmos") << QString("lib.transistor.pmos") << QVector<int>{1, 2, 3} << true << true;
+        QTest::newRow("2n7000") << QString("lib.transistor.2n7000") << QVector<int>{3, 2, 1} << true << false;
+        QTest::newRow("irlz44n") << QString("lib.transistor.irlz44n") << QVector<int>{2, 1, 3} << true << false;
+    }
+    void catalogTransistorsSolveFromSchematic() {
+        QFETCH(QString, variant);
+        QFETCH(QVector<int>, roles);
+        QFETCH(bool, mosfet);
+        QFETCH(bool, reverse);
+        SketchDocument document;
+        auto port = [&](QPointF at, const QString& name) {
+            SketchItem item;
+            item.kind = SketchItem::Kind::Symbol;
+            item.variant = "schematic.power";
+            item.label = name;
+            item.points = {at};
+            document.append(item);
+        };
+        auto source = [&](const QString& reference, const QString& net, double voltage, QPointF at) {
+            SketchItem item;
+            item.kind = SketchItem::Kind::Symbol;
+            item.variant = "schematic.vdc";
+            item.label = reference;
+            item.value = QString::number(voltage);
+            item.points = {at};
+            document.append(item);
+            const auto* symbol = findSymbol(item.variant);
+            port(symbolToWorld(item, symbol->pins[0]), net);
+            port(symbolToWorld(item, symbol->pins[1]), "0");
+        };
+        const double sign = reverse ? -1 : 1;
+        source("V1", "OUTPUT", sign * 5, {0, 20});
+        source("V2", "CONTROL", sign * (mosfet ? 3 : 0.6), {40, 20});
+        SketchItem transistor;
+        transistor.kind = SketchItem::Kind::Symbol;
+        transistor.variant = variant;
+        transistor.label = "Q1";
+        transistor.value = "device label";
+        transistor.points = {{80, 20}};
+        document.append(transistor);
+        const auto* symbol = findSymbol(variant);
+        port(symbolToWorld(transistor, symbol->pins[roles[0] - 1]), "OUTPUT");
+        port(symbolToWorld(transistor, symbol->pins[roles[1] - 1]), "CONTROL");
+        port(symbolToWorld(transistor, symbol->pins[roles[2] - 1]), "0");
+        auto snapshot = analyzeSchematic(document);
+        QVERIFY2(snapshot.simulationErrors.isEmpty(), qPrintable(snapshot.simulationErrors.join("; ")));
+        QCOMPARE(snapshot.dc.nonlinear.size(), std::size_t(1));
+        QCOMPARE(snapshot.dc.netCount, 3);
+        const auto result = hatt::electrical::solveDc(snapshot.dc);
+        QVERIFY2(result.success, result.error.c_str());
+        const double expected = sign * (mosfet ? 0.001 : 1e-14 * std::expm1(0.6 / 0.025852));
+        QVERIFY(std::abs(result.nonlinearCurrents[0] - expected) < std::abs(expected) * 0.02);
+        QVERIFY(std::abs(result.currents[0] + expected) < std::abs(expected) * 0.02);
+        if (mosfet) QVERIFY(std::abs(result.currents[1]) < 1e-10);
+        ProjectData project;
+        project.schematic = document;
+        const auto loaded = parseProject(serializeProject(project));
+        QVERIFY(loaded.ok());
+        const auto restored = analyzeSchematic(loaded.project.schematic);
+        QVERIFY(restored.simulationErrors.isEmpty());
+        QCOMPARE(restored.dc.nonlinear.front().nets, snapshot.dc.nonlinear.front().nets);
+        // A named but undriven ideal gate is floating, even though drain/source
+        // have a DC path. Diagnostics must retain the original packaged pin.
+        if (mosfet) {
+            document.erase(std::remove_if(document.begin(), document.end(), [](const SketchItem& item) {
+                return item.label == QLatin1String("V2") ||
+                       (item.label == QLatin1String("CONTROL") && item.points.first().x() < 60);
+            }), document.end());
+            const auto errors = analyzeSchematic(document).simulationErrors.join(" ");
+            QVERIFY2(errors.contains(QString("Q1 pin %1 has no path to Ground").arg(roles[1])), qPrintable(errors));
+        }
+    }
     void initTestCase() {
         if (!qEnvironmentVariable("HATT_SCREENSHOT_DIR").isEmpty()) {
             const QString font = qEnvironmentVariable("SystemRoot") + "/Fonts/segoeui.ttf";
@@ -216,7 +299,7 @@ private slots:
         schematic.applyDocumentEdit("LED example", seriesDiodeExample("schematic.led"));
         flow.runDc();
         QVERIFY(report);
-        QTRY_VERIFY_WITH_TIMEOUT(report->toPlainText().contains("Nonlinear currents (into anode)"), 5000);
+        QTRY_VERIFY_WITH_TIMEOUT(report->toPlainText().contains("Nonlinear currents (into anode / collector / drain)"), 5000);
         QVERIFY(report->toPlainText().contains("D1"));
         const auto expected = hatt::electrical::solveDc(analyzeSchematic(schematic.document()).dc);
         QVERIFY(expected.success);
