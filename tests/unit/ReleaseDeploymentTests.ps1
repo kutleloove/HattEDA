@@ -12,7 +12,8 @@ $qt = Join-Path $testRoot 'qt'
 $logs = Join-Path $testRoot 'logs'
 $plugin = Join-Path $deploy 'plugins/platforms/qoffscreen.dll'
 $saved = @{}
-foreach ($name in @('PATH', 'QT_QPA_PLATFORM', 'QT_QPA_FONTDIR', 'HATTEDA_SMOKE_FAKE_EXIT')) {
+$qtVariables = @('QT_PLUGIN_PATH', 'QT_QPA_PLATFORM_PLUGIN_PATH', 'QML_IMPORT_PATH', 'QML2_IMPORT_PATH')
+foreach ($name in (@('PATH', 'QT_QPA_PLATFORM', 'QT_QPA_FONTDIR', 'HATTEDA_SMOKE_FAKE_EXIT') + $qtVariables)) {
     $saved[$name] = [Environment]::GetEnvironmentVariable($name, 'Process')
 }
 try {
@@ -22,6 +23,9 @@ try {
     $env:QT_QPA_PLATFORM = 'sentinel-platform'
     $env:QT_QPA_FONTDIR = 'sentinel-fonts'
     $env:HATTEDA_SMOKE_FAKE_EXIT = $null
+    foreach ($name in $qtVariables) {
+        [Environment]::SetEnvironmentVariable($name, 'qt-test-sentinel', 'Process')
+    }
     $result = & $SmokeScript -DeploymentDirectory $deploy -QtRootDirectory $qt `
         -LogDirectory $logs -StartupSeconds 1
     Assert (-not (Test-Path -LiteralPath $plugin)) 'Test plugin leaked into successful package'
@@ -29,6 +33,9 @@ try {
     Assert ($env:PATH -eq $saved['PATH']) 'PATH was not restored'
     Assert ($env:QT_QPA_PLATFORM -eq 'sentinel-platform') 'Platform was not restored'
     Assert ($env:QT_QPA_FONTDIR -eq 'sentinel-fonts') 'Fonts were not restored'
+    foreach ($name in $qtVariables) {
+        Assert ([Environment]::GetEnvironmentVariable($name, 'Process') -eq 'qt-test-sentinel') "$name was not restored"
+    }
     Assert ((Get-Content -LiteralPath "$logs/hatteda-smoke-out.txt") -eq $deploy) 'Wrong working directory'
 
     $env:HATTEDA_SMOKE_FAKE_EXIT = '1'
@@ -44,6 +51,9 @@ try {
     Assert ($env:PATH -eq $saved['PATH']) 'PATH was not restored after failure'
     Assert ($env:QT_QPA_PLATFORM -eq 'sentinel-platform') 'Platform was not restored after failure'
     Assert ($env:QT_QPA_FONTDIR -eq 'sentinel-fonts') 'Fonts were not restored after failure'
+    foreach ($name in $qtVariables) {
+        Assert ([Environment]::GetEnvironmentVariable($name, 'Process') -eq 'qt-test-sentinel') "$name was not restored after failure"
+    }
 
     Set-Content -LiteralPath $plugin -Value 'existing plugin'
     $failure = ''
@@ -72,6 +82,9 @@ try {
     Assert ($env:PATH -eq $saved['PATH']) 'PATH was not restored after launch failure'
     Assert ($env:QT_QPA_PLATFORM -eq 'sentinel-platform') 'Platform was not restored after launch failure'
     Assert ($env:QT_QPA_FONTDIR -eq 'sentinel-fonts') 'Fonts were not restored after launch failure'
+    foreach ($name in $qtVariables) {
+        Assert ([Environment]::GetEnvironmentVariable($name, 'Process') -eq 'qt-test-sentinel') "$name was not restored after launch failure"
+    }
     Write-Host 'Release deployment smoke regression tests passed.'
 }
 finally {

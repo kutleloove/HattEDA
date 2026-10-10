@@ -23,7 +23,8 @@ New-Item -ItemType Directory -Path $LogDirectory -Force | Out-Null
 $stdout = Join-Path $LogDirectory 'hatteda-smoke-out.txt'
 $stderr = Join-Path $LogDirectory 'hatteda-smoke-err.txt'
 $savedEnvironment = @{}
-foreach ($name in @('PATH', 'QT_QPA_PLATFORM', 'QT_QPA_FONTDIR')) {
+$isolatedQtVariables = @('QT_PLUGIN_PATH', 'QT_QPA_PLATFORM_PLUGIN_PATH', 'QML_IMPORT_PATH', 'QML2_IMPORT_PATH')
+foreach ($name in (@('PATH', 'QT_QPA_PLATFORM', 'QT_QPA_FONTDIR') + $isolatedQtVariables)) {
     $savedEnvironment[$name] = [Environment]::GetEnvironmentVariable($name, 'Process')
 }
 $process = $null
@@ -34,6 +35,9 @@ try {
     $env:QT_QPA_PLATFORM = 'offscreen'
     $env:QT_QPA_FONTDIR = Join-Path $env:SystemRoot 'Fonts'
     $env:PATH = "$env:SystemRoot/system32;$env:SystemRoot"
+    foreach ($name in $isolatedQtVariables) {
+        [Environment]::SetEnvironmentVariable($name, $null, 'Process')
+    }
     $process = Start-Process -FilePath $executable -WorkingDirectory $deployment -PassThru `
         -WindowStyle Hidden -RedirectStandardOutput $stdout -RedirectStandardError $stderr
     if ($process.WaitForExit($StartupSeconds * 1000)) {

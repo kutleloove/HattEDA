@@ -93,6 +93,8 @@ The CI check calls `scripts/Test-DeployedRelease.ps1`, which launches from the d
 folder with a minimal Windows PATH. A `finally` block stops the process, restores the caller's
 PATH/platform/font environment and removes the temporary offscreen DLL, including on early
 exit or launch failure. A pre-existing offscreen DLL is rejected without overwriting it.
+Qt plugin and QML import paths are cleared for the child and restored afterwards: install-qt
+sets QT_PLUGIN_PATH to the developer kit, which must not supply plugins during the package check.
 Diagnostics stay outside the distributable directory and are uploaded when CI fails.
 
 `hatt-release-deployment-tests` runs PowerShell without an extra testing dependency, with a

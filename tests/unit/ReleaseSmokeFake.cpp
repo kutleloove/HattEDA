@@ -6,6 +6,14 @@
 #include <thread>
 
 int main() {
+    for (const char* name : {"QT_PLUGIN_PATH", "QT_QPA_PLATFORM_PLUGIN_PATH", "QML_IMPORT_PATH",
+                             "QML2_IMPORT_PATH"}) {
+        const char* value = std::getenv(name);
+        if (value != nullptr && *value != '\0') {
+            std::cerr << "external Qt plugin path leaked into the smoke process\n";
+            return 24;
+        }
+    }
     const char* platform = std::getenv("QT_QPA_PLATFORM");
     const char* path = std::getenv("PATH");
     const char* systemRoot = std::getenv("SystemRoot");
