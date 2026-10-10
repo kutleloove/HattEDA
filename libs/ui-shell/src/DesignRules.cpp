@@ -245,12 +245,15 @@ QHash<QString, QString> netClassAssignments(const DesignRules& rules, const Sket
     }
     const CircuitSnapshot snapshot = analyzeSchematic(schematic);
     QHash<QString, QString> variants;
-    for (const auto& item : schematic) variants.insert(item.id, item.variant);
+    for (const auto& item : schematic) {
+        const auto* symbol = findSymbol(item.variant);
+        variants.insert(item.id, symbol ? symbol->id : item.variant);
+    }
     QSet<int> powerNets;
     if (snapshot.connectivity.pinNets.size() == snapshot.input.pins.size()) {
         for (int p = 0; p < static_cast<int>(snapshot.input.pins.size()); ++p) {
             const QString variant = variants.value(QString::fromStdString(snapshot.input.pins[p].component));
-            if (variant == QLatin1String("schematic.power") || variant == QLatin1String("schematic.ground")) {
+            if (variant == QLatin1String("lib.terminal.power") || variant == QLatin1String("lib.terminal.ground")) {
                 powerNets.insert(snapshot.connectivity.pinNets[p]);
             }
         }

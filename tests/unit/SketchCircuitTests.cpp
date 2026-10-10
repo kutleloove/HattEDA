@@ -69,6 +69,49 @@ SketchDocument seriesDiodeExample(const QString& variant, int cathode = 2, bool 
 class SketchCircuitTests : public QObject {
     Q_OBJECT
 private slots:
+    void legacyTerminalsSurviveCanonicalProjectRoundTrip() {
+        auto document = dcDividerExample();
+        auto terminal = [&](const QString& variant, const QString& label, QPointF at) {
+            SketchItem item;
+            item.kind = SketchItem::Kind::Symbol;
+            item.variant = variant;
+            item.label = label;
+            item.points = {at};
+            document.append(item);
+        };
+        terminal("schematic.voltage-probe", "VOUT", {60.96, 20.32});
+        terminal("schematic.power", "SUPPLY", {20.32, 20.32});
+        terminal("schematic.junction", {}, {60.96, 20.32});
+        terminal("schematic.junction", {}, {100, 80});
+        ProjectData project;
+        project.schematic = document;
+        const auto loaded = parseProject(serializeProject(project));
+        QVERIFY2(loaded.ok(), qPrintable(loaded.error));
+        QVERIFY(std::any_of(loaded.project.schematic.begin(), loaded.project.schematic.end(), [](const SketchItem& item) {
+            return item.variant == QLatin1String("lib.terminal.ground");
+        }));
+        for (const auto& schematic : {document, loaded.project.schematic}) {
+            const auto snapshot = analyzeSchematic(schematic);
+            QVERIFY2(snapshot.errors.isEmpty(), qPrintable(snapshot.errors.join("; ")));
+            QVERIFY2(snapshot.simulationErrors.isEmpty(), qPrintable(snapshot.simulationErrors.join("; ")));
+            QCOMPARE(snapshot.input.junctions.size(), std::size_t(2));
+            QCOMPARE(snapshot.probes.size(), 1);
+            const auto result = hatt::electrical::solveDc(snapshot.dc);
+            QVERIFY2(result.success, result.error.c_str());
+            const int net = snapshot.dcNets.indexOf(snapshot.probes.first().net);
+            QVERIFY(net >= 0);
+            QVERIFY(std::abs(result.voltages[net] - 2.5) < 1e-10);
+            QCOMPARE(netClassForNet(DesignRules{}, schematic, "SUPPLY").name, PowerNetClass);
+            const auto erc = runElectricalRuleCheck(schematic);
+            QStringList errors;
+            for (const auto& violation : erc.violations)
+                if (violation.severity == CheckSeverity::Error) errors.append(violation.message);
+            QVERIFY2(errors.isEmpty(), qPrintable(errors.join("; ")));
+            QVERIFY(std::none_of(erc.violations.begin(), erc.violations.end(), [&](const CheckViolation& v) {
+                return v.rule == QLatin1String("erc.unused-terminal") && v.itemIds.contains(schematic.last().id);
+            }));
+        }
+    }
     void catalogTransistorsSolveFromSchematic_data() {
         QTest::addColumn<QString>("variant");
         QTest::addColumn<QVector<int>>("roles");
