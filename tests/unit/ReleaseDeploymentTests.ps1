@@ -56,14 +56,18 @@ try {
     Assert ((Get-Content -LiteralPath $plugin) -eq 'existing plugin') 'Existing plugin was changed'
 
     Remove-Item -LiteralPath $plugin
-    Set-Content -LiteralPath "$deploy/hatteda.exe" -Value 'invalid executable fixture'
+    # Invalid PE files can open a Windows error dialog on CI. A sharing lock makes
+    # CreateProcess fail synchronously without involving shell associations or dialogs.
+    $lockedExecutable = [IO.File]::Open("$deploy/hatteda.exe", [IO.FileMode]::Open,
+                                       [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
     $failure = ''
     try {
         & $SmokeScript -DeploymentDirectory $deploy -QtRootDirectory $qt `
             -LogDirectory $logs -StartupSeconds 1 | Out-Null
     }
     catch { $failure = $_.Exception.Message }
-    Assert ($failure.Length -gt 0) 'An invalid executable was accepted'
+    finally { $lockedExecutable.Dispose() }
+    Assert ($failure.Length -gt 0) 'A locked executable was accepted'
     Assert (-not (Test-Path -LiteralPath $plugin)) 'Test plugin leaked after launch failure'
     Assert ($env:PATH -eq $saved['PATH']) 'PATH was not restored after launch failure'
     Assert ($env:QT_QPA_PLATFORM -eq 'sentinel-platform') 'Platform was not restored after launch failure'

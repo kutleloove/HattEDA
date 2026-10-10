@@ -97,6 +97,7 @@ Diagnostics stay outside the distributable directory and are uploaded when CI fa
 
 `hatt-release-deployment-tests` runs PowerShell without an extra testing dependency, with a
 statically linked plain C++ process fixture. It checks successful startup, early exit with
-stderr/exit code, an existing plugin, and failure to launch an invalid executable. These
+stderr/exit code, an existing plugin, and failure to launch an exclusively locked executable.
+The sharing lock avoids the interactive Windows error dialog an invalid PE file can trigger. These
 regressions verify the cleanup contract; CI's actual deployed Release smoke check still proves
 Qt/MinGW runtime completeness. Neither check replaces manual desktop QA (#2).
