@@ -22,8 +22,8 @@ kayıt/açma zincirini sınar. Bu test gerçek masaüstü kullanımının veya f
 | İş | Somut eksik ve PR kapsamı | Kabul / kanıt | Bağımlılık |
 | --- | --- | --- | --- |
 | Yayın kapsamı ve belge doğruluğu | README'deki eski “kayıt/ERC/DRC yok” iddialarını düzelt; bu listeyi ekle | Belgeler kodla tutarlı; kapsam ve kalanlar ayrı | Bu PR |
-| Koordinat girişi (#58) | Özellikler Y değerini durum çubuğuyla aynı Y-yukarı kuralında göster/gir | mil ve mm, pozitif/negatif Y, kabul/iptal, tek undo, redo, kayıt açma | ADR-0015 güncellemesi |
-| Paket smoke kontrolü | CI smoke işlemi hata halinde temizlenmeli; test için eklenen offscreen DLL dağıtımda kalmamalı | Minimal PATH ile çalışan kurulu Release; hata ve temizleme testleri | ADR-0016 |
+| Koordinat girişi ([PR #77](https://github.com/kutleloove/HattEDA/pull/77), #58) | Özellikler Y değerini durum çubuğuyla aynı Y-yukarı kuralında göster/gir | mil ve mm, pozitif/negatif Y, kabul/iptal, tek undo, redo, kayıt açma | ADR-0015 güncellemesi |
+| Paket smoke kontrolü ([PR #78](https://github.com/kutleloove/HattEDA/pull/78)) | CI smoke işlemi hata halinde temizlenmeli; test için eklenen offscreen DLL dağıtımda kalmamalı | Minimal PATH ile çalışan kurulu Release; hata ve temizleme testleri | ADR-0016 |
 | Simülasyon UI bağlantısı (#22/#62) | `SketchCircuit.cpp` yalnız lineer `DcKind` üretiyor; katalog model/parametre/pin rollerini nonlinear DTO'ya bağla | LED, zener, BJT, MOSFET devreleri UI adapter üzerinden beklenen sonuç; geçersiz model açık hata; iptal ve eski sonuç testleri | #74'ün değerlendirilmesi |
 | Çözücü tamamlaması | Var olan #74 op-amp/lojik/warm-start PR'ını incele; ikinci PR açma | main üzerinde tam test; besleme ve durumlu devre sınırları ADR'de | Açık PR #74 |
 | Gerçek footprint aileleri (#63) | Chip ailesi tamam; kalan THT/SOT/SOIC/DIP ailelerini küçük PR'lara böl | Boyut/pad/pin-1 testleri, kaynak metadata, CAM pad/silk doğrulaması ve aile görüntüleri | #61 tamam |
@@ -34,6 +34,21 @@ PR açılmış olması kabul ölçütünün geçtiği anlamına gelmez. Uygulama
 build/test sonuçlarını taşımalı; eksik masaüstü kanıtı ve dış araç testi açıkça
 belirtilmelidir. PR'lar bu çalışma sırasında otomatik birleştirilmez ve sürüm yayınlanmaz.
 
+## Uygulama ilerlemesi
+
+- [PR #77](https://github.com/kutleloove/HattEDA/pull/77): koordinat düzeltmesi uygulandı;
+  WERROR Debug ve 22/22 test, ayrıca CI başarılı.
+- [PR #78](https://github.com/kutleloove/HattEDA/pull/78): paket testinin süreç/DLL/ortam
+  temizliği uygulandı. Windows hata penceresini önleyen takip düzeltmesi tam CI'dan geçti;
+  geliştirici Qt eklenti yollarını yalıtan ek kontrol de yerelde doğrulandı.
+- [PR #79](https://github.com/kutleloove/HattEDA/pull/79): genel diyot/LED/Zener modelleri
+  masaüstü simülasyonuna bağlandı; NC pinler, kompakt netler, kayıt/açma, akımlar ve eski
+  sonuçlar sınandı. WERROR Debug ve 22/22 test başarılı. Datasheet'e özgü modeller ve
+  animasyon bu dilimde yoktur; model varsayılanları sonuç ekranında açıklanır.
+
+Bu PR'lar henüz `main`'e birleşmedi. Sıradaki simülasyon dilimi BJT/MOSFET terminal
+rolleri ve parametre bağlantısıdır; op-amp/lojik için #74 ayrıca değerlendirilmelidir.
+Masaüstü ve temiz makine kabulü hâlâ açıktır.
 ## Kütüphane epiğinde kalan ürün işleri
 
 #60'ın kabul ölçütleri ilk MVP'nin tam parça kütüphanesi hedefi için hâlâ açıktır:
