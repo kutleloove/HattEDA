@@ -7,10 +7,12 @@ on:
       - "feature/**"
       - "work/**"
       - "issue/**"
+      - "codex/**"
   pull_request:
     branches:
       - main
       - integration/mvp
+      - "codex/**"
   workflow_dispatch:
 
 permissions:
