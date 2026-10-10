@@ -120,4 +120,9 @@ if(WIN32)
                 -FakeExecutable "$<TARGET_FILE:hatt-release-smoke-fake>"
                 -SmokeScript "${CMAKE_SOURCE_DIR}/scripts/Test-DeployedRelease.ps1")
     set_tests_properties(hatt-release-deployment-tests PROPERTIES TIMEOUT 30)
+    add_test(NAME hatt-release-package-tests
+        COMMAND "${HATTEDA_POWERSHELL}" -NoProfile -ExecutionPolicy Bypass
+                -File "${CMAKE_CURRENT_SOURCE_DIR}/ReleasePackageTests.ps1"
+                -PackageScript "${CMAKE_SOURCE_DIR}/scripts/New-ReleasePackage.ps1")
+    set_tests_properties(hatt-release-package-tests PROPERTIES TIMEOUT 30)
 endif()
