@@ -448,6 +448,22 @@ int main() {
         const auto badRails = solveDc({3, 0, {}, {{"U1", NonlinearKind::OpAmp, {0, 1, 2}, {1e5, 1000, -15, 15}}}});
         check(!badRails.success, "op-amp Vpos must exceed Vneg");
     }
+    {
+        // An ideal op-amp drives its output even without a resistor load. Its
+        // non-inverting input must still have an independent DC path to ground.
+        const auto unloaded = solveDc({3, 0,
+                                       {{"Vin", DcKind::VoltageSource, 1, 0, 0.5}},
+                                       {{"U1", NonlinearKind::OpAmp, {1, 0, 2}, {1e5, 1000, 15, -15}}}});
+        check(unloaded.success, "unloaded op-amp output is driven, not floating");
+        if (unloaded.success)
+            check(std::abs(unloaded.voltages[2] - 15) < 1e-6,
+                  "unloaded op-amp output saturates at the positive rail");
+        const auto floatingInput = solveDc({3, 0,
+                                            {{"Rload", DcKind::Resistor, 2, 0, 1000}},
+                                            {{"U1", NonlinearKind::OpAmp, {1, 0, 2}, {1e5, 1000, 15, -15}}}});
+        check(!floatingInput.success && floatingInput.error.find("loating") != std::string::npos,
+              "op-amp non-inverting input does not acquire a fictitious ground path");
+    }
     // Shared logic gate parameters used by every gate test below: 0/5 V logic, threshold at
     // mid-rail, a sharp (but smooth) transition, and a driver conductance that dominates any
     // stray load with margin (the ideal inputs draw no current at all, so nothing else competes).

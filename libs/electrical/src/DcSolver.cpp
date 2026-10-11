@@ -392,7 +392,7 @@ DcResult solveDc(const DcCircuit& circuit, const std::atomic_bool* cancelled) {
             // as if conducting straight to ground for reachability purposes. The inputs carry no
             // current (ideal) and must reach ground through some other element, or they are
             // reported as floating nets.
-            const int output = element.nets[0];
+            const int output = element.nets[element.kind == NonlinearKind::OpAmp ? 2 : 0];
             link(adjacent, output, circuit.ground);
             link(coupled, output, circuit.ground);
         }
