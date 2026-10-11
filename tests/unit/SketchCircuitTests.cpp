@@ -11,6 +11,7 @@
 #include <QDoubleSpinBox>
 #include <QPushButton>
 #include <QPolygonF>
+#include <QPainter>
 #include <QRegularExpression>
 #include <QFontDatabase>
 #include <QLabel>
@@ -198,6 +199,89 @@ private slots:
             const auto errors = analyzeSchematic(document).simulationErrors.join(" ");
             QVERIFY2(errors.contains(QString("Q1 pin %1 has no path to Ground").arg(roles[1])), qPrintable(errors));
         }
+    }
+    void transistorArtworkMatchesTerminalRoles_data() {
+        catalogTransistorsSolveFromSchematic_data();
+    }
+    void transistorArtworkMatchesTerminalRoles() {
+        QFETCH(QString, variant);
+        QFETCH(QVector<int>, roles);
+        QFETCH(bool, mosfet);
+        QFETCH(bool, reverse);
+        const auto* device = findCatalogComponent(variant);
+        QVERIFY(device);
+        const auto* symbol = findSymbol(variant);
+        QVERIFY(symbol);
+        // Existing documents and copper mappings must keep their physical terminals.
+        QCOMPARE(symbol->pins, QVector<QPointF>({{-5.08, 0}, {2.54, -5.08}, {2.54, 5.08}}));
+        QCOMPARE(device->pins[roles[1] - 1].name, mosfet ? QString("G") : QString("B"));
+        QCOMPARE(device->pins[roles[1] - 1].type, PinElectricalType::Input);
+        const auto& shapes = symbol->shapes;
+        const QPointF control = symbol->pins[roles[1] - 1];
+        const auto lead = std::find_if(shapes.begin(), shapes.end(), [&](const SymbolShape& shape) {
+            return !shape.closed && shape.points.size() == 2 && shape.points.first() == control;
+        });
+        QVERIFY(lead != shapes.end());
+        const auto arrow = std::find_if(shapes.begin(), shapes.end(), [](const SymbolShape& shape) {
+            return shape.filled && shape.closed && shape.points.size() == 3;
+        });
+        QVERIFY(arrow != shapes.end());
+        const QPointF direction = arrow->points[0] - (arrow->points[1] + arrow->points[2]) / 2;
+        if (mosfet) {
+            // The body arrow points toward the insulated gate for NMOS, away for PMOS.
+            const double dot = QPointF::dotProduct(direction, control);
+            QVERIFY(reverse ? dot < 0 : dot > 0);
+            // No channel/source/drain stroke may touch the gate bar.
+            const auto bar = std::find_if(shapes.begin(), shapes.end(), [&](const SymbolShape& shape) {
+                return !shape.closed && shape.points.size() == 2 &&
+                       std::abs(QLineF(shape.points[0], lead->points.last()).length() -
+                                QLineF(shape.points[1], lead->points.last()).length()) < 1e-5;
+            });
+            QVERIFY(bar != shapes.end());
+            const QPointF alongBar = bar->points[1] - bar->points[0];
+            const QPointF normal(-alongBar.y(), alongBar.x());
+            for (const auto& shape : shapes) {
+                if (shape.closed || &shape == &*lead || &shape == &*bar) continue;
+                for (const auto& point : shape.points) {
+                    const QPointF delta = point - lead->points.last();
+                    QVERIFY(std::abs(QPointF::dotProduct(delta, normal)) / QLineF({}, normal).length() > 1);
+                }
+            }
+        } else {
+            const QPointF emitter = symbol->pins[roles[2] - 1];
+            const auto leg = std::find_if(shapes.begin(), shapes.end(), [&](const SymbolShape& shape) {
+                return !shape.closed && shape.points.size() >= 3 && shape.points.last() == emitter;
+            });
+            QVERIFY(leg != shapes.end());
+            const double dot = QPointF::dotProduct(direction, leg->points[1] - leg->points[0]);
+            QVERIFY(reverse ? dot < 0 : dot > 0);
+        }
+    }
+    void transistorArtworkContactSheet() {
+        const QString directory = qEnvironmentVariable("HATT_SCREENSHOT_DIR");
+        if (directory.isEmpty()) return;
+        QPixmap sheet(900, 750);
+        sheet.fill(Qt::white);
+        QPainter painter(&sheet);
+        painter.setFont(QFont("Segoe UI", 11));
+        QPalette palette;
+        palette.setColor(QPalette::Window, Qt::white);
+        palette.setColor(QPalette::WindowText, Qt::black);
+        int index = 0;
+        for (const char* id : {"npn", "pnp", "bc547", "bc557", "2n2222", "nmos", "pmos", "2n7000", "irlz44n"}) {
+            const QString variant = QString("lib.transistor.%1").arg(id);
+            const auto* device = findCatalogComponent(variant);
+            const QRectF cell((index % 3) * 300, (index / 3) * 250, 300, 250);
+            DesignCanvas::paintSymbolPreview(painter, cell.adjusted(35, 30, -35, -45), variant, palette);
+            painter.setPen(Qt::black);
+            QStringList pins;
+            for (const auto& pin : device->pins) pins << QString("%1:%2").arg(pin.number).arg(pin.name);
+            painter.drawText(cell.adjusted(5, 5, -5, -5), Qt::AlignTop | Qt::AlignHCenter, QString::fromLatin1(id));
+            painter.drawText(cell.adjusted(5, 5, -5, -10), Qt::AlignBottom | Qt::AlignHCenter, pins.join("  "));
+            ++index;
+        }
+        painter.end();
+        QVERIFY(sheet.save(directory + "/transistor-artwork.png"));
     }
     void initTestCase() {
         if (!qEnvironmentVariable("HATT_SCREENSHOT_DIR").isEmpty()) {
