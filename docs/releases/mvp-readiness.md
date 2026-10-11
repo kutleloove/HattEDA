@@ -46,9 +46,24 @@ belirtilmelidir. PR'lar bu çalışma sırasında otomatik birleştirilmez ve s�
   sonuçlar sınandı. WERROR Debug ve 22/22 test başarılı. Datasheet'e özgü modeller ve
   animasyon bu dilimde yoktur; model varsayılanları sonuç ekranında açıklanır.
 
-Bu PR'lar henüz `main`'e birleşmedi. Sıradaki simülasyon dilimi BJT/MOSFET terminal
-rolleri ve parametre bağlantısıdır; op-amp/lojik için #74 ayrıca değerlendirilmelidir.
-Masaüstü ve temiz makine kabulü hâlâ açıktır.
+- [PR #80](https://github.com/kutleloove/HattEDA/pull/80): dokuz katalog BJT/MOSFET parçası
+  UI DC akışına bağlandı; paket pin sıraları, genel model parametreleri ve boşta gate
+  kontrolü doğrulandı. WERROR Debug 22/22 ve tam CI başarılı.
+- [PR #81](https://github.com/kutleloove/HattEDA/pull/81): kaynak commit/Qt/derleyici bilgisi,
+  dosya manifesti ve SHA256 ile çekirdek Windows ZIP adayı üretiliyor. Tam CI başarılı.
+- [PR #82](https://github.com/kutleloove/HattEDA/pull/82): katalog ground/junction/voltage-probe
+  kimlikleri eski alias'larla aynı bağlantı, ERC ve POWER sınıfı davranışını kullanıyor.
+  Yeniden kayıt/açma regresyonu geçti; CI takip kontrolü sürüyor.
+
+#76–81 ortak `codex/mvp-candidate` dalında WERROR Debug ve 24/24 testten, ayrıca
+Release deploy/smoke/paket CI'ından geçti. CI ZIP'i indirilip dış SHA256, tüm yük
+dosyalarının hash/boyutları ve kaynak commit'i doğrulandı; indirilmiş EXE geliştirici
+Qt/MinGW yolları olmadan tekrar çalıştı ve test eklentisi kaldırıldı.
+
+Bu PR'lar henüz `main`'e birleşmedi. Op-amp/lojik için #74 ayrıca değerlendirilmelidir.
+Gerçek pencerede masaüstü etkileşimleri, bağımsız CAM incelemesi ve seçilen gerçek tag
+üzerindeki son kabul hâlâ açıktır. CI çekirdek paketi optional router içermez; router'lı
+paket için kaynak/JRE notices ve gerçek router kabulü ayrı gereklidir.
 ## Kütüphane epiğinde kalan ürün işleri
 
 #60'ın kabul ölçütleri ilk MVP'nin tam parça kütüphanesi hedefi için hâlâ açıktır:

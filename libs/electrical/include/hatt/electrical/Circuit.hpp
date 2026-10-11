@@ -51,7 +51,10 @@ struct DcElement {
 // Nonlinear DC operating-point models (#62), solved by Newton-Raphson alongside the linear
 // elements above in the same MNA system. `nets` gives terminal net indices in the order documented
 // per kind; `parameters` gives SI values in the order documented per kind.
-enum class NonlinearKind { Diode, Zener, Led, BjtNpn, BjtPnp, NMosfet, PMosfet };
+// LogicFunction selects LogicGate's boolean behaviour (see NonlinearElement::parameters below).
+enum class LogicFunction { Not, And, Or, Nand, Nor, Xor };
+
+enum class NonlinearKind { Diode, Zener, Led, BjtNpn, BjtPnp, NMosfet, PMosfet, OpAmp, LogicGate };
 struct NonlinearElement {
     std::string reference;
     NonlinearKind kind = NonlinearKind::Diode;
@@ -59,6 +62,10 @@ struct NonlinearElement {
     // BjtNpn/BjtPnp: nets = {collector, base, emitter}.
     // NMosfet/PMosfet: nets = {drain, gate, source}. The gate carries no current (ideal, no
     // leakage): it must reach ground through some other element, or it is reported floating.
+    // OpAmp: nets = {nonInvertingIn, invertingIn, output}. Both inputs carry no current (ideal,
+    // infinite input impedance).
+    // LogicGate: nets = {output, inputA, inputB}. For NonlinearKind::LogicGate with function Not,
+    // inputB is unused (still needs a valid net index; wire it to inputA or ground).
     std::vector<int> nets;
     // Diode: {Is (A), n, Rs (ohm, may be 0)}.
     // Zener: {Is, n, Rs, Vz (breakdown voltage, positive), Rz (breakdown slope resistance, ohm)}.
@@ -66,6 +73,10 @@ struct NonlinearElement {
     // BjtNpn/BjtPnp: {Is (A), BetaF, BetaR} - Ebers-Moll transport model, junction ideality 1.
     // NMosfet/PMosfet: {Vto (V; negative for PMOS), K (A/V^2, K = kp*(W/L)/2)} - level-1 square
     // law, no channel-length modulation.
+    // OpAmp: {gain (dimensionless, e.g. 1e5), outputConductance (S), Vpos (V), Vneg (V)} - ideal,
+    // smoothly saturating between the two (fixed, not wired to circuit nets) supply rails.
+    // LogicGate: {function (a LogicFunction value, stored as double), Vth (V), steepness (1/V,
+    // e.g. 100 for a sharp digital transition), Vol (V), Voh (V), outputConductance (S)}.
     std::vector<double> parameters;
 };
 
@@ -74,6 +85,12 @@ struct DcCircuit {
     int ground = -1;
     std::vector<DcElement> elements;
     std::vector<NonlinearElement> nonlinear;
+    // Optional warm start (#62): a previous solve's `DcResult::voltages`, same size as netCount.
+    // When present, nonlinear elements seed their Newton-Raphson guess from it instead of 0 V,
+    // so a bistable circuit (e.g. a latch built from cross-coupled gates) keeps whichever state
+    // that solution was in rather than always settling to the same one. Ignored (falls back to a
+    // 0 V start) unless its size exactly matches netCount.
+    std::vector<double> initialVoltages;
 };
 struct DcResult {
     bool success = false;
@@ -83,6 +100,7 @@ struct DcResult {
     std::vector<double> nonlinearCurrents;
     // Indexed by `DcCircuit::nonlinear`: kind-specific secondary output, 0 where unused.
     // Led: forward current / ratedCurrent, clamped to [0, 1] (0 when ratedCurrent is 0).
+    // LogicGate: output voltage normalized to [0, 1] between Vol and Voh (a "digital level").
     std::vector<double> nonlinearAux;
     std::string error;
 };
