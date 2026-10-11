@@ -53,14 +53,32 @@ belirtilmelidir. PR'lar bu çalışma sırasında otomatik birleştirilmez ve s�
   dosya manifesti ve SHA256 ile çekirdek Windows ZIP adayı üretiliyor. Tam CI başarılı.
 - [PR #82](https://github.com/kutleloove/HattEDA/pull/82): katalog ground/junction/voltage-probe
   kimlikleri eski alias'larla aynı bağlantı, ERC ve POWER sınıfı davranışını kullanıyor.
-  Yeniden kayıt/açma regresyonu geçti; CI takip kontrolü sürüyor.
+  Yeniden kayıt/açma regresyonu, birleşik 24/24 test ve CI başarılı.
+- [PR #83](https://github.com/kutleloove/HattEDA/pull/83): `codex/**` kaynak ve hedef
+  dalları da CI tetikliyor; gerçek push ve stacked PR çalışmaları başarılı.
+- [PR #84](https://github.com/kutleloove/HattEDA/pull/84): LED ve gerilim bölücü için
+  açık/koyu tema önizlemeleri, bağımsız proje kopyası ve Türkçe öğretici not eklendi.
+  ERC, beklenen VOUT, gerçek diyalogdan dosya oluşturma, WERROR 24/24 ve CI başarılı.
+- [PR #85](https://github.com/kutleloove/HattEDA/pull/85): dokuz transistör çizimi pin
+  rollerine uyarlandı; BJT ok yönü ve MOSFET gate yalıtımı sınandı. Pin konumları,
+  kimlikler ve footprint eşlemeleri korunuyor. WERROR 24/24 başarılı; CI başladı.
+- [PR #74](https://github.com/kutleloove/HattEDA/pull/74): incelemede op-amp çıkışının
+  yerine girişinin sürülmüş sayıldığı topoloji hatası bulundu ve mevcut PR düzeltildi.
+  Yüksüz çıkış/boşta giriş regresyonları düzeltmeden önce başarısız, sonra başarılı.
+  Qt'siz çözücü testleri WERROR ile geçti; son birleşik aday ve CI kontrolü sürüyor.
 
 #76–81 ortak `codex/mvp-candidate` dalında WERROR Debug ve 24/24 testten, ayrıca
 Release deploy/smoke/paket CI'ından geçti. CI ZIP'i indirilip dış SHA256, tüm yük
 dosyalarının hash/boyutları ve kaynak commit'i doğrulandı; indirilmiş EXE geliştirici
 Qt/MinGW yolları olmadan tekrar çalıştı ve test eklentisi kaldırıldı.
 
-Bu PR'lar henüz `main`'e birleşmedi. Op-amp/lojik için #74 ayrıca değerlendirilmelidir.
+2026-10-11 takibinde #82/#84/#85 ortak değişiklikleri de yerelde WERROR 24/24 geçti.
+`codex/mvp-validated-candidate`, #74'ün düzeltilmiş core modelleri ve #83 CI kuralını
+da birleştirerek son regresyon için hazırlanıyor. Önceki indirilmiş ZIP bu yeni commit'i
+temsil etmez; son adayın Release paketi ayrıca doğrulanmalıdır.
+
+Bu PR'lar henüz `main`'e birleşmedi. #74 core modelleri op-amp/lojik UI bağlantısını
+tek başına sağlamaz; bağlı besleme pinleri ve live warm-start sahipliği ayrıca ele alınmalıdır.
 Gerçek pencerede masaüstü etkileşimleri, bağımsız CAM incelemesi ve seçilen gerçek tag
 üzerindeki son kabul hâlâ açıktır. CI çekirdek paketi optional router içermez; router'lı
 paket için kaynak/JRE notices ve gerçek router kabulü ayrı gereklidir.
@@ -72,7 +90,7 @@ paket için kaynak/JRE notices ve gerçek router kabulü ayrı gereklidir.
 2. #64 sembol varyant seçimi, pin bağlantılarını koruyan tek undo ve simülasyon DTO'sundan
    animasyon. Önce LED ile bir uçtan uca dilim; sonra diğer göstergeler.
 3. #65 kullanıcı seçimiyle KiCad import; parser, dönüşüm/rapor ve önizleme ayrı PR'lar.
-4. #66 önizlemeli temel devre şablonları; her şablon ERC ve beklenen simülasyon sonucu ile
+4. #66'nın gerilim bölücü/LED dışındaki önizlemeli temel devre şablonları; her şablon ERC ve beklenen simülasyon sonucu ile
    doğrulanmalı. NE555/flip-flop gibi zamana bağlı şablonlar DC desteği varmış gibi sunulmamalı.
 
 Bu maddeler tamamlanmadan #60 kapanmaz. Daha dar bir alpha yayınlanırsa, ertelenen
