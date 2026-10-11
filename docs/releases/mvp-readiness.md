@@ -65,7 +65,8 @@ belirtilmelidir. PR'lar bu çalışma sırasında otomatik birleştirilmez ve s�
 - [PR #74](https://github.com/kutleloove/HattEDA/pull/74): incelemede op-amp çıkışının
   yerine girişinin sürülmüş sayıldığı topoloji hatası bulundu ve mevcut PR düzeltildi.
   Yüksüz çıkış/boşta giriş regresyonları düzeltmeden önce başarısız, sonra başarılı.
-  Qt'siz çözücü testleri WERROR ile geçti; son birleşik aday ve CI kontrolü sürüyor.
+  Qt'siz çözücü testleri WERROR ile geçti; son birleşik aday da WERROR 24/24 geçti.
+  Yeni Release/paket CI kontrolü sürüyor.
 
 #76–81 ortak `codex/mvp-candidate` dalında WERROR Debug ve 24/24 testten, ayrıca
 Release deploy/smoke/paket CI'ından geçti. CI ZIP'i indirilip dış SHA256, tüm yük
@@ -74,7 +75,8 @@ Qt/MinGW yolları olmadan tekrar çalıştı ve test eklentisi kaldırıldı.
 
 2026-10-11 takibinde #82/#84/#85 ortak değişiklikleri de yerelde WERROR 24/24 geçti.
 `codex/mvp-validated-candidate`, #74'ün düzeltilmiş core modelleri ve #83 CI kuralını
-da birleştirerek son regresyon için hazırlanıyor. Önceki indirilmiş ZIP bu yeni commit'i
+  da birleştiren `e26b98c` commit'inde WERROR Debug ve 24/24 testten geçti.
+  Önceki indirilmiş ZIP bu yeni commit'i
 temsil etmez; son adayın Release paketi ayrıca doğrulanmalıdır.
 
 Bu PR'lar henüz `main`'e birleşmedi. #74 core modelleri op-amp/lojik UI bağlantısını
